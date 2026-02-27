@@ -16,12 +16,12 @@ export const MessageInput: React.FC<MessageInputProps> = ({ onSend, disabled, ma
   const isNearLimit = length >= maxLength - 10
   const isApproachingLimit = length >= maxLength - 30
 
+  // For 85-character limit: show counter at 75+, yellow at 75-84, red at 85
+  const showCounter = maxLength === 85 ? length >= 75 : isApproachingLimit
   const counterColor = isOverLimit
-    ? 'text-red-500'
-    : isNearLimit
     ? 'text-red-400'
-    : isApproachingLimit
-    ? 'text-orange-400'
+    : (maxLength === 85 && length >= 75) || isNearLimit
+    ? 'text-yellow-500'
     : 'text-qf-text-muted'
 
   const handleSubmit = (e: React.FormEvent) => {
@@ -67,7 +67,7 @@ export const MessageInput: React.FC<MessageInputProps> = ({ onSend, disabled, ma
           </svg>
         </button>
       </form>
-      {isApproachingLimit && (
+      {showCounter && (
         <div className="flex justify-end mt-1">
           <span className={`text-xs tabular-nums transition-colors ${counterColor}`}>
             {length}/{maxLength}

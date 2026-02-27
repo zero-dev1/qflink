@@ -1,7 +1,7 @@
 import { create } from 'zustand'
 import type { PodsState, Pod, PodMessage, DefaultPod } from '@/types'
 import { getApi, type InjectedAccountWithMeta } from '@/lib/chain'
-import { podsGetPodCount, podsGetPod, podsGetPodMessages, podsSendMessage, podsCheckAccess } from '@/lib/contracts'
+import { podsGetPodCount, podsGetPod, podsGetPodMessages, sendPodMessageOnChain, podsCheckAccess } from '@/lib/contracts'
 import { useWalletStore } from './wallet'
 
 // Helper to get EVM address from wallet store (for access checks)
@@ -35,6 +35,15 @@ export const usePodsStore = create<PodsState>((set, get) => ({
   addPodMessage: (message: PodMessage) => {
     const state = get()
     const existing = state.podMessages[message.podId] || []
+    
+    // Check for duplicate ID before adding
+    const isDuplicate = existing.some(m => m.id === message.id)
+    if (isDuplicate) {
+      console.warn('[addPodMessage] Duplicate message ID, skipping:', message.id)
+      return
+    }
+    
+    console.log('[addPodMessage] Adding message:', { id: message.id, sender: message.sender?.slice(0, 10), contentPreview: message.content?.slice(0, 30) })
     set({
       podMessages: {
         ...state.podMessages,
@@ -147,16 +156,34 @@ export const usePodsStore = create<PodsState>((set, get) => ({
         return
       }
       
+      console.log('[podStore] fetchPodMessages starting for pod:', podId)
       const api = await getApi()
       const messages = await podsGetPodMessages(api, podId, 0, 100)
       
-      const formatted: PodMessage[] = messages.map(msg => ({
-        id: `${podId}-${msg.timestamp}`,
+      console.log('[podStore] messages from contracts:', messages.length)
+      console.log('[podStore] messages before processing:', messages.map((m, i) => ({
+        index: i,
+        sender: m.sender?.substring(0, 10),
+        contentPreview: m.content?.substring(0, 30),
+        timestamp: m.timestamp
+      })))
+      
+      const formatted: PodMessage[] = messages.map((msg, index) => ({
+        id: msg.id || `${podId}-${msg.sender?.substring(0, 8)}-${msg.timestamp}-${index}`,
         podId,
         sender: msg.sender,
-        content: Array.from(msg.contentHash).map(b => b.toString(16).padStart(2, '0')).join(''),
+        content: msg.content,  // Use decoded content directly, NOT contentHash hex
         timestamp: Number(msg.timestamp),
       }))
+      
+      console.log('[podStore] messages after processing:', formatted.length)
+      console.log('[podStore] formatted messages:', formatted.map((m, i) => ({
+        index: i,
+        id: m.id,
+        sender: m.sender?.substring(0, 10),
+        contentPreview: m.content?.substring(0, 30),
+        timestamp: m.timestamp
+      })))
       
       set({ podMessages: { ...get().podMessages, [podId]: formatted } })
     } catch (err) {
@@ -165,33 +192,20 @@ export const usePodsStore = create<PodsState>((set, get) => ({
   },
 
   sendPodMessage: async (podId: number, content: string) => {
-    const { address, walletSource, evmAddress } = useWalletStore.getState()
-    if (!address || !walletSource || !evmAddress) {
-      throw new Error('Wallet not connected or not mapped')
+    const { evmAddress } = useWalletStore.getState()
+    if (!evmAddress) {
+      throw new Error('Wallet not connected')
     }
 
-    const { web3FromSource } = await import('@polkadot/extension-dapp')
-    const injector = await web3FromSource(walletSource)
-    const account: InjectedAccountWithMeta = {
-      address,
-      meta: { source: walletSource },
-      signer: injector.signer,
-    }
-
-    const api = await getApi()
-    const contentHash = new Uint8Array(32)
-    const encoder = new TextEncoder()
-    const contentBytes = encoder.encode(content)
-    contentHash.set(contentBytes.slice(0, 32))
-
-    await podsSendMessage(api, account, podId, contentHash)
+    // Use sendPodMessageOnChain which handles chunking for long messages
+    const result = await sendPodMessageOnChain(podId, evmAddress, content)
     
     const message: PodMessage = {
-      id: `${podId}-${Date.now()}`,
-      podId,
-      sender: evmAddress,
-      content,
-      timestamp: Date.now(),
+      id: result.id,
+      podId: result.podId,
+      sender: result.sender,
+      content: result.content,
+      timestamp: result.timestamp,
     }
     
     get().addPodMessage(message)

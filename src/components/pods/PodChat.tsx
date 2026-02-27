@@ -42,7 +42,14 @@ export const PodChat: React.FC<PodChatProps> = ({
   onLeave,
 }) => {
   // Debug: log when messages update
-  console.log('[PodChat] messages updated, count:', messages?.length)
+  console.log('[PodChat] rendering messages:', messages?.length)
+  console.log('[PodChat] messages data:', messages?.map((m, i) => ({
+    index: i,
+    id: m.id,
+    sender: m.sender?.substring(0, 10),
+    contentPreview: m.content?.substring(0, 30),
+    timestamp: m.timestamp
+  })))
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const navigate = useNavigate()
   const [senderProfiles, setSenderProfiles] = useState<Map<string, string>>(new Map())
@@ -244,7 +251,7 @@ export const PodChat: React.FC<PodChatProps> = ({
           <div ref={messagesEndRef} />
         </div>
 
-        <MessageInput onSend={onSend} maxLength={500} />
+        <MessageInput onSend={onSend} maxLength={85} />
       </div>
 
       {/* Right column: Pod Info */}

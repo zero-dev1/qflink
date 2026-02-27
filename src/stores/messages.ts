@@ -1,7 +1,7 @@
 import { create } from 'zustand'
 import type { MessagesState, Message, Conversation } from '@/types'
 import { getApi, type InjectedAccountWithMeta } from '@/lib/chain'
-import { getConversations, getMessages, messagesSendMessage } from '@/lib/contracts'
+import { getConversations, getMessages, sendMessageOnChain } from '@/lib/contracts'
 import { useWalletStore } from './wallet'
 import { keccak256AsU8a } from '@polkadot/util-crypto'
 import nacl from 'tweetnacl'
@@ -142,36 +142,24 @@ export const useMessagesStore = create<MessagesState>((set, get) => ({
   },
 
   sendMessage: async (recipient: string, content: string) => {
-    const { address, walletSource, evmAddress, encryptionKeyPair } = useWalletStore.getState()
-    if (!address || !walletSource || !evmAddress || !encryptionKeyPair) {
-      throw new Error('Wallet not connected, not mapped, or encryption key not set')
+    const { evmAddress } = useWalletStore.getState()
+    if (!evmAddress) {
+      throw new Error('Wallet not connected')
     }
 
-    const { web3FromSource } = await import('@polkadot/extension-dapp')
-    const injector = await web3FromSource(walletSource)
-    const account: InjectedAccountWithMeta = {
-      address,
-      meta: { source: walletSource },
-      signer: injector.signer,
-    }
-
-    // Encode content as UTF-8 bytes (same as pod messages)
-    const messageBytes = new TextEncoder().encode(content)
-    const contentHash = new Uint8Array(32)
-    contentHash.set(messageBytes.slice(0, 32))
+    // Use sendMessageOnChain which handles chunking for long messages
+    const encoder = new TextEncoder()
+    const contentBytes = encoder.encode(content)
     
-    const nonce = new Uint8Array(24) // Dummy nonce
-
-    const api = await getApi()
-    await messagesSendMessage(api, account, recipient.toLowerCase(), contentHash, nonce)
+    const result = await sendMessageOnChain(evmAddress, recipient.toLowerCase(), contentBytes)
 
     const message: Message = {
-      id: `${evmAddress}-${Date.now()}`,
+      id: result.id,
       sender: evmAddress.toLowerCase(),
       recipient: recipient.toLowerCase(),
-      encryptedContent: contentHash,
-      decryptedContent: content,
-      timestamp: Date.now(),
+      encryptedContent: result.encryptedContent,
+      decryptedContent: result.decryptedContent,
+      timestamp: result.timestamp,
     }
 
     get().addMessage(message)

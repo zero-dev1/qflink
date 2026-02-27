@@ -141,7 +141,7 @@ export const ChatView: React.FC<ChatViewProps> = ({
         <div ref={messagesEndRef} />
       </div>
 
-      <MessageInput onSend={onSend} maxLength={500} />
+      <MessageInput onSend={onSend} maxLength={85} />
     </div>
   )
 }

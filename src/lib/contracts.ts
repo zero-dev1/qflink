@@ -16,7 +16,9 @@ console.log('ENV messages:', import.meta.env.VITE_MESSAGES_ADDRESS)
 
 const DECIMALS_18 = BigInt(10) ** BigInt(18)
 const DEFAULT_GAS_LIMIT = { refTime: BigInt(10000000000), proofSize: BigInt(10000000000) }
+const BATCH_GAS_LIMIT = { refTime: BigInt(1000000000), proofSize: BigInt(1000000000) }
 const DEFAULT_STORAGE_DEPOSIT = (BigInt(10) ** BigInt(18)).toString()
+const MAX_BATCH_CHUNKS = 3
 
 function selector(signature: string): Uint8Array {
   const hash = keccak256AsU8a(new TextEncoder().encode(signature))
@@ -739,6 +741,24 @@ export async function podsGetPodMessages(
     // Reassemble chunked messages for pod messages
     const reassembled = reassemblePodMessages(rawMessages, podId)
     
+    // DEBUG: Log raw data before returning
+    console.log('[podsGetPodMessages] raw message count:', rawMessages.length)
+    console.log('[podsGetPodMessages] raw messages:', rawMessages.map((m, i) => ({ 
+      index: i, 
+      sender: m.sender?.substring(0,10), 
+      contentLength: m.contentHash?.length, 
+      timestamp: m.timestamp,
+      contentHashHex: Array.from(m.contentHash).map(b => b.toString(16).padStart(2, '0')).slice(0, 8).join('') + '...'
+    })))
+    console.log('[podsGetPodMessages] reassembled count:', reassembled.length)
+    console.log('[podsGetPodMessages] reassembled:', reassembled.map((m, i) => ({
+      index: i,
+      id: m.id,
+      sender: m.sender?.substring(0, 10),
+      contentPreview: m.content?.substring(0, 30),
+      timestamp: m.timestamp
+    })))
+    
     console.log(`✅ [podsGetPodMessages] Fetched ${reassembled.length} messages for pod ${podId}`)
     return reassembled
   } catch (err) {
@@ -749,6 +769,7 @@ export async function podsGetPodMessages(
 
 /**
  * Reassemble chunked pod messages
+ * Protocol: Each chunk is Uint8Array(32): byte[0]=0xFF(magic), byte[1]=chunkIndex, byte[2]=totalChunks, bytes[3-31]=content(29 bytes)
  */
 interface PodRawMessage {
   sender: string
@@ -762,34 +783,18 @@ function reassemblePodMessages(
   podId: number
 ): PodMessage[] {
   console.log('[reassemblePod] raw messages count:', rawMessages.length)
-  console.log('[reassemblePod] raw messages:', rawMessages.map(m => ({
-    originalIndex: m.originalIndex,
-    sender: m.sender.slice(0, 8) + '...',
-    timestamp: new Date(m.timestamp).toISOString(),
-    contentHex: Array.from(m.contentHash).slice(0, 8).map(b => b.toString(16).padStart(2, '0')).join(''),
-    isChunked: isChunkedMessage(m.contentHash)
-  })))
-  
-  // Detailed debug logging for Chefs pod issue
-  console.log('[reassemblePod] input messages:', rawMessages.map((m, i) => ({
-    index: i,
-    sender: m.sender?.slice(0, 10),
-    contentBytes: Array.from(m.contentHash || []).slice(0, 5),
-    isChunked: isChunkedMessage(m.contentHash),
-    decoded: new TextDecoder().decode(m.contentHash)
-  })))
   
   const result: { msg: PodMessage; originalIndex: number }[] = []
   const chunkGroups = new Map<string, PodRawMessage[]>()
   
-  // Group potential chunks by sender+timeWindow
+  // First pass: separate non-chunked messages and group chunks
   for (const msg of rawMessages) {
     if (!isChunkedMessage(msg.contentHash)) {
-      // Not chunked - decode as single message, preserve original index
+      // Not chunked - decode as single message (full 32 bytes, trimmed of nulls)
       const content = new TextDecoder().decode(msg.contentHash).replace(/\0/g, '').trim()
       result.push({
         msg: {
-          id: `${podId}-${msg.sender}-${msg.timestamp}-${result.length}`,
+          id: `${podId}-${msg.sender.slice(0, 8)}-${msg.timestamp}-${result.length}`,
           podId,
           sender: msg.sender,
           contentHash: msg.contentHash,
@@ -801,15 +806,18 @@ function reassemblePodMessages(
       continue
     }
     
-    const chunkIndex = msg.contentHash[1] // byte 1: chunk index (byte 0 is 0xFF magic)
-    const totalChunks = msg.contentHash[2] // byte 2: total chunks
+    // Chunked message - extract header info
+    // Protocol: byte[0]=0xFF(magic), byte[1]=chunkIndex, byte[2]=totalChunks
+    const chunkIndex = msg.contentHash[1]
+    const totalChunks = msg.contentHash[2]
     
-    // Create a group key based on sender and approximate timestamp (30 second window)
-    const timeWindow = Math.floor(msg.timestamp / 30000) // 30 second buckets
+    // Create a group key: same sender + same totalChunks + timestamps within 60s window
+    // Using 60 second buckets to handle sequential chunk sending with 3s delays
+    const timeWindow = Math.floor(msg.timestamp / 60000) // 60 second buckets (timestamps are in ms)
     const groupKey = `${msg.sender}-${timeWindow}-${totalChunks}`
     
     if (!chunkGroups.has(groupKey)) {
-      chunkGroups.set(groupKey, [])
+      chunkGroups.set(groupKey, new Array(totalChunks))
     }
     const group = chunkGroups.get(groupKey)!
     group[chunkIndex] = msg
@@ -817,7 +825,7 @@ function reassemblePodMessages(
   
   console.log('[reassemblePod] chunk groups:', chunkGroups.size)
   
-  // Reassemble complete messages
+  // Second pass: reassemble complete chunk groups
   for (const [groupKey, chunks] of chunkGroups) {
     const firstChunk = chunks.find(c => c !== undefined)
     if (!firstChunk) continue
@@ -827,21 +835,21 @@ function reassemblePodMessages(
     
     console.log(`[reassemblePod] group ${groupKey}: ${receivedChunks}/${expectedChunks} chunks`)
     
-    // Check if we have all chunks
+    // Check if we have all chunks (indices 0 through totalChunks-1)
     const hasAllChunks = chunks.length === expectedChunks && chunks.every(c => c !== undefined)
     
     if (hasAllChunks) {
-      // Reassemble content
+      // Reassemble content: concatenate bytes[3-31] from each chunk (29 bytes per chunk)
       const reassembled = new Uint8Array(expectedChunks * CHUNK_CONTENT_SIZE)
       
       for (let i = 0; i < expectedChunks; i++) {
         const chunk = chunks[i]
         if (!chunk) continue // safety check
-        const content = chunk.contentHash.slice(CHUNK_HEADER_SIZE)
+        const content = chunk.contentHash.slice(CHUNK_HEADER_SIZE) // bytes 3-31
         reassembled.set(content, i * CHUNK_CONTENT_SIZE)
       }
       
-      // Find actual content length (first null byte or full length)
+      // Find actual content length (trim trailing null bytes)
       let actualLength = reassembled.length
       for (let i = 0; i < reassembled.length; i++) {
         if (reassembled[i] === 0) {
@@ -851,41 +859,26 @@ function reassemblePodMessages(
       }
       const trimmed = reassembled.slice(0, actualLength)
       
-      // Decode reassembled content
+      // Decode reassembled content as UTF-8
       const content = new TextDecoder().decode(trimmed).trim()
       
       console.log(`[reassemblePod] successfully reassembled ${expectedChunks} chunks, content length: ${content.length}`)
       
       result.push({
         msg: {
-          id: `${podId}-${firstChunk.sender}-${firstChunk.timestamp}-${result.length}`,
+          id: `${podId}-${firstChunk.sender.slice(0, 8)}-${firstChunk.timestamp}-${result.length}`,
           podId,
           sender: firstChunk.sender,
           contentHash: trimmed,
           timestamp: firstChunk.timestamp,
           content,
         },
-        originalIndex: firstChunk.originalIndex, // Use index of first chunk for ordering
+        originalIndex: firstChunk.originalIndex,
       })
     } else {
-      // Incomplete - add individual chunks as separate messages
-      console.log(`[reassemblePod] incomplete chunks, adding ${receivedChunks} individual messages`)
-      for (const chunk of chunks) {
-        if (chunk) {
-          const content = new TextDecoder().decode(chunk.contentHash.slice(CHUNK_HEADER_SIZE)).replace(/\0/g, '').trim()
-          result.push({
-            msg: {
-              id: `${podId}-${chunk.sender}-${chunk.timestamp}-${result.length}`,
-              podId,
-              sender: chunk.sender,
-              contentHash: chunk.contentHash.slice(CHUNK_HEADER_SIZE),
-              timestamp: chunk.timestamp,
-              content,
-            },
-            originalIndex: chunk.originalIndex,
-          })
-        }
-      }
+      // Incomplete group - hide the chunks (don't display)
+      // The next poll will pick up remaining chunks
+      console.log(`[reassemblePod] incomplete group ${groupKey} - hiding ${receivedChunks} chunks until complete`)
     }
   }
   
@@ -986,8 +979,10 @@ export async function messagesGetMessages(
     const reassembled = reassembleChunkedMessages(rawMessages)
     
     // Convert to DirectMessage format with decoded content
-    return reassembled.map((msg, index) => {
-      // Decode contentHash as UTF-8 text (works for both single and reassembled messages)
+    // Reassembled messages have contentHash set to the full reassembled content (for chunked)
+    // or the original 32-byte content (for non-chunked)
+    return reassembled.map((msg) => {
+      // Decode contentHash as UTF-8 text (trim trailing null bytes)
       const content = new TextDecoder().decode(msg.contentHash).replace(/\0/g, '').trim()
       return { 
         sender: msg.sender, 
@@ -1233,24 +1228,144 @@ export async function sendPodMessageOnChain(podId: number, address: string, cont
   
   const sel = selector('send_pod_message(uint64,bytes32)')
   
-  // Send all chunks sequentially with delay to avoid rate limiting
-  for (let i = 0; i < chunks.length; i++) {
-    const chunk = chunks[i]
-    const contentHash = new Uint8Array(32)
-    contentHash.set(chunk)
-    
-    const callData = concat(sel, encodeU64(podId), contentHash)
-    
-    // Use unified sendContractTx which handles both wallet types
-    await sendContractTx(api, CONTRACT_ADDRESSES.pods, callData)
-    
-    if (totalChunks > 1) {
-      console.log(`📤 [sendPodMessageOnChain] Sent chunk ${i + 1}/${totalChunks}`)
+  // Determine if we should use batching or sequential sending
+  // Batching saves signatures but has block weight limits
+  const shouldBatch = walletType !== 'evm' && totalChunks <= MAX_BATCH_CHUNKS
+  
+  if (shouldBatch) {
+    // Collect all chunk transactions into an array for batch submission
+    const txArray: any[] = []
+    for (let i = 0; i < chunks.length; i++) {
+      const chunk = chunks[i]
+      const contentHash = new Uint8Array(32)
+      contentHash.set(chunk)
+      
+      const callData = concat(sel, encodeU64(podId), contentHash)
+      
+      // Use full gas limit for batch - limited to 2 chunks to fit in block
+      const tx = api.tx.revive.call(
+        CONTRACT_ADDRESSES.pods,
+        '0',
+        DEFAULT_GAS_LIMIT,
+        DEFAULT_STORAGE_DEPOSIT,
+        u8aToHex(callData)
+      )
+      txArray.push(tx)
     }
     
-    // Add delay between chunks to avoid rate limiting (except after last chunk)
-    if (i < chunks.length - 1) {
-      await new Promise(resolve => setTimeout(resolve, 1000)) // 1 second delay
+    // Send all chunks as a single batched transaction (one signature)
+    const { walletSource } = useWalletStore.getState()
+    if (!walletSource) {
+      throw new Error('Wallet not connected')
+    }
+    
+    const { web3FromSource } = await import('@polkadot/extension-dapp')
+    const injector = await web3FromSource(walletSource)
+    
+    const batchTx = api.tx.utility.batchAll(txArray)
+    console.log(`📤 [sendPodMessageOnChain] Sending batch of ${totalChunks} chunks with reduced gas limit`)
+    await new Promise((resolve, reject) => {
+      batchTx
+        .signAndSend(address, { signer: injector.signer }, (result) => {
+          if (result.status.isInBlock || result.status.isFinalized) {
+            console.log(`✅ [sendPodMessageOnChain] Batch tx in block/finalized, status: ${result.status.type}`)
+            resolve(result)
+          }
+          if (result.isError) {
+            reject(new Error('Batch transaction failed'))
+          }
+        })
+        .catch(reject)
+    })
+  } else {
+    // Sequential sending for EVM wallets or when chunks exceed MAX_BATCH_CHUNKS
+    console.log('[sendPodMessage] using sequential path, chunks:', totalChunks)
+    if (totalChunks > MAX_BATCH_CHUNKS) {
+      console.log(`📤 [sendPodMessageOnChain] ${totalChunks} chunks exceed batch limit (${MAX_BATCH_CHUNKS}), using sequential sending`)
+    }
+    
+    for (let i = 0; i < chunks.length; i++) {
+      const chunk = chunks[i]
+      const contentHash = new Uint8Array(32)
+      contentHash.set(chunk)
+      
+      const callData = concat(sel, encodeU64(podId), contentHash)
+      
+      console.log(`[sequential] sending chunk ${i + 1}/${totalChunks}`)
+      
+      if (walletType === 'evm') {
+        const result = await sendContractTxEvm(CONTRACT_ADDRESSES.pods, callData)
+        console.log(`[sequential] EVM result:`, result)
+      } else {
+        // Substrate sequential send
+        const { walletSource } = useWalletStore.getState()
+        if (!walletSource) {
+          throw new Error('Wallet not connected')
+        }
+        const { web3FromSource } = await import('@polkadot/extension-dapp')
+        const injector = await web3FromSource(walletSource)
+        
+        const tx = api.tx.revive.call(
+          CONTRACT_ADDRESSES.pods,
+          '0',
+          DEFAULT_GAS_LIMIT,
+          DEFAULT_STORAGE_DEPOSIT,
+          u8aToHex(callData)
+        )
+        
+        // Send chunk with retry logic
+        let retries = 0
+        const maxRetries = 1
+        let lastError: Error | null = null
+        
+        while (retries <= maxRetries) {
+          try {
+            const result = await new Promise((resolve, reject) => {
+              tx
+                .signAndSend(address, { signer: injector.signer }, (result) => {
+                  console.log(`[sequential] tx status:`, result.status.type)
+                  if (result.events) {
+                    const events = result.events.map((e: any) => `${e.event.section}.${e.event.method}`)
+                    console.log(`[sequential] events:`, events)
+                    const hasFailed = events.some((e: string) => e.includes('ExtrinsicFailed') || e.includes('ContractReverted'))
+                    if (hasFailed) {
+                      console.error(`[sequential] FAILED EVENT DETECTED in chunk ${i + 1}`)
+                    }
+                  }
+                  if (result.status.isInBlock || result.status.isFinalized) {
+                    resolve(result)
+                  }
+                  if (result.isError) {
+                    reject(new Error(`Chunk ${i + 1} transaction failed`))
+                  }
+                })
+                .catch(reject)
+            })
+            console.log(`[sequential] chunk ${i + 1} result:`, result)
+            // Success - break out of retry loop
+            break
+          } catch (err) {
+            lastError = err instanceof Error ? err : new Error(String(err))
+            retries++
+            if (retries <= maxRetries) {
+              console.warn(`📤 [sendPodMessageOnChain] Chunk ${i + 1} failed, retrying in 3s...`, lastError.message)
+              await new Promise(resolve => setTimeout(resolve, 3000))
+            } else {
+              console.error(`📤 [sendPodMessageOnChain] Chunk ${i + 1} failed after ${maxRetries + 1} attempts`)
+              throw lastError
+            }
+          }
+        }
+      }
+      
+      if (totalChunks > 1) {
+        console.log(`📤 [sendPodMessageOnChain] Sent chunk ${i + 1}/${totalChunks}`)
+      }
+      
+      // Add delay between chunks to avoid rate limiting (except after last chunk)
+      if (i < chunks.length - 1) {
+        await new Promise(resolve => setTimeout(resolve, 3000))
+      }
     }
   }
   
@@ -1302,6 +1417,7 @@ function createMessageChunks(content: Uint8Array): Uint8Array[] {
 /**
  * Detect if a message chunk is part of a multi-chunk message
  * Uses 0xFF magic byte prefix - no valid UTF-8 text starts with 0xFF
+ * Protocol: byte[0]=magic(0xFF), byte[1]=chunkIndex, byte[2]=totalChunks, bytes[3-31]=content
  */
 function isChunkedMessage(contentHash: Uint8Array): boolean {
   // Check for magic byte 0xFF - this eliminates all false positives
@@ -1319,6 +1435,7 @@ function isChunkedMessage(contentHash: Uint8Array): boolean {
 
 /**
  * Reassemble chunked messages from raw message data
+ * Protocol: Each chunk is Uint8Array(32): byte[0]=0xFF(magic), byte[1]=chunkIndex, byte[2]=totalChunks, bytes[3-31]=content(29 bytes)
  */
 interface RawMessage {
   sender: string
@@ -1333,22 +1450,15 @@ interface RawMessageWithIndex extends RawMessage {
 }
 
 function reassembleChunkedMessages(rawMessages: RawMessageWithIndex[]): RawMessage[] {
-  console.log('[reassemble] raw messages count:', rawMessages.length)
-  console.log('[reassemble] raw messages:', rawMessages.map(m => ({
-    originalIndex: m.originalIndex,
-    sender: m.sender.slice(0, 8) + '...',
-    timestamp: new Date(m.timestamp).toISOString(),
-    contentHex: Array.from(m.contentHash).slice(0, 8).map(b => b.toString(16).padStart(2, '0')).join(''),
-    isChunked: isChunkedMessage(m.contentHash)
-  })))
+  console.log('[reassembleDM] raw messages count:', rawMessages.length)
   
   const result: { msg: RawMessage; originalIndex: number }[] = []
   const chunkGroups = new Map<string, RawMessageWithIndex[]>()
   
-  // Group potential chunks by sender+recipient+timeWindow
+  // First pass: separate non-chunked messages and group chunks
   for (const msg of rawMessages) {
     if (!isChunkedMessage(msg.contentHash)) {
-      // Not chunked - decode as single message, preserve original index
+      // Not chunked - keep as single message
       result.push({
         msg: {
           ...msg,
@@ -1359,23 +1469,26 @@ function reassembleChunkedMessages(rawMessages: RawMessageWithIndex[]): RawMessa
       continue
     }
     
-    const chunkIndex = msg.contentHash[1] // byte 1: chunk index (byte 0 is 0xFF magic)
-    const totalChunks = msg.contentHash[2] // byte 2: total chunks
+    // Chunked message - extract header info
+    // Protocol: byte[0]=0xFF(magic), byte[1]=chunkIndex, byte[2]=totalChunks
+    const chunkIndex = msg.contentHash[1]
+    const totalChunks = msg.contentHash[2]
     
-    // Create a group key based on sender, recipient, and approximate timestamp (30 second window)
-    const timeWindow = Math.floor(msg.timestamp / 30000) // 30 second buckets
+    // Create a group key: same sender + same recipient + same totalChunks + timestamps within 60s window
+    // Using 60 second buckets to handle sequential chunk sending with 3s delays
+    const timeWindow = Math.floor(msg.timestamp / 60000) // 60 second buckets (timestamps are in ms)
     const groupKey = `${msg.sender}-${msg.recipient}-${timeWindow}-${totalChunks}`
     
     if (!chunkGroups.has(groupKey)) {
-      chunkGroups.set(groupKey, [])
+      chunkGroups.set(groupKey, new Array(totalChunks))
     }
     const group = chunkGroups.get(groupKey)!
     group[chunkIndex] = msg
   }
   
-  console.log('[reassemble] chunk groups:', chunkGroups.size)
+  console.log('[reassembleDM] chunk groups:', chunkGroups.size)
   
-  // Reassemble complete messages
+  // Second pass: reassemble complete chunk groups
   for (const [groupKey, chunks] of chunkGroups) {
     const firstChunk = chunks.find(c => c !== undefined)
     if (!firstChunk) continue
@@ -1383,23 +1496,23 @@ function reassembleChunkedMessages(rawMessages: RawMessageWithIndex[]): RawMessa
     const expectedChunks = firstChunk.contentHash[2] // byte 2: total chunks
     const receivedChunks = chunks.filter(Boolean).length
     
-    console.log(`[reassemble] group ${groupKey}: ${receivedChunks}/${expectedChunks} chunks`)
+    console.log(`[reassembleDM] group ${groupKey}: ${receivedChunks}/${expectedChunks} chunks`)
     
-    // Check if we have all chunks
+    // Check if we have all chunks (indices 0 through totalChunks-1)
     const hasAllChunks = chunks.length === expectedChunks && chunks.every(c => c !== undefined)
     
     if (hasAllChunks) {
-      // Reassemble content
+      // Reassemble content: concatenate bytes[3-31] from each chunk (29 bytes per chunk)
       const reassembled = new Uint8Array(expectedChunks * CHUNK_CONTENT_SIZE)
       
       for (let i = 0; i < expectedChunks; i++) {
         const chunk = chunks[i]
         if (!chunk) continue // safety check
-        const content = chunk.contentHash.slice(CHUNK_HEADER_SIZE)
+        const content = chunk.contentHash.slice(CHUNK_HEADER_SIZE) // bytes 3-31
         reassembled.set(content, i * CHUNK_CONTENT_SIZE)
       }
       
-      // Find actual content length (first null byte or full length)
+      // Find actual content length (trim trailing null bytes)
       let actualLength = reassembled.length
       for (let i = 0; i < reassembled.length; i++) {
         if (reassembled[i] === 0) {
@@ -1409,7 +1522,7 @@ function reassembleChunkedMessages(rawMessages: RawMessageWithIndex[]): RawMessa
       }
       const trimmed = reassembled.slice(0, actualLength)
       
-      console.log(`[reassemble] successfully reassembled ${expectedChunks} chunks, content length: ${trimmed.length}`)
+      console.log(`[reassembleDM] successfully reassembled ${expectedChunks} chunks, content length: ${trimmed.length}`)
       
       result.push({
         msg: {
@@ -1419,29 +1532,19 @@ function reassembleChunkedMessages(rawMessages: RawMessageWithIndex[]): RawMessa
           timestamp: firstChunk.timestamp,
           nonce: firstChunk.nonce,
         },
-        originalIndex: firstChunk.originalIndex, // Use index of first chunk for ordering
+        originalIndex: firstChunk.originalIndex,
       })
     } else {
-      // Incomplete - add individual chunks as separate messages
-      console.log(`[reassemble] incomplete chunks, adding ${receivedChunks} individual messages`)
-      for (const chunk of chunks) {
-        if (chunk) {
-          result.push({
-            msg: {
-              ...chunk,
-              contentHash: chunk.contentHash.slice(CHUNK_HEADER_SIZE),
-            },
-            originalIndex: chunk.originalIndex,
-          })
-        }
-      }
+      // Incomplete group - hide the chunks (don't display)
+      // The next poll will pick up remaining chunks
+      console.log(`[reassembleDM] incomplete group ${groupKey} - hiding ${receivedChunks} chunks until complete`)
     }
   }
   
   // Sort by original index to maintain on-chain order
   result.sort((a, b) => a.originalIndex - b.originalIndex)
   
-  console.log('[reassemble] final result count:', result.length)
+  console.log('[reassembleDM] final result count:', result.length)
   return result.map(r => r.msg)
 }
 
@@ -1450,7 +1553,7 @@ export async function sendMessageOnChain(sender: string, recipient: string, cont
   
   // Get wallet info
   const { useWalletStore } = await import('@/stores/wallet')
-  const { evmAddress, encryptionKeyPair } = useWalletStore.getState()
+  const { walletType, evmAddress, encryptionKeyPair } = useWalletStore.getState()
   
   if (!sender || !evmAddress || !encryptionKeyPair) {
     throw new Error('Wallet not connected, not mapped, or encryption key not set')
@@ -1462,28 +1565,138 @@ export async function sendMessageOnChain(sender: string, recipient: string, cont
   
   console.log(`📤 [sendMessageOnChain] Split into ${totalChunks} chunk(s)`)
   
-  // Send all chunks sequentially with delay to avoid rate limiting
-  for (let i = 0; i < chunks.length; i++) {
-    const chunk = chunks[i]
-    const contentHash = new Uint8Array(32)
-    contentHash.set(chunk)
-    
-    // Generate a dummy nonce (required by contract, but not used for raw content)
-    const nonce = new Uint8Array(24)
-    
-    const sel = selector('send_message(address,bytes32,bytes24)')
-    const callData = concat(sel, encodeAddress(recipient), contentHash, nonce)
-    
-    // Use unified sendContractTx which handles both wallet types
-    await sendContractTx(api, CONTRACT_ADDRESSES.messages, callData)
-    
-    if (totalChunks > 1) {
-      console.log(`📤 [sendMessageOnChain] Sent chunk ${i + 1}/${totalChunks}`)
+  const sel = selector('send_message(address,bytes32,bytes24)')
+  
+  // Determine if we should use batching or sequential sending
+  // Batching saves signatures but has block weight limits
+  const shouldBatch = walletType !== 'evm' && totalChunks <= MAX_BATCH_CHUNKS
+  
+  if (shouldBatch) {
+    // Collect all chunk transactions into an array for batch submission
+    const txArray: any[] = []
+    for (let i = 0; i < chunks.length; i++) {
+      const chunk = chunks[i]
+      const contentHash = new Uint8Array(32)
+      contentHash.set(chunk)
+      
+      // Generate a dummy nonce (required by contract, but not used for raw content)
+      const nonce = new Uint8Array(24)
+      
+      const callData = concat(sel, encodeAddress(recipient), contentHash, nonce)
+      
+      // Use full gas limit for batch - limited to 2 chunks to fit in block
+      const tx = api.tx.revive.call(
+        CONTRACT_ADDRESSES.messages,
+        '0',
+        DEFAULT_GAS_LIMIT,
+        DEFAULT_STORAGE_DEPOSIT,
+        u8aToHex(callData)
+      )
+      txArray.push(tx)
     }
     
-    // Add delay between chunks to avoid rate limiting (except after last chunk)
-    if (i < chunks.length - 1) {
-      await new Promise(resolve => setTimeout(resolve, 1000)) // 1 second delay
+    // Send all chunks as a single batched transaction (one signature)
+    const { walletSource } = useWalletStore.getState()
+    if (!walletSource) {
+      throw new Error('Wallet not connected')
+    }
+    
+    const { web3FromSource } = await import('@polkadot/extension-dapp')
+    const injector = await web3FromSource(walletSource)
+    
+    const batchTx = api.tx.utility.batchAll(txArray)
+    console.log(`📤 [sendMessageOnChain] Sending batch of ${totalChunks} chunks with full gas limit (max 2 chunks)`)
+    await new Promise((resolve, reject) => {
+      batchTx
+        .signAndSend(sender, { signer: injector.signer }, (result) => {
+          if (result.status.isInBlock || result.status.isFinalized) {
+            console.log(`✅ [sendMessageOnChain] Batch tx in block/finalized, status: ${result.status.type}`)
+            resolve(result)
+          }
+          if (result.isError) {
+            reject(new Error('Batch transaction failed'))
+          }
+        })
+        .catch(reject)
+    })
+  } else {
+    // Sequential sending for EVM wallets or when chunks exceed MAX_BATCH_CHUNKS
+    if (totalChunks > MAX_BATCH_CHUNKS) {
+      console.log(`📤 [sendMessageOnChain] ${totalChunks} chunks exceed batch limit (${MAX_BATCH_CHUNKS}), using sequential sending`)
+    }
+    
+    for (let i = 0; i < chunks.length; i++) {
+      const chunk = chunks[i]
+      const contentHash = new Uint8Array(32)
+      contentHash.set(chunk)
+      
+      // Generate a dummy nonce (required by contract, but not used for raw content)
+      const nonce = new Uint8Array(24)
+      
+      const callData = concat(sel, encodeAddress(recipient), contentHash, nonce)
+      
+      if (walletType === 'evm') {
+        await sendContractTxEvm(CONTRACT_ADDRESSES.messages, callData)
+      } else {
+        // Substrate sequential send
+        const { walletSource } = useWalletStore.getState()
+        if (!walletSource) {
+          throw new Error('Wallet not connected')
+        }
+        const { web3FromSource } = await import('@polkadot/extension-dapp')
+        const injector = await web3FromSource(walletSource)
+        
+        const tx = api.tx.revive.call(
+          CONTRACT_ADDRESSES.messages,
+          '0',
+          DEFAULT_GAS_LIMIT,
+          DEFAULT_STORAGE_DEPOSIT,
+          u8aToHex(callData)
+        )
+        
+        // Send chunk with retry logic
+        let retries = 0
+        const maxRetries = 1
+        let lastError: Error | null = null
+        
+        while (retries <= maxRetries) {
+          try {
+            await new Promise((resolve, reject) => {
+              tx
+                .signAndSend(sender, { signer: injector.signer }, (result) => {
+                  if (result.status.isInBlock || result.status.isFinalized) {
+                    resolve(result)
+                  }
+                  if (result.isError) {
+                    reject(new Error(`Chunk ${i + 1} transaction failed`))
+                  }
+                })
+                .catch(reject)
+            })
+            // Success - break out of retry loop
+            break
+          } catch (err) {
+            lastError = err instanceof Error ? err : new Error(String(err))
+            retries++
+            if (retries <= maxRetries) {
+              console.warn(`📤 [sendMessageOnChain] Chunk ${i + 1} failed, retrying in 3s...`, lastError.message)
+              await new Promise(resolve => setTimeout(resolve, 3000))
+            } else {
+              console.error(`📤 [sendMessageOnChain] Chunk ${i + 1} failed after ${maxRetries + 1} attempts`)
+              throw lastError
+            }
+          }
+        }
+      }
+      
+      if (totalChunks > 1) {
+        console.log(`📤 [sendMessageOnChain] Sent chunk ${i + 1}/${totalChunks}`)
+      }
+      
+      // Add delay between chunks to avoid rate limiting (except after last chunk)
+      if (i < chunks.length - 1) {
+        await new Promise(resolve => setTimeout(resolve, 3000))
+      }
     }
   }
   
