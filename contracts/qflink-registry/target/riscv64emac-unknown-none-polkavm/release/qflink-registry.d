@@ -1,0 +1,1 @@
+/Users/ismaelwali/CascadeProjects/QFDapps/qflink/contracts/qflink-registry/target/riscv64emac-unknown-none-polkavm/release/qflink-registry: /Users/ismaelwali/CascadeProjects/QFDapps/qflink/contracts/qflink-registry/src/main.rs

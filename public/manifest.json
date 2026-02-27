@@ -1,0 +1,20 @@
+{
+  "name": "QFLink - Encrypted Messaging",
+  "short_name": "QFLink",
+  "description": "Decentralized wallet-gated encrypted messaging on QF Network",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#0D0D0D",
+  "theme_color": "#00FFFF",
+  "orientation": "portrait-primary",
+  "icons": [
+    {
+      "src": "/favicon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ],
+  "categories": ["social", "communication"],
+  "lang": "en"
+}

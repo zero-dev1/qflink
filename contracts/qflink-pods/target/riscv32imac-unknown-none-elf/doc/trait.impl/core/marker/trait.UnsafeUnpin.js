@@ -1,0 +1,9 @@
+(function() {
+    var implementors = Object.fromEntries([["pallet_revive_uapi",[["impl UnsafeUnpin for <a class=\"enum\" href=\"pallet_revive_uapi/enum.HostFnImpl.html\" title=\"enum pallet_revive_uapi::HostFnImpl\">HostFnImpl</a>",1,["pallet_revive_uapi::host::HostFnImpl"]],["impl UnsafeUnpin for <a class=\"enum\" href=\"pallet_revive_uapi/enum.ReturnErrorCode.html\" title=\"enum pallet_revive_uapi::ReturnErrorCode\">ReturnErrorCode</a>",1,["pallet_revive_uapi::ReturnErrorCode"]],["impl UnsafeUnpin for <a class=\"struct\" href=\"pallet_revive_uapi/struct.CallFlags.html\" title=\"struct pallet_revive_uapi::CallFlags\">CallFlags</a>",1,["pallet_revive_uapi::flags::CallFlags"]],["impl UnsafeUnpin for <a class=\"struct\" href=\"pallet_revive_uapi/struct.ReturnCode.html\" title=\"struct pallet_revive_uapi::ReturnCode\">ReturnCode</a>",1,["pallet_revive_uapi::ReturnCode"]],["impl UnsafeUnpin for <a class=\"struct\" href=\"pallet_revive_uapi/struct.ReturnFlags.html\" title=\"struct pallet_revive_uapi::ReturnFlags\">ReturnFlags</a>",1,["pallet_revive_uapi::flags::ReturnFlags"]],["impl UnsafeUnpin for <a class=\"struct\" href=\"pallet_revive_uapi/struct.StorageFlags.html\" title=\"struct pallet_revive_uapi::StorageFlags\">StorageFlags</a>",1,["pallet_revive_uapi::flags::StorageFlags"]]]]]);
+    if (window.register_implementors) {
+        window.register_implementors(implementors);
+    } else {
+        window.pending_implementors = implementors;
+    }
+})()
+//{"start":57,"fragment_lengths":[1243]}

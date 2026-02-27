@@ -1,0 +1,11 @@
+[package]
+name = "qflink-pods"
+version = "0.1.0"
+edition = "2021"
+publish = false
+
+[dependencies]
+codec = { version = "3.7.4", package = "parity-scale-codec", features = ["derive"], default-features = false }
+pallet-revive-uapi = { version = "0.4.0", default-features = false }
+polkavm-derive = { version = "0.21.0" }
+qf-polkavm-sdk = { version = "0.2.0", features = ["global-allocator", "panic-handler"] }
