@@ -1,20 +1,37 @@
 {
-  "name": "QFLink - Encrypted Messaging",
+  "name": "QFLink",
   "short_name": "QFLink",
-  "description": "Decentralized wallet-gated encrypted messaging on QF Network",
-  "start_url": "/",
+  "description": "Every Message. On-Chain. Forever. The first fully on-chain messaging app built on QF Network.",
+  "start_url": "/connect",
   "display": "standalone",
   "background_color": "#0D0D0D",
-  "theme_color": "#00FFFF",
-  "orientation": "portrait-primary",
+  "theme_color": "#0891B2",
+  "orientation": "portrait",
   "icons": [
     {
-      "src": "/favicon.svg",
-      "sizes": "any",
-      "type": "image/svg+xml",
-      "purpose": "any maskable"
+      "src": "/favicon-16.png",
+      "sizes": "16x16",
+      "type": "image/png"
+    },
+    {
+      "src": "/favicon-32.png",
+      "sizes": "32x32",
+      "type": "image/png"
+    },
+    {
+      "src": "/apple-touch-icon.png",
+      "sizes": "180x180",
+      "type": "image/png"
+    },
+    {
+      "src": "/logo-192.png",
+      "sizes": "192x192",
+      "type": "image/png"
+    },
+    {
+      "src": "/logo-512.png",
+      "sizes": "512x512",
+      "type": "image/png"
     }
-  ],
-  "categories": ["social", "communication"],
-  "lang": "en"
+  ]
 }

@@ -251,7 +251,7 @@ const ConnectPage: React.FC = () => {
   )
 
   return (
-    <div className="min-h-screen bg-[#0D0D0D] flex flex-col items-center justify-center px-4">
+    <div className="h-dvh overflow-hidden bg-[#0D0D0D] flex flex-col items-center justify-center px-4">
       {/* QFLink Wordmark */}
       <QFLinkWordmark size={56} variant="dark" className="mb-10" />
 
