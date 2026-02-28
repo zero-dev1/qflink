@@ -11,14 +11,14 @@ export const FooterCTA: React.FC = () => {
       <div 
         className="absolute inset-0 pointer-events-none opacity-50 hidden dark:block"
         style={{
-          background: 'radial-gradient(ellipse at center, rgba(0,229,255,0.08) 0%, #0D0D0D 70%)'
+          background: 'radial-gradient(ellipse at center, rgba(8,145,178,0.08) 0%, #0D0D0D 70%)'
         }}
       />
       {/* Radial gradient glow - Light mode */}
       <div 
         className="absolute inset-0 pointer-events-none opacity-50 dark:hidden"
         style={{
-          background: 'radial-gradient(ellipse at center, rgba(0,229,255,0.04) 0%, #FFFFFF 70%)'
+          background: 'radial-gradient(ellipse at center, rgba(8,145,178,0.06) 0%, #FFFFFF 70%)'
         }}
       />
 
@@ -30,13 +30,13 @@ export const FooterCTA: React.FC = () => {
             inView ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-8'
           }`}
         >
-          <h2 className="font-heading text-4xl md:text-6xl font-bold text-gray-900 dark:text-white mb-10">
+          <h2 className="font-display text-4xl md:text-6xl font-bold text-gray-900 dark:text-white mb-10">
             Start chatting on-chain.
           </h2>
 
           <Link
-            to="/home"
-            className="inline-block bg-cyan-600 dark:bg-cyan-400 text-white dark:text-black font-bold text-lg px-8 py-3 rounded-none hover:bg-cyan-500 dark:hover:bg-cyan-300 transition-colors duration-200"
+            to="/connect"
+            className="inline-block bg-cyan-600 text-white font-bold text-lg px-8 py-3 rounded-none hover:bg-cyan-700 transition-colors duration-200"
           >
             Launch App &rarr;
           </Link>
@@ -47,22 +47,24 @@ export const FooterCTA: React.FC = () => {
         </div>
 
         {/* Footer bar */}
-        <footer className="border-t border-gray-200 dark:border-white/[0.06] py-8 mt-16">
+        <footer className="border-t border-gray-200 dark:border-gray-800 py-8 mt-16">
           <div className="flex flex-col md:flex-row items-center justify-between gap-4">
             <div className="flex items-center gap-2">
               <span className="text-gray-900 dark:text-white font-bold">QFLink</span>
-              <span className="text-gray-400 dark:text-gray-600 text-sm">&copy; 2025</span>
+              <span className="text-gray-400 dark:text-gray-600 text-sm">&copy; 2026</span>
             </div>
 
             <div className="flex items-center gap-6">
               <Link 
-                to="/home" 
+                to="/connect" 
                 className="text-gray-500 hover:text-gray-900 dark:hover:text-white transition-colors text-sm"
               >
                 App
               </Link>
               <a 
-                href="#" 
+                href="https://qfnetwork.xyz" 
+                target="_blank"
+                rel="noopener noreferrer"
                 className="text-gray-500 hover:text-gray-900 dark:hover:text-white transition-colors text-sm"
               >
                 QF Network

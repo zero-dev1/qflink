@@ -16,8 +16,8 @@ export const CategoryPills: React.FC<CategoryPillsProps> = ({ categories, select
         className={cn(
           'rounded-full px-4 py-1.5 text-sm font-medium transition-colors border',
           selected === null
-            ? 'bg-qf-accent text-qf-accent-text border-qf-accent'
-            : 'bg-transparent text-qf-text-secondary border-qf-border-prominent hover:border-qf-text-secondary'
+            ? 'bg-cyan-600 text-white border-cyan-600'
+            : 'bg-transparent text-gray-600 dark:text-gray-400 border border-gray-200 dark:border-gray-700 hover:border-gray-400 dark:hover:border-gray-500'
         )}
       >
         All
@@ -29,8 +29,8 @@ export const CategoryPills: React.FC<CategoryPillsProps> = ({ categories, select
           className={cn(
             'rounded-full px-4 py-1.5 text-sm font-medium transition-colors border capitalize',
             selected === cat
-              ? 'bg-qf-accent text-qf-accent-text border-qf-accent'
-              : 'bg-transparent text-qf-text-secondary border-qf-border-prominent hover:border-qf-text-secondary'
+              ? 'bg-cyan-600 text-white border-cyan-600'
+              : 'bg-transparent text-gray-600 dark:text-gray-400 border border-gray-200 dark:border-gray-700 hover:border-gray-400 dark:hover:border-gray-500'
           )}
         >
           {cat}

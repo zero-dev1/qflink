@@ -17,20 +17,20 @@ interface CreatePodModalProps {
 const TIERS: PodTier[] = ['standard', 'premium', 'elite']
 
 const TIER_COLORS: Record<PodTier, string> = {
-  standard: 'border-qf-border-subtle hover:border-qf-text-secondary',
-  premium: 'border-cyan-500/40 hover:border-cyan-400',
+  standard: 'border-qx-border-subtle hover:border-qx-text-secondary',
+  premium: 'border-cyan-600/40 hover:border-cyan-700',
   elite: 'border-yellow-500/40 hover:border-yellow-400',
 }
 
 const TIER_SELECTED: Record<PodTier, string> = {
-  standard: 'border-qf-accent bg-qf-accent/10',
-  premium: 'border-cyan-400 bg-cyan-400/10',
+  standard: 'border-cyan-600 bg-cyan-600/10',
+  premium: 'border-cyan-600 bg-cyan-600/10',
   elite: 'border-yellow-400 bg-yellow-400/10',
 }
 
 const TIER_LABEL_COLORS: Record<PodTier, string> = {
-  standard: 'text-qf-text-primary',
-  premium: 'text-cyan-400',
+  standard: 'text-qx-text-primary',
+  premium: 'text-cyan-600',
   elite: 'text-yellow-400',
 }
 
@@ -129,11 +129,11 @@ export const CreatePodModal: React.FC<CreatePodModalProps> = ({ isOpen, onClose,
         {[1, 2, 3].map((s) => (
           <div key={s} className="flex items-center gap-2">
             <div className={`flex h-7 w-7 items-center justify-center rounded-full text-xs font-bold transition-colors ${
-              s <= step ? 'bg-qf-accent text-black' : 'bg-qf-elevated text-qf-text-muted'
+              s <= step ? 'bg-cyan-600 text-white' : 'bg-qx-elevated text-qx-text-muted'
             }`}>
               {s}
             </div>
-            {s < 3 && <div className={`h-px w-8 ${s < step ? 'bg-qf-accent' : 'bg-qf-border-subtle'}`} />}
+            {s < 3 && <div className={`h-px w-8 ${s < step ? 'bg-cyan-600' : 'bg-qx-border-subtle'}`} />}
           </div>
         ))}
       </div>
@@ -141,8 +141,8 @@ export const CreatePodModal: React.FC<CreatePodModalProps> = ({ isOpen, onClose,
       {/* Step 1: Choose Tier */}
       {step === 1 && (
         <div className="flex flex-col gap-4">
-          <p className="text-xs text-qf-text-muted text-center">
-            Your balance: <span className="text-qf-text-primary font-medium">{formatBalance(userBalance)} QF</span>
+          <p className="text-xs text-qx-text-muted text-center">
+            Your balance: <span className="text-qx-text-primary font-medium">{formatBalance(userBalance)} QF</span>
           </p>
           <div className="grid grid-cols-1 gap-3">
             {TIERS.map((t) => {
@@ -156,10 +156,10 @@ export const CreatePodModal: React.FC<CreatePodModalProps> = ({ isOpen, onClose,
                   onClick={() => { setTier(t); setError('') }}
                   className={`relative flex flex-col border p-4 text-left transition-[border-color,transform] duration-150 ${
                     !affordable
-                      ? 'cursor-not-allowed border-qf-card-border opacity-40'
+                      ? 'cursor-not-allowed border-gray-200 dark:border-gray-800 opacity-40'
                       : selected
-                        ? 'border-qf-accent bg-qf-active-bg'
-                        : 'border-qf-card-border hover:border-qf-accent hover:-translate-y-0.5'
+                        ? 'border-cyan-600 bg-qx-active-bg'
+                        : 'border-gray-200 dark:border-gray-800 hover:border-cyan-600 hover:-translate-y-0.5'
                   }`}
                 >
                   <div className="flex items-center justify-between mb-2">
@@ -167,13 +167,13 @@ export const CreatePodModal: React.FC<CreatePodModalProps> = ({ isOpen, onClose,
                       {info.name} — {info.feeDisplay.toLocaleString()} QF
                     </span>
                     {selected && affordable && (
-                      <div className="h-2.5 w-2.5 rounded-full bg-qf-accent" />
+                      <div className="h-2.5 w-2.5 rounded-full bg-cyan-600" />
                     )}
                   </div>
                   <ul className="space-y-1">
                     {info.features.map((f, i) => (
-                      <li key={i} className="flex items-center gap-2 text-xs text-qf-text-secondary">
-                        <span className="dark:text-qf-accent text-qf-text-primary">✓</span> {f}
+                      <li key={i} className="flex items-center gap-2 text-xs text-qx-text-secondary">
+                        <span className="text-cyan-600">✓</span> {f}
                       </li>
                     ))}
                   </ul>
@@ -213,16 +213,16 @@ export const CreatePodModal: React.FC<CreatePodModalProps> = ({ isOpen, onClose,
             error={error && error.includes('balance') ? error : undefined}
           />
           <div className="flex items-center justify-between">
-            <label className="text-sm font-medium text-qf-text-secondary">Public Pod</label>
+            <label className="text-sm font-medium text-qx-text-secondary">Public Pod</label>
             <button
               type="button"
               onClick={() => setIsPublic(!isPublic)}
-              className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${isPublic ? 'bg-qf-accent' : 'bg-qf-border-prominent'}`}
+              className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${isPublic ? 'bg-cyan-600' : 'bg-qx-border-prominent'}`}
             >
               <span className={`inline-block h-4 w-4 rounded-full bg-white transition-transform ${isPublic ? 'translate-x-6' : 'translate-x-1'}`} />
             </button>
           </div>
-          <p className="text-xs text-qf-text-muted">
+          <p className="text-xs text-qx-text-muted">
             {isPublic ? 'Anyone can discover and join this pod' : 'Only invited members can join'}
           </p>
           {error && !error.includes('name') && !error.includes('balance') && (
@@ -234,38 +234,38 @@ export const CreatePodModal: React.FC<CreatePodModalProps> = ({ isOpen, onClose,
       {/* Step 3: Confirm */}
       {step === 3 && (
         <div className="flex flex-col gap-4">
-          <div className="border border-qf-card-border bg-qf-card p-4 space-y-3">
+          <div className="border border-gray-200 dark:border-gray-800 bg-transparent p-4 space-y-3">
             <div className="flex justify-between text-sm">
-              <span className="text-qf-text-muted">Pod Name</span>
-              <span className="text-qf-text-primary font-medium">{name}</span>
+              <span className="text-qx-text-muted">Pod Name</span>
+              <span className="text-qx-text-primary font-medium">{name}</span>
             </div>
             <div className="flex justify-between text-sm">
-              <span className="text-qf-text-muted">Tier</span>
+              <span className="text-qx-text-muted">Tier</span>
               <span className={`font-medium ${TIER_LABEL_COLORS[tier]}`}>{tierInfo.name}</span>
             </div>
             <div className="flex justify-between text-sm">
-              <span className="text-qf-text-muted">Min Balance</span>
-              <span className="text-qf-text-primary">{minBalance || '0'} QF</span>
+              <span className="text-qx-text-muted">Min Balance</span>
+              <span className="text-qx-text-primary">{minBalance || '0'} QF</span>
             </div>
             <div className="flex justify-between text-sm">
-              <span className="text-qf-text-muted">Visibility</span>
-              <span className="dark:text-qf-text-primary">{isPublic ? 'Public' : 'Private'}</span>
+              <span className="text-qx-text-muted">Visibility</span>
+              <span className="dark:text-qx-text-primary">{isPublic ? 'Public' : 'Private'}</span>
             </div>
           </div>
 
-          <div className="border border-qf-card-border bg-qf-card p-4">
-            <p className="text-sm font-medium text-qf-text-primary mb-3">Fee Breakdown</p>
+          <div className="border border-gray-200 dark:border-gray-800 bg-transparent p-4">
+            <p className="text-sm font-medium text-qx-text-primary mb-3">Fee Breakdown</p>
             <div className="space-y-2 font-mono text-sm">
               <div className="flex justify-between">
-                <span className="text-qf-text-muted">Total</span>
-                <span className="text-qf-text-primary font-bold">{tierInfo.feeDisplay.toLocaleString()} QF</span>
+                <span className="text-qx-text-muted">Total</span>
+                <span className="text-qx-text-primary font-bold">{tierInfo.feeDisplay.toLocaleString()} QF</span>
               </div>
               <div className="flex justify-between">
-                <span className="text-qf-text-muted">├─ Treasury (25%)</span>
-                <span className="text-qf-text-secondary">{treasuryAmount.toLocaleString()} QF</span>
+                <span className="text-qx-text-muted">├─ Treasury (25%)</span>
+                <span className="text-qx-text-secondary">{treasuryAmount.toLocaleString()} QF</span>
               </div>
               <div className="flex justify-between">
-                <span className="text-qf-text-muted">└─ Burned (75%)</span>
+                <span className="text-qx-text-muted">└─ Burned (75%)</span>
                 <span className="text-orange-400">{burnAmount.toLocaleString()} QF</span>
               </div>
             </div>

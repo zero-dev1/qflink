@@ -3,6 +3,7 @@ import { NavLink } from 'react-router-dom'
 import { NetworkIndicator } from '@/components/ui/NetworkIndicator'
 import { useUIStore } from '@/stores/ui'
 import { cn } from '@/lib/utils'
+import { QFLinkWordmark } from '@/components/QFLinkWordmark'
 
 const sidebarItems = [
   {
@@ -18,6 +19,16 @@ const sidebarItems = [
   {
     to: '/explore',
     label: 'Explore',
+    icon: (
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+        <circle cx="11" cy="11" r="8" />
+        <line x1="21" y1="21" x2="16.65" y2="16.65" />
+      </svg>
+    ),
+  },
+  {
+    to: '/pods',
+    label: 'Pods',
     icon: (
       <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
         <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" />
@@ -62,11 +73,8 @@ const mobileItems = sidebarItems.filter((i) => i.label !== 'Settings')
 
 const SidebarContent: React.FC<{ onClose?: () => void }> = ({ onClose }) => (
   <>
-    <div className="flex h-14 items-center px-5 border-b border-qf-border-subtle">
-      <h1 className="font-heading text-xl font-bold">
-        <span className="text-qf-text-primary">QF</span>
-        <span className="text-qf-accent">Link</span>
-      </h1>
+    <div className="flex h-14 items-center px-5 border-b border-gray-200 dark:border-gray-800">
+      <QFLinkWordmark size={28} variant="auto" />
     </div>
 
     <nav className="flex-1 px-2 py-4">
@@ -81,8 +89,8 @@ const SidebarContent: React.FC<{ onClose?: () => void }> = ({ onClose }) => (
                 cn(
                   'flex items-center gap-3 px-3 py-2.5 text-sm font-medium transition-colors duration-150',
                   isActive
-                    ? 'text-qf-active-text bg-qf-active-bg font-semibold'
-                    : 'text-qf-text-secondary hover:text-qf-text-primary hover:bg-qf-elevated'
+                    ? 'text-qx-active-text bg-qx-active-bg font-semibold'
+                    : 'text-qx-text-secondary hover:text-qx-text-primary hover:bg-qx-elevated'
                 )
               }
             >
@@ -94,7 +102,7 @@ const SidebarContent: React.FC<{ onClose?: () => void }> = ({ onClose }) => (
       </ul>
     </nav>
 
-    <div className="border-t border-qf-border-subtle p-4">
+    <div className="border-t border-gray-200 dark:border-gray-800 p-4">
       <NetworkIndicator />
     </div>
   </>
@@ -107,7 +115,7 @@ export const Sidebar: React.FC = () => {
   return (
     <>
       {/* Desktop sidebar — always visible */}
-      <aside className="hidden md:flex w-44 flex-shrink-0 flex-col border-r border-qf-border-subtle bg-qf-bg h-screen sticky top-0">
+      <aside className="hidden md:flex w-44 flex-shrink-0 flex-col border-r border-gray-200 dark:border-gray-800 bg-white dark:bg-[#0D0D0D] h-screen sticky top-0">
         <SidebarContent />
       </aside>
 
@@ -120,7 +128,7 @@ export const Sidebar: React.FC = () => {
             onClick={() => setSidebarOpen(false)}
           />
           {/* Drawer */}
-          <aside className="absolute left-0 top-0 h-full w-64 flex flex-col border-r border-qf-border-subtle bg-qf-bg shadow-xl animate-slide-in">
+          <aside className="absolute left-0 top-0 h-full w-64 flex flex-col border-r border-gray-200 dark:border-gray-800 bg-white dark:bg-[#0D0D0D] shadow-xl animate-slide-in">
             <SidebarContent onClose={() => setSidebarOpen(false)} />
           </aside>
         </div>
@@ -131,7 +139,7 @@ export const Sidebar: React.FC = () => {
 
 export const BottomNav: React.FC = () => {
   return (
-    <nav className="fixed bottom-0 left-0 right-0 z-40 flex md:hidden border-t border-qf-border-subtle bg-qf-bg">
+    <nav className="fixed bottom-0 left-0 right-0 z-40 flex md:hidden border-t border-gray-200 dark:border-gray-800 bg-white dark:bg-[#0D0D0D]">
       {mobileItems.map((item) => (
         <NavLink
           key={item.to}
@@ -140,7 +148,7 @@ export const BottomNav: React.FC = () => {
           className={({ isActive }) =>
             cn(
               'flex flex-1 flex-col items-center gap-1 py-3 text-xs font-medium transition-colors',
-              isActive ? 'text-qf-active-text' : 'text-qf-text-muted'
+              isActive ? 'text-qx-active-text' : 'text-qx-text-muted'
             )
           }
         >

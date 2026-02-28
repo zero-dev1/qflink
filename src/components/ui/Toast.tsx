@@ -11,17 +11,17 @@ const iconMap: Record<ToastType, string> = {
 }
 
 const styleMap: Record<ToastType, string> = {
-  success: 'border-qf-success/30 bg-qf-success/10',
-  error: 'border-qf-error/30 bg-qf-error/10',
-  info: 'border-qf-accent/30 bg-qf-accent/10',
-  warning: 'border-qf-warning/30 bg-qf-warning/10',
+  success: 'border-qx-success/30 bg-qx-success/10',
+  error: 'border-qx-error/30 bg-qx-error/10',
+  info: 'border-cyan-600/30 bg-cyan-600/10',
+  warning: 'border-qx-warning/30 bg-qx-warning/10',
 }
 
 const iconColorMap: Record<ToastType, string> = {
-  success: 'text-qf-success',
-  error: 'text-qf-error',
-  info: 'dark:text-qf-accent text-qf-text-primary',
-  warning: 'text-qf-warning',
+  success: 'text-qx-success',
+  error: 'text-qx-error',
+  info: 'text-cyan-600',
+  warning: 'text-qx-warning',
 }
 
 export const ToastContainer: React.FC = () => {
@@ -43,10 +43,10 @@ export const ToastContainer: React.FC = () => {
           <span className={cn('text-lg flex-shrink-0', iconColorMap[toast.type])}>
             {iconMap[toast.type]}
           </span>
-          <p className="text-sm text-qf-text-primary flex-1">{toast.message}</p>
+          <p className="text-sm text-qx-text-primary flex-1">{toast.message}</p>
           <button
             onClick={() => removeToast(toast.id)}
-            className="flex-shrink-0 text-qf-text-muted hover:text-qf-text-primary transition-colors"
+            className="flex-shrink-0 text-qx-text-muted hover:text-qx-text-primary transition-colors"
           >
             <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="2">
               <path d="M4 4l8 8M12 4l-8 8" />

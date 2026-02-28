@@ -102,18 +102,18 @@ const HomePage: React.FC = () => {
   if (!isConnected) {
     return (
       <div className="flex flex-col items-center justify-center h-[calc(100vh-3.5rem)] text-center px-6">
-        <div className="mx-auto mb-6 flex h-20 w-20 items-center justify-center rounded-full bg-qf-accent/10">
-          <svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" className="text-qf-accent">
+        <div className="mx-auto mb-6 flex h-20 w-20 items-center justify-center rounded-full bg-cyan-600/10">
+          <svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" className="text-cyan-600">
             <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" strokeLinecap="round" strokeLinejoin="round" />
           </svg>
         </div>
-        <h2 className="text-2xl font-bold text-qf-text-primary mb-2">Welcome to QFLink</h2>
-        <p className="text-sm text-qf-text-secondary mb-6 max-w-md">
+        <h2 className="font-display text-2xl font-bold text-qx-text-primary mb-2">Welcome to QFLink</h2>
+        <p className="text-sm text-qx-text-secondary mb-6 max-w-md">
           Decentralized, wallet-gated messaging for QF holders. Connect your wallet to join exclusive Pods based on your holdings.
         </p>
         <button
           onClick={() => setShowConnectWallet(true)}
-          className="rounded-lg bg-qf-accent px-6 py-3 text-sm font-semibold text-qf-accent-text hover:bg-qf-accent-hover transition-colors"
+          className="rounded-lg bg-cyan-600 px-6 py-3 text-sm font-semibold text-white hover:bg-cyan-700 transition-colors"
         >
           Connect Wallet
         </button>
@@ -125,15 +125,15 @@ const HomePage: React.FC = () => {
     <div className="p-6 md:p-8 space-y-8 max-w-5xl mx-auto">
       {/* Your Pods */}
       <section>
-        <h2 className="text-xl font-semibold text-qf-text-primary mb-4">Your Pods</h2>
+        <h2 className="font-display text-xl font-semibold text-qx-text-primary mb-4">Your Pods</h2>
 
         {isLoadingPods ? (
-          <div className="border border-qf-card-border bg-qf-card p-8 text-center">
-            <p className="text-sm text-qf-text-secondary">Loading pods...</p>
+          <div className="border border-gray-200 dark:border-gray-800 bg-transparent p-8 text-center">
+            <p className="text-sm text-qx-text-secondary">Loading pods...</p>
           </div>
         ) : allMyPods.length === 0 ? (
-          <div className="border border-qf-card-border bg-qf-card p-8 text-center">
-            <p className="text-sm text-qf-text-secondary">
+          <div className="border border-gray-200 dark:border-gray-800 bg-transparent p-8 text-center">
+            <p className="text-sm text-qx-text-secondary">
               You don't have enough QF to join any pods. Get more QF to unlock exclusive communities.
             </p>
           </div>
@@ -145,7 +145,7 @@ const HomePage: React.FC = () => {
                 pod={pod}
                 userBalance={balance}
                 unreadCount={0}
-                onClick={() => navigate(`/pod/${pod.id}`)}
+                onClick={() => navigate(`/pods/${pod.id}`)}
               />
             ))}
           </div>
@@ -154,11 +154,11 @@ const HomePage: React.FC = () => {
 
       {/* Direct Messages */}
       <section>
-        <h2 className="text-xl font-semibold text-qf-text-primary mb-4">Direct</h2>
+        <h2 className="font-display text-xl font-semibold text-qx-text-primary mb-4">Direct</h2>
 
         {conversations.length === 0 ? (
-          <div className="border border-qf-card-border bg-qf-card p-8 text-center">
-            <p className="text-sm text-qf-text-secondary">
+          <div className="border border-gray-200 dark:border-gray-800 bg-transparent p-8 text-center">
+            <p className="text-sm text-qx-text-secondary">
               No conversations yet. Find someone in a pod and start chatting!
             </p>
           </div>
@@ -177,20 +177,20 @@ const HomePage: React.FC = () => {
               <button
                 key={convo.address}
                 onClick={() => navigate(`/direct/${convo.address}`)}
-                className="flex items-center gap-3 border border-qf-card-border bg-qf-card p-4 text-left transition-[border-color,transform] duration-150 hover:border-qf-accent hover:-translate-y-0.5"
+                className="flex items-center gap-3 border border-gray-200 dark:border-gray-800 bg-transparent p-4 text-left transition-[border-color,transform] duration-150 hover:border-cyan-600 hover:-translate-y-0.5"
               >
                 <Avatar address={convo.address} size="md" />
                 <div className="flex-1 min-w-0">
-                  <p className="text-sm font-semibold text-qf-text-primary truncate">
+                  <p className="text-sm font-semibold text-qx-text-primary truncate">
                     {profileNames.get(convo.address.toLowerCase()) || truncateAddress(convo.address)}
                   </p>
                   {(convo.lastMessage || convo.lastMessageTime) && (
                     <div className="flex items-center justify-between gap-2 mt-0.5">
                       {convo.lastMessage && (
-                        <p className="text-xs text-qf-text-secondary truncate flex-1">{convo.lastMessage}</p>
+                        <p className="text-xs text-qx-text-secondary truncate flex-1">{convo.lastMessage}</p>
                       )}
                       {convo.lastMessageTime && (
-                        <span className="text-xs text-qf-text-muted flex-shrink-0">
+                        <span className="text-xs text-qx-text-muted flex-shrink-0">
                           {relativeTimeHome(convo.lastMessageTime)}
                         </span>
                       )}
@@ -198,7 +198,7 @@ const HomePage: React.FC = () => {
                   )}
                 </div>
                 {convo.unreadCount > 0 && (
-                  <span className="flex-shrink-0 flex h-5 min-w-5 items-center justify-center rounded-full bg-qf-accent px-1 text-xs font-bold text-black">
+                  <span className="flex-shrink-0 flex h-5 min-w-5 items-center justify-center rounded-full bg-cyan-600 px-1 text-xs font-bold text-white">
                     {convo.unreadCount > 99 ? '99+' : convo.unreadCount}
                   </span>
                 )}
@@ -234,50 +234,50 @@ const PodHomeCard: React.FC<PodHomeCardProps> = ({
   return (
     <button
       onClick={onClick}
-      className="flex flex-col border border-qf-card-border bg-qf-card p-4 text-left transition-[border-color,transform] duration-150 hover:border-qf-accent hover:-translate-y-0.5"
+      className="flex flex-col border border-gray-200 dark:border-gray-800 bg-transparent p-4 text-left transition-[border-color,transform] duration-150 hover:border-cyan-600 hover:-translate-y-0.5"
     >
       {/* Row 1: name + unread badge + arrow */}
       <div className="flex items-center justify-between mb-1">
         <div className="flex items-center gap-2 min-w-0">
-          <h3 className="text-base font-semibold text-qf-text-primary truncate">{pod.name}</h3>
+          <h3 className="text-base font-semibold text-qx-text-primary truncate">{pod.name}</h3>
           {unreadCount > 0 && (
-            <span className="flex-shrink-0 flex h-5 min-w-5 items-center justify-center rounded-full bg-qf-accent px-1 text-xs font-bold text-black">
+            <span className="flex-shrink-0 flex h-5 min-w-5 items-center justify-center rounded-full bg-cyan-600 px-1 text-xs font-bold text-white">
               {unreadCount > 99 ? '99+' : unreadCount}
             </span>
           )}
         </div>
-        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-qf-text-muted flex-shrink-0">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-qx-text-muted flex-shrink-0">
           <polyline points="9 18 15 12 9 6" />
         </svg>
       </div>
 
       {/* Row 2: holder label */}
-      <p className="text-xs text-qf-text-secondary mb-3">{holderLabel}</p>
+      <p className="text-xs text-qx-text-secondary mb-3">{holderLabel}</p>
 
       {/* Row 3: progress bar (default pods) OR last message */}
       {isDefault && minBal > 0n ? (
         <>
           <ProgressBar current={userBalance} target={minBal} showLabels={false} />
           <div className="flex items-center justify-between mt-1.5">
-            <span className="text-xs text-qf-text-muted">{fmtRemaining(userBalance, minBal)}</span>
+            <span className="text-xs text-qx-text-muted">{fmtRemaining(userBalance, minBal)}</span>
             {lastMsg && (
               <div className="flex items-center gap-1">
-                <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-qf-text-muted">
+                <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-qx-text-muted">
                   <circle cx="12" cy="12" r="10" /><polyline points="12 6 12 12 16 14" />
                 </svg>
-                <span className="text-xs text-qf-text-muted">{formatTimestamp(lastMsg.timestamp)}</span>
+                <span className="text-xs text-qx-text-muted">{formatTimestamp(lastMsg.timestamp)}</span>
               </div>
             )}
           </div>
         </>
       ) : lastMsg ? (
         <>
-          <p className="text-xs text-qf-text-secondary truncate">{lastMsg.content}</p>
+          <p className="text-xs text-qx-text-secondary truncate">{lastMsg.content}</p>
           <div className="flex items-center justify-end gap-1 mt-1.5">
-            <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-qf-text-muted">
+            <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-qx-text-muted">
               <circle cx="12" cy="12" r="10" /><polyline points="12 6 12 12 16 14" />
             </svg>
-            <span className="text-xs text-qf-text-muted">{formatTimestamp(lastMsg.timestamp)}</span>
+            <span className="text-xs text-qx-text-muted">{formatTimestamp(lastMsg.timestamp)}</span>
           </div>
         </>
       ) : null}

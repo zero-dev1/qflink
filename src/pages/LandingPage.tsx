@@ -17,22 +17,22 @@ const LandingPage: React.FC = () => {
         @keyframes blockPulse {
           0%, 100% { 
             opacity: 0.3; 
-            border-color: rgba(0,180,220,0.15); 
+            border-color: rgba(8,145,178,0.15); 
           }
           50% { 
             opacity: 1; 
-            border-color: rgba(0,180,220,0.6); 
+            border-color: rgba(8,145,178,0.5); 
           }
         }
         
         .dark @keyframes blockPulse {
           0%, 100% { 
             opacity: 0.3; 
-            border-color: rgba(0,229,255,0.15); 
+            border-color: rgba(8,145,178,0.15); 
           }
           50% { 
             opacity: 1; 
-            border-color: rgba(0,229,255,0.5); 
+            border-color: rgba(8,145,178,0.5); 
           }
         }
         

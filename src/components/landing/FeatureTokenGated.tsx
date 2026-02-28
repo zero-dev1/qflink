@@ -13,12 +13,12 @@ const PodMockup: React.FC<PodMockupProps> = ({ name, threshold, subtitle, isQual
     <div className="bg-white dark:bg-[#0D0D0D] border border-gray-200 dark:border-gray-700 p-4 rounded-none">
       <div className="flex items-center justify-between mb-2">
         <span className="text-gray-900 dark:text-white font-semibold">{name}</span>
-        <span className="text-cyan-600 dark:text-cyan-400 font-mono text-sm">{threshold}</span>
+        <span className="text-cyan-600 font-mono text-sm">{threshold}</span>
       </div>
       <p className="text-gray-500 dark:text-gray-500 text-sm mb-2">{subtitle}</p>
       <div className="flex items-center gap-2">
-        <div className={`w-2 h-2 ${isQualified ? 'bg-cyan-600 dark:bg-cyan-400' : 'bg-gray-400 dark:bg-gray-600'}`} />
-        <span className={`text-xs ${isQualified ? 'text-cyan-600 dark:text-cyan-400' : 'text-gray-400 dark:text-gray-500'}`}>
+        <div className={`w-2 h-2 ${isQualified ? 'bg-cyan-600' : 'bg-gray-400 dark:bg-gray-600'}`} />
+        <span className={`text-xs ${isQualified ? 'text-cyan-600' : 'text-gray-400 dark:text-gray-500'}`}>
           {isQualified ? 'Qualified' : `${threshold.replace('+', '')} Required`}
         </span>
       </div>
@@ -44,10 +44,10 @@ export const FeatureTokenGated: React.FC = () => {
         >
           {/* Left side - Text */}
           <div className={`transition-all duration-700 ${inView ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-8'}`}>
-            <div className="text-cyan-600 dark:text-cyan-400 font-mono text-sm uppercase tracking-widest mb-4">
+            <div className="text-cyan-600 font-mono text-xs uppercase tracking-[0.2em] mb-4">
               #01 / Token-Gated Access
             </div>
-            <h2 className="font-heading text-3xl md:text-4xl font-bold text-gray-900 dark:text-white mt-4">
+            <h2 className="font-display text-3xl md:text-4xl font-bold text-gray-900 dark:text-white mt-4">
               Your balance is your badge.
             </h2>
             <p className="text-gray-600 dark:text-gray-400 text-lg mt-6 leading-relaxed">

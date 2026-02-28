@@ -4,7 +4,7 @@ import { cn } from '@/lib/utils'
 
 interface AvatarProps {
   address: string
-  size?: 'sm' | 'md' | 'lg'
+  size?: 'sm' | 'md' | 'lg' | number
   className?: string
 }
 
@@ -12,7 +12,7 @@ const sizeMap = { sm: 32, md: 40, lg: 48 }
 
 export const Avatar: React.FC<AvatarProps> = ({ address, size = 'md', className }) => {
   const svgRef = useRef<HTMLDivElement>(null)
-  const px = sizeMap[size]
+  const px = typeof size === 'number' ? size : sizeMap[size]
 
   useEffect(() => {
     if (svgRef.current) {
@@ -24,7 +24,7 @@ export const Avatar: React.FC<AvatarProps> = ({ address, size = 'md', className 
     <div
       ref={svgRef}
       className={cn(
-        'rounded-full border border-qf-border-prominent overflow-hidden flex-shrink-0',
+        'rounded-full border border-qx-border-prominent overflow-hidden flex-shrink-0',
         className
       )}
       style={{ width: px, height: px }}

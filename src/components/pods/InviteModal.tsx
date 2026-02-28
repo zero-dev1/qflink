@@ -36,15 +36,15 @@ export const InviteModal: React.FC<InviteModalProps> = ({ isOpen, onClose, podId
   return (
     <Modal isOpen={isOpen} onClose={onClose} title="Invite to Pod">
       <div className="space-y-4">
-        <p className="text-sm text-qf-text-secondary">
-          Share this link to invite others to <span className="font-semibold text-qf-text-primary">{podName}</span>:
+        <p className="text-sm text-qx-text-secondary">
+          Share this link to invite others to <span className="font-semibold text-qx-text-primary">{podName}</span>:
         </p>
 
-        <div className="flex items-center gap-2 rounded-lg border border-qf-border-prominent bg-qf-elevated p-3">
-          <p className="flex-1 text-xs text-qf-text-secondary font-mono truncate">{inviteLink}</p>
+        <div className="flex items-center gap-2 rounded-lg border border-qx-border-prominent bg-qx-elevated p-3">
+          <p className="flex-1 text-xs text-qx-text-secondary font-mono truncate">{inviteLink}</p>
           <button
             onClick={handleCopy}
-            className="flex-shrink-0 flex items-center gap-1.5 rounded-md px-2.5 py-1.5 text-xs font-medium transition-colors bg-qf-accent/15 dark:text-qf-accent text-qf-text-primary hover:bg-qf-accent/25"
+            className="flex-shrink-0 flex items-center gap-1.5 rounded-md px-2.5 py-1.5 text-xs font-medium transition-colors bg-cyan-600/15 text-cyan-600 hover:bg-cyan-600/25"
           >
             {copied ? (
               <>
@@ -79,13 +79,13 @@ export const InviteModal: React.FC<InviteModalProps> = ({ isOpen, onClose, podId
         <div className="flex justify-between items-center pt-1">
           <button
             onClick={handleGenerateNew}
-            className="text-xs text-qf-text-muted hover:text-qf-text-secondary transition-colors underline underline-offset-2"
+            className="text-xs text-qx-text-muted hover:text-qx-text-secondary transition-colors underline underline-offset-2"
           >
             Generate New Link
           </button>
           <button
             onClick={onClose}
-            className="rounded-md bg-qf-elevated px-4 py-2 text-sm font-medium text-qf-text-primary transition-colors hover:bg-qf-border-subtle"
+            className="rounded-md bg-qx-elevated px-4 py-2 text-sm font-medium text-qx-text-primary transition-colors hover:bg-qx-border-subtle"
           >
             Done
           </button>

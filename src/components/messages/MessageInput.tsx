@@ -22,7 +22,7 @@ export const MessageInput: React.FC<MessageInputProps> = ({ onSend, disabled, ma
     ? 'text-red-400'
     : (maxLength === 85 && length >= 75) || isNearLimit
     ? 'text-yellow-500'
-    : 'text-qf-text-muted'
+    : 'text-qx-text-muted'
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault()
@@ -40,7 +40,7 @@ export const MessageInput: React.FC<MessageInputProps> = ({ onSend, disabled, ma
   }
 
   return (
-    <div className="border-t border-qf-border-subtle px-4 py-3">
+    <div className="border-t border-gray-200 dark:border-gray-800 px-4 py-3">
       <form onSubmit={handleSubmit} className="flex items-center gap-2">
         <input
           type="text"
@@ -50,16 +50,16 @@ export const MessageInput: React.FC<MessageInputProps> = ({ onSend, disabled, ma
           placeholder="Type a message..."
           disabled={disabled}
           maxLength={maxLength + 20}
-          className={`flex-1 h-10 rounded-lg border bg-qf-card px-4 text-sm text-qf-text-primary placeholder:text-qf-text-muted focus:outline-none focus:ring-1 disabled:opacity-50 transition-colors ${
+          className={`flex-1 h-10 rounded-lg border bg-gray-50 dark:bg-white/[0.03] px-4 text-sm text-qx-text-primary placeholder:text-qx-text-muted focus:outline-none focus:ring-1 disabled:opacity-50 transition-colors ${
             isOverLimit
               ? 'border-red-500 focus:border-red-500 focus:ring-red-500'
-              : 'border-qf-border-prominent focus:border-qf-accent focus:ring-qf-accent'
+              : 'border-qx-border-prominent focus:border-cyan-600 focus:ring-cyan-600'
           }`}
         />
         <button
           type="submit"
           disabled={disabled || !text.trim() || isOverLimit}
-          className="flex h-10 w-10 items-center justify-center rounded-lg bg-qf-accent text-black transition-colors hover:bg-qf-accent-hover disabled:opacity-50 disabled:cursor-not-allowed flex-shrink-0"
+          className="flex h-10 w-10 items-center justify-center rounded-lg bg-cyan-600 text-white transition-colors hover:bg-cyan-700 disabled:opacity-50 disabled:cursor-not-allowed flex-shrink-0"
         >
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
             <line x1="22" y1="2" x2="11" y2="13" />

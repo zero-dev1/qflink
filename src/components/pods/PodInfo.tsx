@@ -83,24 +83,24 @@ export const PodInfo: React.FC<PodInfoProps> = ({
 
   return (
     <>
-      <div className="hidden md:flex w-56 flex-shrink-0 flex-col border-l border-qf-border-subtle bg-qf-bg overflow-y-auto">
+      <div className="hidden md:flex w-56 flex-shrink-0 flex-col border-l border-gray-200 dark:border-gray-800 bg-white dark:bg-[#0D0D0D] overflow-y-auto">
         {/* POD INFO header */}
-        <div className="px-4 py-3 border-b border-qf-border-subtle">
-          <p className="text-[10px] font-semibold uppercase tracking-widest text-qf-text-muted">Pod Info</p>
+        <div className="px-4 py-3 border-b border-gray-200 dark:border-gray-800">
+          <p className="text-[10px] font-semibold uppercase tracking-widest text-qx-text-muted">Pod Info</p>
         </div>
 
         <div className="flex-1 px-4 py-4 space-y-4">
           {/* About */}
           <div>
-            <h4 className="text-sm font-semibold text-qf-text-primary mb-1">About</h4>
-            <p className="text-xs text-qf-text-secondary leading-relaxed">{pod.description}</p>
+            <h4 className="text-sm font-semibold text-qx-text-primary mb-1">About</h4>
+            <p className="text-xs text-qx-text-secondary leading-relaxed">{pod.description}</p>
           </div>
 
           {/* Requirements (default pods) */}
           {isDefault && (
             <div>
-              <h4 className="text-sm font-semibold text-qf-text-primary mb-1">Requirements</h4>
-              <p className="text-xs text-qf-text-secondary">
+              <h4 className="text-sm font-semibold text-qx-text-primary mb-1">Requirements</h4>
+              <p className="text-xs text-qx-text-secondary">
                 Requires {formatBalance(minBalance)} QF aggregated balance
               </p>
             </div>
@@ -109,22 +109,22 @@ export const PodInfo: React.FC<PodInfoProps> = ({
           {/* Requirements (custom pods) */}
           {isCustom && customPod && (
             <div>
-              <h4 className="text-sm font-semibold text-qf-text-primary mb-1">Requirements</h4>
+              <h4 className="text-sm font-semibold text-qx-text-primary mb-1">Requirements</h4>
               <div className="space-y-1">
                 <div className="flex justify-between text-xs">
-                  <span className="text-qf-text-muted">Tier</span>
-                  <span className="capitalize font-medium text-qf-text-primary">{customPod.tier}</span>
+                  <span className="text-qx-text-muted">Tier</span>
+                  <span className="capitalize font-medium text-qx-text-primary">{customPod.tier}</span>
                 </div>
                 <div className="flex justify-between text-xs">
-                  <span className="text-qf-text-muted">Join Method</span>
-                  <span className="capitalize font-medium text-qf-text-primary">
+                  <span className="text-qx-text-muted">Join Method</span>
+                  <span className="capitalize font-medium text-qx-text-primary">
                     {customPod.joinMethod === 'balance' ? 'Balance-Based' : 'Invite-Only'}
                   </span>
                 </div>
                 {customPod.minBalance !== undefined && customPod.minBalance > 0n && (
                   <div className="flex justify-between text-xs">
-                    <span className="text-qf-text-muted">Min Balance</span>
-                    <span className="font-medium dark:text-qf-accent text-qf-text-primary">{formatBalance(customPod.minBalance)} QF</span>
+                    <span className="text-qx-text-muted">Min Balance</span>
+                    <span className="font-medium text-cyan-600">{formatBalance(customPod.minBalance)} QF</span>
                   </div>
                 )}
               </div>
@@ -133,11 +133,11 @@ export const PodInfo: React.FC<PodInfoProps> = ({
 
           {/* Members */}
           <div>
-            <h4 className="text-sm font-semibold text-qf-text-primary mb-1">Members</h4>
-            <p className="text-xs text-qf-text-secondary">
+            <h4 className="text-sm font-semibold text-qx-text-primary mb-1">Members</h4>
+            <p className="text-xs text-qx-text-secondary">
               Open to qualified holders
               {activeMemberCount > 0 && (
-                <span className="ml-1 text-qf-accent">({activeMemberCount} active)</span>
+                <span className="ml-1 text-cyan-600">({activeMemberCount} active)</span>
               )}
             </p>
           </div>
@@ -148,7 +148,7 @@ export const PodInfo: React.FC<PodInfoProps> = ({
           {onInvite && (
             <button
               onClick={onInvite}
-              className="flex w-full items-center justify-center gap-2 rounded-lg border border-qf-border-prominent px-3 py-2 text-sm font-medium text-qf-text-primary transition-colors hover:bg-qf-elevated"
+              className="flex w-full items-center justify-center gap-2 rounded-lg border border-qx-border-prominent px-3 py-2 text-sm font-medium text-qx-text-primary transition-colors hover:bg-qx-elevated"
             >
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                 <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71" />
@@ -160,7 +160,7 @@ export const PodInfo: React.FC<PodInfoProps> = ({
 
           <button
             onClick={() => setShowMembersModal(true)}
-            className="flex w-full items-center justify-center gap-2 rounded-lg border border-qf-border-prominent px-3 py-2 text-sm font-medium text-qf-text-primary transition-colors hover:bg-qf-elevated"
+            className="flex w-full items-center justify-center gap-2 rounded-lg border border-qx-border-prominent px-3 py-2 text-sm font-medium text-qx-text-primary transition-colors hover:bg-qx-elevated"
           >
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
               <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" />
@@ -199,7 +199,7 @@ export const PodInfo: React.FC<PodInfoProps> = ({
               width="14" height="14"
               viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"
               strokeLinecap="round" strokeLinejoin="round"
-              className="absolute left-3 top-1/2 -translate-y-1/2 text-qf-text-muted"
+              className="absolute left-3 top-1/2 -translate-y-1/2 text-qx-text-muted"
             >
               <circle cx="11" cy="11" r="8" />
               <line x1="21" y1="21" x2="16.65" y2="16.65" />
@@ -209,33 +209,33 @@ export const PodInfo: React.FC<PodInfoProps> = ({
               placeholder="Search members..."
               value={memberSearch}
               onChange={(e) => setMemberSearch(e.target.value)}
-              className="w-full rounded-md border border-qf-border-prominent bg-qf-elevated pl-8 pr-3 py-2 text-sm text-qf-text-primary placeholder:text-qf-text-muted focus:border-qf-accent focus:outline-none focus:ring-1 focus:ring-qf-accent"
+              className="w-full rounded-md border border-qx-border-prominent bg-qx-elevated pl-8 pr-3 py-2 text-sm text-qx-text-primary placeholder:text-qx-text-muted focus:border-cyan-600 focus:outline-none focus:ring-1 focus:ring-cyan-600"
             />
           </div>
 
-          <div className="max-h-72 overflow-y-auto divide-y divide-qf-border-subtle rounded-md border border-qf-border-subtle">
+          <div className="max-h-72 overflow-y-auto divide-y divide-gray-200 dark:divide-gray-800 rounded-md border border-gray-200 dark:border-gray-800">
             {filteredMembers.length === 0 ? (
               <div className="flex items-center justify-center py-8">
-                <p className="text-sm text-qf-text-muted">No active members yet.</p>
+                <p className="text-sm text-qx-text-muted">No active members yet.</p>
               </div>
             ) : (
               filteredMembers.map((addr) => {
                 const profileName = memberProfiles.get(addr)
                 return (
-                  <div key={addr} className="flex items-center gap-3 px-3 py-2.5 hover:bg-qf-elevated">
+                  <div key={addr} className="flex items-center gap-3 px-3 py-2.5 hover:bg-qx-elevated">
                     <Avatar address={addr} size="sm" />
                     <div className="flex-1 min-w-0">
                       {profileName ? (
-                        <p className="text-sm font-medium text-qf-text-primary truncate">
+                        <p className="text-sm font-medium text-qx-text-primary truncate">
                           {profileName}
                         </p>
                       ) : (
-                        <p className="text-sm font-medium text-qf-text-primary font-mono">
+                        <p className="text-sm font-medium text-qx-text-primary font-mono">
                           {truncateAddress(addr, 'evm', 8)}
                         </p>
                       )}
                       {addr === currentUserAddress && (
-                        <p className="text-xs dark:text-qf-accent text-qf-text-primary">You</p>
+                        <p className="text-xs text-cyan-600">You</p>
                       )}
                     </div>
                   </div>
@@ -244,7 +244,7 @@ export const PodInfo: React.FC<PodInfoProps> = ({
             )}
           </div>
 
-          <p className="text-xs text-qf-text-muted text-center">
+          <p className="text-xs text-qx-text-muted text-center">
             Showing {filteredMembers.length} of {activeMemberCount} active members
           </p>
         </div>

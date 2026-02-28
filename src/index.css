@@ -4,37 +4,37 @@
 
 @layer base {
   :root {
-    --qf-bg: #FFFFFF;
-    --qf-elevated: #F5F5F5;
-    --qf-card: #FFFFFF;
-    --qf-card-border: #E5E5E5;
-    --qf-border-subtle: #E5E5E5;
-    --qf-border-prominent: #D4D4D4;
-    --qf-text-primary: #161616;
-    --qf-text-secondary: #4a4a4a;
-    --qf-text-muted: #6b6b6b;
-    --qf-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
-    --qf-msg-other: #E5E5E5;
-    --qf-msg-other-text: #161616;
-    --qf-active-text: #161616;
-    --qf-active-bg: rgba(0, 0, 0, 0.08);
+    --qx-bg: #FFFFFF;
+    --qx-elevated: #F5F5F5;
+    --qx-card: #FFFFFF;
+    --qx-card-border: #E5E5E5;
+    --qx-border-subtle: #E5E5E5;
+    --qx-border-prominent: #D4D4D4;
+    --qx-text-primary: #161616;
+    --qx-text-secondary: #4a4a4a;
+    --qx-text-muted: #6b6b6b;
+    --qx-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+    --qx-msg-other: #E5E5E5;
+    --qx-msg-other-text: #161616;
+    --qx-active-text: #161616;
+    --qx-active-bg: rgba(0, 0, 0, 0.08);
   }
 
   .dark {
-    --qf-bg: #0D0D0D;
-    --qf-elevated: #141414;
-    --qf-card: #0D0D0D;
-    --qf-card-border: #2A2A2A;
-    --qf-border-subtle: #1A1A1A;
-    --qf-border-prominent: #2A2A2A;
-    --qf-text-primary: #FFFFFF;
-    --qf-text-secondary: #A0A0A0;
-    --qf-text-muted: #606060;
-    --qf-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
-    --qf-msg-other: #2A2A2A;
-    --qf-msg-other-text: #FFFFFF;
-    --qf-active-text: #00FFFF;
-    --qf-active-bg: rgba(0, 255, 255, 0.1);
+    --qx-bg: #0D0D0D;
+    --qx-elevated: #141414;
+    --qx-card: #0D0D0D;
+    --qx-card-border: #2A2A2A;
+    --qx-border-subtle: #1A1A1A;
+    --qx-border-prominent: #2A2A2A;
+    --qx-text-primary: #FFFFFF;
+    --qx-text-secondary: #A0A0A0;
+    --qx-text-muted: #606060;
+    --qx-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+    --qx-msg-other: #2A2A2A;
+    --qx-msg-other-text: #FFFFFF;
+    --qx-active-text: #00FFFF;
+    --qx-active-bg: rgba(0, 255, 255, 0.1);
   }
 
   * {
@@ -46,8 +46,8 @@
   body {
     min-height: 100vh;
     overflow-x: hidden;
-    background-color: var(--qf-bg);
-    color: var(--qf-text-primary);
+    background-color: var(--qx-bg);
+    color: var(--qx-text-primary);
   }
 
   ::-webkit-scrollbar {
@@ -55,11 +55,11 @@
   }
 
   ::-webkit-scrollbar-track {
-    background: var(--qf-elevated);
+    background: var(--qx-elevated);
   }
 
   ::-webkit-scrollbar-thumb {
-    background: var(--qf-border-prominent);
+    background: var(--qx-border-prominent);
     border-radius: 3px;
   }
 
@@ -70,7 +70,7 @@
 
 @layer components {
   .spinner {
-    border: 2px solid var(--qf-border-prominent);
+    border: 2px solid var(--qx-border-prominent);
     border-top-color: #00FFFF;
     border-radius: 50%;
     animation: spin 0.6s linear infinite;

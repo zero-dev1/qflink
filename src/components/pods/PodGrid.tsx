@@ -40,7 +40,7 @@ export const PodGrid: React.FC<PodGridProps> = ({ pods, myPodIds, isLoading, onJ
   if (pods.length === 0) {
     return (
       <div className="flex flex-col items-center justify-center py-12 text-center">
-        <p className="text-sm text-qf-text-muted">No pods found</p>
+        <p className="text-sm text-qx-text-muted">No pods found</p>
       </div>
     )
   }
@@ -68,7 +68,7 @@ export const PodGrid: React.FC<PodGridProps> = ({ pods, myPodIds, isLoading, onJ
       {otherPods.length > 0 && (
         <div>
           {featuredPods.length > 0 && (
-            <h3 className="mb-3 text-sm font-semibold text-qf-text-secondary">All Pods</h3>
+            <h3 className="mb-3 text-sm font-semibold text-qx-text-secondary">All Pods</h3>
           )}
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
             {otherPods.map((pod) => (

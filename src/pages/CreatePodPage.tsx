@@ -30,8 +30,8 @@ const CreatePodPage: React.FC = () => {
   if (!isConnected) {
     return (
       <div className="flex flex-col items-center justify-center h-[calc(100vh-3.5rem)] text-center px-6">
-        <h2 className="text-xl font-semibold text-qf-text-primary mb-4">Create a Pod</h2>
-        <p className="text-sm text-qf-text-muted mb-6">Connect your wallet to create a pod</p>
+        <h2 className="font-display text-xl font-semibold text-qx-text-primary mb-4">Create a Pod</h2>
+        <p className="text-sm text-qx-text-muted mb-6">Connect your wallet to create a pod</p>
         <Button onClick={() => setShowConnectWallet(true)}>Connect Wallet</Button>
       </div>
     )
@@ -75,8 +75,8 @@ const CreatePodPage: React.FC = () => {
 
   return (
     <div className="max-w-2xl mx-auto p-4 md:p-6 space-y-6">
-      <h1 className="text-2xl font-semibold text-qf-text-primary">Create a Pod</h1>
-      <p className="text-sm text-qf-text-secondary">
+      <h1 className="font-display text-2xl font-semibold text-qx-text-primary">Create a Pod</h1>
+      <p className="text-sm text-qx-text-secondary">
         Step {step} of 3: {step === 1 ? 'Choose Your Plan' : step === 2 ? 'Pod Details' : 'Confirm & Pay'}
       </p>
 
@@ -85,11 +85,11 @@ const CreatePodPage: React.FC = () => {
         {[1, 2, 3].map((s) => (
           <div key={s} className="flex items-center gap-2">
             <div className={`flex h-8 w-8 items-center justify-center rounded-full text-xs font-bold transition-colors ${
-              s <= step ? 'bg-qf-accent text-qf-accent-text' : 'bg-qf-elevated text-qf-text-muted'
+              s <= step ? 'bg-cyan-600 text-white' : 'bg-qx-elevated text-qx-text-muted'
             }`}>
               {s}
             </div>
-            {s < 3 && <div className={`h-px w-10 ${s < step ? 'bg-qf-accent' : 'bg-qf-border-subtle'}`} />}
+            {s < 3 && <div className={`h-px w-10 ${s < step ? 'bg-cyan-600' : 'bg-qx-border-subtle'}`} />}
           </div>
         ))}
       </div>
@@ -97,8 +97,8 @@ const CreatePodPage: React.FC = () => {
       {/* Step 1: Choose Tier */}
       {step === 1 && (
         <div className="space-y-4">
-          <p className="text-xs text-qf-text-muted text-center">
-            Your balance: <span className="text-qf-text-primary font-medium">{formatBalance(balance)} QF</span>
+          <p className="text-xs text-qx-text-muted text-center">
+            Your balance: <span className="text-qx-text-primary font-medium">{formatBalance(balance)} QF</span>
           </p>
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
             {TIERS.map((t) => {
@@ -112,22 +112,22 @@ const CreatePodPage: React.FC = () => {
                   onClick={() => { setTier(t); setError('') }}
                   className={`flex flex-col border p-5 text-left transition-[border-color,transform] duration-150 ${
                     !affordable
-                      ? 'cursor-not-allowed border-qf-card-border opacity-40'
+                      ? 'cursor-not-allowed border-gray-200 dark:border-gray-800 opacity-40'
                       : selected
-                        ? 'border-qf-accent bg-qf-active-bg'
-                        : 'border-qf-card-border hover:border-qf-accent hover:-translate-y-0.5'
+                        ? 'border-cyan-600 bg-qx-active-bg'
+                        : 'border-gray-200 dark:border-gray-800 hover:border-cyan-600 hover:-translate-y-0.5'
                   }`}
                 >
-                  <span className="text-base font-bold text-qf-text-primary">{info.name}</span>
-                  <span className="text-2xl font-bold dark:text-qf-accent text-qf-text-primary mt-2">{info.feeDisplay.toLocaleString()} QF</span>
+                  <span className="text-base font-bold text-qx-text-primary">{info.name}</span>
+                  <span className="text-2xl font-bold text-cyan-600 mt-2">{info.feeDisplay.toLocaleString()} QF</span>
                   <ul className="mt-4 space-y-1.5">
                     {info.features.map((f, i) => (
-                      <li key={i} className="flex items-start gap-2 text-xs text-qf-text-secondary">
-                        <span className="dark:text-qf-accent text-qf-text-primary mt-0.5">✓</span> {f}
+                      <li key={i} className="flex items-start gap-2 text-xs text-qx-text-secondary">
+                        <span className="text-cyan-600 mt-0.5">✓</span> {f}
                       </li>
                     ))}
                   </ul>
-                  {!affordable && <p className="mt-3 text-xs text-qf-error">Insufficient balance</p>}
+                  {!affordable && <p className="mt-3 text-xs text-qx-error">Insufficient balance</p>}
                 </button>
               )
             })}
@@ -151,11 +151,11 @@ const CreatePodPage: React.FC = () => {
             onChange={(e) => { setDescription(e.target.value); setError('') }}
           />
           <div className="flex flex-col gap-1.5">
-            <label className="text-sm font-medium text-qf-text-secondary">Category</label>
+            <label className="text-sm font-medium text-qx-text-secondary">Category</label>
             <select
               value={category}
               onChange={(e) => setCategory(e.target.value as PodCategory)}
-              className="h-10 w-full rounded-lg border border-qf-border-prominent bg-qf-card px-3 text-sm text-qf-text-primary focus:border-qf-accent focus:outline-none focus:ring-1 focus:ring-qf-accent"
+              className="h-10 w-full rounded-lg border border-gray-200 dark:border-gray-800 bg-transparent px-3 text-sm text-qx-text-primary focus:border-cyan-600 focus:outline-none focus:ring-1 focus:ring-cyan-600"
             >
               {POD_CATEGORIES.map((c) => (
                 <option key={c} value={c} className="capitalize">{c.charAt(0).toUpperCase() + c.slice(1)}</option>
@@ -163,23 +163,23 @@ const CreatePodPage: React.FC = () => {
             </select>
           </div>
           <div className="flex flex-col gap-1.5">
-            <label className="text-sm font-medium text-qf-text-secondary">Join Method</label>
+            <label className="text-sm font-medium text-qx-text-secondary">Join Method</label>
             <div className="flex gap-3">
-              <label className={`flex-1 flex items-center gap-2 border p-3 cursor-pointer transition-[border-color] duration-150 ${joinMethod === 'balance' ? 'border-qf-accent bg-qf-active-bg' : 'border-qf-card-border hover:border-qf-accent'}`}>
+              <label className={`flex-1 flex items-center gap-2 border p-3 cursor-pointer transition-[border-color] duration-150 bg-transparent ${joinMethod === 'balance' ? 'border-cyan-600 bg-qx-active-bg' : 'border-gray-200 dark:border-gray-800 hover:border-cyan-600'}`}>
                 <input type="radio" name="joinMethod" checked={joinMethod === 'balance'} onChange={() => setJoinMethod('balance')} className="accent-[#00FFFF]" />
                 <div>
-                  <p className="text-sm font-medium text-qf-text-primary">Balance-Based</p>
-                  <p className="text-xs text-qf-text-muted">Require token holdings</p>
+                  <p className="text-sm font-medium text-qx-text-primary">Balance-Based</p>
+                  <p className="text-xs text-qx-text-muted">Require token holdings</p>
                 </div>
               </label>
-              <label className={`flex-1 flex items-center gap-2 border p-3 cursor-not-allowed opacity-50 ${joinMethod === 'invite' ? 'border-qf-accent bg-qf-active-bg' : 'border-qf-card-border'}`}>
+              <label className={`flex-1 flex items-center gap-2 border p-3 cursor-not-allowed opacity-50 bg-transparent ${joinMethod === 'invite' ? 'border-cyan-600 bg-qx-active-bg' : 'border-gray-200 dark:border-gray-800'}`}>
                 <input type="radio" name="joinMethod" checked={joinMethod === 'invite'} disabled className="accent-[#00FFFF]" />
                 <div className="flex-1">
                   <div className="flex items-center gap-2">
-                    <p className="text-sm font-medium text-qf-text-primary">Invite-Only</p>
-                    <span className="text-[10px] px-1.5 py-0.5 rounded bg-qf-elevated text-qf-text-muted">Coming Soon</span>
+                    <p className="text-sm font-medium text-qx-text-primary">Invite-Only</p>
+                    <span className="text-[10px] px-1.5 py-0.5 rounded bg-qx-elevated text-qx-text-muted">Coming Soon</span>
                   </div>
-                  <p className="text-xs text-qf-text-muted">Generate invite links</p>
+                  <p className="text-xs text-qx-text-muted">Generate invite links</p>
                 </div>
               </label>
             </div>
@@ -200,38 +200,38 @@ const CreatePodPage: React.FC = () => {
       {step === 3 && (
         <div className="space-y-4">
           <Card>
-            <h3 className="text-sm font-semibold text-qf-text-primary mb-3">Pod Summary</h3>
+            <h3 className="text-sm font-semibold text-qx-text-primary mb-3">Pod Summary</h3>
             <div className="space-y-2 text-sm">
-              <div className="flex justify-between"><span className="text-qf-text-muted">Name</span><span className="text-qf-text-primary font-medium">{name}</span></div>
-              <div className="flex justify-between"><span className="text-qf-text-muted">Tier</span><span className="text-qf-accent font-medium">{tierInfo.name}</span></div>
-              <div className="flex justify-between"><span className="text-qf-text-muted">Max Members</span><span className="text-qf-text-primary">{tierInfo.maxMembers === Infinity ? 'Unlimited' : tierInfo.maxMembers}</span></div>
-              <div className="flex justify-between"><span className="text-qf-text-muted">Join Method</span><span className="text-qf-text-primary capitalize">{joinMethod === 'balance' ? 'Balance-Based' : 'Invite-Only'}</span></div>
+              <div className="flex justify-between"><span className="text-qx-text-muted">Name</span><span className="text-qx-text-primary font-medium">{name}</span></div>
+              <div className="flex justify-between"><span className="text-qx-text-muted">Tier</span><span className="text-cyan-600 font-medium">{tierInfo.name}</span></div>
+              <div className="flex justify-between"><span className="text-qx-text-muted">Max Members</span><span className="text-qx-text-primary">{tierInfo.maxMembers === Infinity ? 'Unlimited' : tierInfo.maxMembers}</span></div>
+              <div className="flex justify-between"><span className="text-qx-text-muted">Join Method</span><span className="text-qx-text-primary capitalize">{joinMethod === 'balance' ? 'Balance-Based' : 'Invite-Only'}</span></div>
               {joinMethod === 'balance' && (
-                <div className="flex justify-between"><span className="text-qf-text-muted">Requirement</span><span className="text-qf-text-primary">{minBalance || '0'} QF</span></div>
+                <div className="flex justify-between"><span className="text-qx-text-muted">Requirement</span><span className="text-qx-text-primary">{minBalance || '0'} QF</span></div>
               )}
-              <div className="flex justify-between"><span className="text-qf-text-muted">Category</span><span className="text-qf-text-primary capitalize">{category}</span></div>
+              <div className="flex justify-between"><span className="text-qx-text-muted">Category</span><span className="text-qx-text-primary capitalize">{category}</span></div>
             </div>
           </Card>
 
           <Card>
-            <h3 className="text-sm font-semibold text-qf-text-primary mb-3">Fee Breakdown</h3>
+            <h3 className="text-sm font-semibold text-qx-text-primary mb-3">Fee Breakdown</h3>
             <div className="space-y-2 text-sm font-mono">
               <div className="flex justify-between">
-                <span className="text-qf-text-muted">Creation Fee</span>
-                <span className="text-qf-text-primary font-bold">{tierInfo.feeDisplay.toLocaleString()} QF</span>
+                <span className="text-qx-text-muted">Creation Fee</span>
+                <span className="text-qx-text-primary font-bold">{tierInfo.feeDisplay.toLocaleString()} QF</span>
               </div>
               <div className="flex justify-between">
-                <span className="text-qf-text-muted">→ Treasury (25%)</span>
-                <span className="text-qf-text-secondary">{treasuryAmount.toLocaleString()} QF</span>
+                <span className="text-qx-text-muted">→ Treasury (25%)</span>
+                <span className="text-qx-text-secondary">{treasuryAmount.toLocaleString()} QF</span>
               </div>
               <div className="flex justify-between">
-                <span className="text-qf-text-muted">→ Burned (75%)</span>
+                <span className="text-qx-text-muted">→ Burned (75%)</span>
                 <span className="text-orange-400">{burnAmount.toLocaleString()} QF</span>
               </div>
-              <div className="border-t border-qf-border-subtle pt-2 mt-2">
+              <div className="border-t border-qx-border-subtle pt-2 mt-2">
                 <div className="flex justify-between">
-                  <span className="text-qf-text-muted">Your Balance</span>
-                  <span className="text-qf-text-primary">{formatBalance(balance)} QF</span>
+                  <span className="text-qx-text-muted">Your Balance</span>
+                  <span className="text-qx-text-primary">{formatBalance(balance)} QF</span>
                 </div>
               </div>
             </div>
@@ -239,7 +239,7 @@ const CreatePodPage: React.FC = () => {
         </div>
       )}
 
-      {error && <p className="text-sm text-qf-error text-center">{error}</p>}
+      {error && <p className="text-sm text-qx-error text-center">{error}</p>}
 
       {/* Navigation buttons */}
       <div className="flex items-center justify-between pt-2">

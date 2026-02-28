@@ -18,7 +18,7 @@ const Stat: React.FC<StatProps> = ({ value, label, delay }) => {
       }`}
       style={{ transitionDelay: `${delay}ms` }}
     >
-      <div className="font-heading text-5xl font-bold text-cyan-600 dark:text-cyan-400">{value}</div>
+      <div className="font-display text-5xl font-bold text-cyan-600">{value}</div>
       <div className="text-gray-500 dark:text-gray-400 text-sm uppercase tracking-widest mt-2">{label}</div>
     </div>
   )
@@ -39,7 +39,7 @@ export const NetworkStats: React.FC = () => {
         {/* Headline */}
         <h2 
           ref={ref}
-          className={`font-heading text-3xl md:text-5xl font-bold text-gray-900 dark:text-white text-center mb-16 transition-all duration-700 ${
+          className={`font-display text-3xl md:text-5xl font-bold text-gray-900 dark:text-white text-center mb-16 transition-all duration-700 ${
             inView ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-8'
           }`}
         >

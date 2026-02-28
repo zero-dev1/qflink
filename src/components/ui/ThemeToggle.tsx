@@ -15,7 +15,7 @@ export const ThemeToggle: React.FC = () => {
   return (
     <button
       onClick={cycle}
-      className="flex h-9 w-9 items-center justify-center rounded-lg text-qf-text-secondary hover:bg-qf-elevated hover:text-qf-text-primary transition-colors"
+      className="flex h-9 w-9 items-center justify-center rounded-lg text-qx-text-secondary hover:bg-qx-elevated hover:text-qx-text-primary transition-colors"
       title={`Theme: ${theme}`}
     >
       {theme === 'light' && (

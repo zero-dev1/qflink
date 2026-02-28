@@ -29,18 +29,18 @@ export const ProgressBar: React.FC<ProgressBarProps> = ({
 
   return (
     <div className={cn('w-full', className)}>
-      <div className="h-1.5 w-full rounded-full bg-qf-border-prominent overflow-hidden">
+      <div className="h-1.5 w-full rounded-full bg-qx-border-prominent overflow-hidden">
         <div
-          className="h-full rounded-full bg-qf-accent transition-all duration-500"
+          className="h-full rounded-full bg-cyan-600 transition-all duration-500"
           style={{ width: `${clampedPct}%` }}
         />
       </div>
       {showLabels && (
         <div className="flex items-center justify-between mt-1.5 text-xs">
           {remaining > 0n ? (
-            <span className="text-qf-text-muted">{fmt(remaining)} to go</span>
+            <span className="text-qx-text-muted">{fmt(remaining)} to go</span>
           ) : (
-            <span className="text-qf-success font-medium">Qualified ✓</span>
+            <span className="text-qx-success font-medium">Qualified ✓</span>
           )}
         </div>
       )}

@@ -13,10 +13,10 @@ export const FeatureDMs: React.FC = () => {
         >
           {/* Left side - Text */}
           <div className={`transition-all duration-700 ${inView ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-8'}`}>
-            <div className="text-cyan-600 dark:text-cyan-400 font-mono text-sm uppercase tracking-widest mb-4">
+            <div className="text-cyan-600 font-mono text-xs uppercase tracking-[0.2em] mb-4">
               #03 / Private Channels
             </div>
-            <h2 className="font-heading text-3xl md:text-4xl font-bold text-gray-900 dark:text-white mt-4">
+            <h2 className="font-display text-3xl md:text-4xl font-bold text-gray-900 dark:text-white mt-4">
               DM any wallet. Encrypted.
             </h2>
             <p className="text-gray-600 dark:text-gray-400 text-lg mt-6 leading-relaxed">
@@ -32,9 +32,9 @@ export const FeatureDMs: React.FC = () => {
           >
             <div className="bg-white dark:bg-[#0D0D0D] border border-gray-200 dark:border-gray-700 rounded-none overflow-hidden">
               {/* Header */}
-              <div className="px-4 py-3 border-b border-gray-200 dark:border-white/[0.06] flex items-center gap-3">
-                <div className="w-8 h-8 bg-transparent border border-cyan-600 dark:border-cyan-400 flex items-center justify-center">
-                  <span className="text-cyan-700 dark:text-cyan-400 text-xs font-bold">A</span>
+              <div className="px-4 py-3 border-b border-gray-200 dark:border-gray-800 flex items-center gap-3">
+                <div className="w-8 h-8 bg-transparent border border-cyan-600 flex items-center justify-center">
+                  <span className="text-cyan-600 text-xs font-bold">A</span>
                 </div>
                 <span className="text-gray-900 dark:text-white font-semibold">Alice</span>
               </div>
@@ -43,7 +43,7 @@ export const FeatureDMs: React.FC = () => {
               <div className="p-4 space-y-4 min-h-[200px]">
                 {/* Sent message */}
                 <div className="flex justify-end">
-                  <div className="bg-transparent border border-cyan-600 dark:border-cyan-400 text-gray-900 dark:text-white px-4 py-2 max-w-[80%]">
+                  <div className="bg-transparent border border-cyan-600 text-gray-900 dark:text-white px-4 py-2 max-w-[80%]">
                     <p className="text-sm">Hey, saw your proposal</p>
                   </div>
                 </div>
@@ -57,7 +57,7 @@ export const FeatureDMs: React.FC = () => {
 
                 {/* Sent message */}
                 <div className="flex justify-end">
-                  <div className="bg-transparent border border-cyan-600 dark:border-cyan-400 text-gray-900 dark:text-white px-4 py-2 max-w-[80%]">
+                  <div className="bg-transparent border border-cyan-600 text-gray-900 dark:text-white px-4 py-2 max-w-[80%]">
                     <p className="text-sm">Perfect, see you there</p>
                   </div>
                 </div>
@@ -66,7 +66,7 @@ export const FeatureDMs: React.FC = () => {
               {/* Input */}
               <div className="px-4 py-3 bg-transparent border-t border-gray-200 dark:border-gray-700 flex items-center gap-2">
                 <div className="flex-1 text-gray-400 dark:text-gray-500 text-sm">Type a message...</div>
-                <button className="bg-cyan-600 dark:bg-cyan-400 text-white dark:text-black text-xs font-bold px-4 py-1.5 rounded-none hover:bg-cyan-500 dark:hover:bg-cyan-300 transition-colors">
+                <button className="bg-cyan-600 text-white text-xs font-bold px-4 py-1.5 rounded-none hover:bg-cyan-700 transition-colors">
                   Send
                 </button>
               </div>

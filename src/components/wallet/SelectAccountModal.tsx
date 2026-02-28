@@ -49,7 +49,7 @@ export const SelectAccountModal: React.FC<SelectAccountModalProps> = ({
         <button
           onClick={handleConnect}
           disabled={!selected || isConnecting}
-          className="flex items-center gap-2 rounded-md bg-qf-accent px-4 py-2 text-sm font-medium text-black transition-colors hover:bg-qf-accent-hover disabled:opacity-50 disabled:cursor-not-allowed"
+          className="flex items-center gap-2 rounded-md bg-cyan-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-cyan-700 disabled:opacity-50 disabled:cursor-not-allowed"
         >
           {isConnecting && <Spinner size="sm" />}
           Connect
@@ -57,13 +57,13 @@ export const SelectAccountModal: React.FC<SelectAccountModalProps> = ({
       }
     >
       <div className="space-y-2">
-        <p className="text-sm text-qf-text-secondary mb-3">
+        <p className="text-sm text-qx-text-secondary mb-3">
           Choose an account from {walletName}:
         </p>
 
         {accounts.length === 0 ? (
           <div className="flex items-center justify-center py-8">
-            <p className="text-sm text-qf-text-muted">No accounts found in this wallet.</p>
+            <p className="text-sm text-qx-text-muted">No accounts found in this wallet.</p>
           </div>
         ) : (
           accounts.map((account) => {
@@ -74,31 +74,31 @@ export const SelectAccountModal: React.FC<SelectAccountModalProps> = ({
                 onClick={() => setSelected(account.address)}
                 className={`flex w-full items-center gap-3 rounded-lg border p-3 text-left transition-all ${
                   isSelected
-                    ? 'border-qf-accent bg-qf-accent/10'
-                    : 'border-qf-border-subtle hover:border-qf-border-prominent hover:bg-qf-elevated'
+                    ? 'border-cyan-600 bg-cyan-600/10'
+                    : 'border-qx-border-subtle hover:border-qx-border-prominent hover:bg-qx-elevated'
                 }`}
               >
                 <div
                   className={`flex h-4 w-4 flex-shrink-0 items-center justify-center rounded-full border-2 transition-colors ${
-                    isSelected ? 'border-qf-accent' : 'border-qf-border-prominent'
+                    isSelected ? 'border-cyan-600' : 'border-qx-border-prominent'
                   }`}
                 >
                   {isSelected && (
-                    <div className="h-2 w-2 rounded-full bg-qf-accent" />
+                    <div className="h-2 w-2 rounded-full bg-cyan-600" />
                   )}
                 </div>
                 <Avatar address={account.address} size="sm" />
                 <div className="flex-1 min-w-0">
                   {account.name && (
-                    <p className="text-sm font-medium text-qf-text-primary truncate">
+                    <p className="text-sm font-medium text-qx-text-primary truncate">
                       {account.name}
                     </p>
                   )}
-                  <p className="text-xs text-qf-text-muted font-mono">
+                  <p className="text-xs text-qx-text-muted font-mono">
                     {truncateAddress(account.address, 'substrate', 6)}
                   </p>
                   {account.balance !== undefined && (
-                    <p className="text-xs dark:text-qf-accent text-qf-text-primary mt-0.5">
+                    <p className="text-xs text-cyan-600 mt-0.5">
                       {formatBalance(account.balance)} QF
                     </p>
                   )}

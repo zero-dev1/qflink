@@ -8,10 +8,10 @@ import { useNetworkStore } from '@/stores/network'
 const NET_DOT: Record<string, string> = {
   local: 'bg-blue-400',
   testnet: 'bg-yellow-400',
-  mainnet: 'bg-qf-success',
+  mainnet: 'bg-qx-success',
 }
 const STATUS_DOT: Record<string, string> = {
-  connected: 'bg-qf-success',
+  connected: 'bg-qx-success',
   connecting: 'bg-yellow-400 animate-pulse',
   disconnected: 'bg-red-500',
   stalled: 'bg-orange-400 animate-pulse',
@@ -46,7 +46,7 @@ export const WalletButton: React.FC = () => {
       <div className="relative">
         <div className="mb-2 flex items-center justify-center gap-1.5">
           <div className={`h-1.5 w-1.5 rounded-full ${NET_DOT[currentNetwork] || 'bg-gray-400'}`} />
-          <span className="text-[10px] text-qf-text-muted">{network.name}</span>
+          <span className="text-[10px] text-qx-text-muted">{network.name}</span>
         </div>
         <Button onClick={handleConnect} size="sm" className="w-full" loading={isConnecting}>
           Connect Wallet
@@ -56,16 +56,16 @@ export const WalletButton: React.FC = () => {
   }
 
   return (
-    <div className="flex flex-col gap-2 rounded-lg border border-qf-border-subtle bg-qf-elevated p-3">
+    <div className="flex flex-col gap-2 rounded-lg border border-qx-border-subtle bg-qx-elevated p-3">
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-1.5">
           <div className={`h-1.5 w-1.5 rounded-full ${NET_DOT[currentNetwork] || 'bg-gray-400'}`} />
-          <span className="text-[10px] text-qf-text-muted">{network.name}</span>
+          <span className="text-[10px] text-qx-text-muted">{network.name}</span>
         </div>
         <div className={`h-2 w-2 rounded-full ${STATUS_DOT[connectionStatus] || 'bg-gray-400'}`} />
       </div>
-      <p className="text-sm font-medium text-qf-text-primary">{displayAddress}</p>
-      <p className="text-xs text-qf-text-secondary">{formatBalance(balance)} QF</p>
+      <p className="text-sm font-mono font-medium text-qx-text-primary">{displayAddress}</p>
+      <p className="text-xs text-qx-text-secondary">{formatBalance(balance)} QF</p>
       <Button variant="ghost" size="sm" onClick={disconnect} className="mt-1">
         Disconnect
       </Button>

@@ -67,11 +67,11 @@ const PodPage: React.FC = () => {
 
   const handleLeave = async () => {
     // leavePod will be wired when contracts are ready
-    navigate('/')
+    navigate(-1)
   }
 
   return (
-    <div className="h-[calc(100vh-3.5rem)]">
+    <div className="fixed inset-0 z-50 flex flex-col bg-white dark:bg-[#0D0D0D] lg:static lg:z-auto lg:inset-auto lg:h-[calc(100vh-3.5rem)] lg:overflow-hidden">
       <PodChat
         pod={pod}
         messages={messages}

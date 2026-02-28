@@ -14,13 +14,13 @@ const StepCard: React.FC<StepCardProps> = ({ number, title, description, delay }
   return (
     <div
       ref={ref}
-      className={`bg-white dark:bg-[#0D0D0D] border border-gray-200 dark:border-gray-700 p-8 rounded-none transition-all duration-700 hover:border-cyan-500 dark:hover:border-cyan-400 ${
+      className={`bg-white dark:bg-[#0D0D0D] border border-gray-200 dark:border-gray-700 p-8 rounded-none transition-all duration-700 hover:border-cyan-600 ${
         inView ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-8'
       }`}
       style={{ transitionDelay: `${delay}ms` }}
     >
-      <div className="font-heading text-cyan-600 dark:text-cyan-400 text-4xl font-bold mb-4">{number}</div>
-      <h3 className="font-heading text-xl font-bold text-gray-900 dark:text-white mb-3">{title}</h3>
+      <div className="font-display text-cyan-600 text-4xl font-bold mb-4">{number}</div>
+      <h3 className="font-display text-xl font-bold text-gray-900 dark:text-white mb-3">{title}</h3>
       <p className="text-gray-600 dark:text-gray-400 leading-relaxed">{description}</p>
     </div>
   )
@@ -57,10 +57,10 @@ export const HowItWorks: React.FC = () => {
             inView ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-8'
           }`}
         >
-          <div className="text-cyan-600 dark:text-cyan-400 text-sm font-mono uppercase tracking-widest mb-4">
+          <div className="text-cyan-600 text-xs font-mono uppercase tracking-[0.2em] mb-4">
             How It Works
           </div>
-          <h2 className="font-heading text-3xl md:text-5xl font-bold text-gray-900 dark:text-white">
+          <h2 className="font-display text-3xl md:text-5xl font-bold text-gray-900 dark:text-white">
             Chat infrastructure that lives on the blockchain
           </h2>
         </div>

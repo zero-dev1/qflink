@@ -26,30 +26,30 @@ export const ConversationItem: React.FC<ConversationItemProps> = ({
     <button
       onClick={onClick}
       className={cn(
-        'flex w-full items-center gap-3 px-4 py-3 text-left transition-colors duration-150 border-l-2',
+        'flex w-full items-center gap-3 px-4 py-3 text-left transition-colors duration-150 border-l-2 border-b border-b-gray-200 dark:border-b-gray-800 last:border-b-0',
         isActive
-          ? 'border-l-qf-accent bg-qf-active-bg'
-          : 'border-l-transparent hover:bg-qf-elevated'
+          ? 'border-l-cyan-600 bg-gray-100 dark:bg-white/5'
+          : 'border-l-transparent bg-transparent hover:bg-gray-50 dark:hover:bg-white/[0.03]'
       )}
     >
       <Avatar address={conversation.address} size="md" />
       <div className="flex-1 min-w-0">
-        <p className={cn('text-sm font-semibold truncate', isActive ? 'text-qf-active-text' : 'text-qf-text-primary')}>
-          {conversation.displayName || truncateAddress(conversation.address)}
+        <p className="text-sm font-semibold truncate text-qx-text-primary">
+          {conversation.displayName || <span className="font-mono">{truncateAddress(conversation.address)}</span>}
         </p>
         {conversation.lastMessage && (
-          <p className="text-xs text-qf-text-secondary truncate mt-0.5">
+          <p className="text-xs text-qx-text-secondary truncate mt-0.5">
             {conversation.lastMessage}
           </p>
         )}
         {conversation.lastMessageTime && (
-          <p className="text-xs text-qf-text-muted mt-0.5">
+          <p className="text-xs text-qx-text-muted mt-0.5">
             {relativeTime(conversation.lastMessageTime)}
           </p>
         )}
       </div>
       {conversation.unreadCount > 0 && (
-        <span className="flex h-5 min-w-5 items-center justify-center rounded-full bg-qf-accent px-1 text-xs font-bold text-black flex-shrink-0">
+        <span className="flex h-5 min-w-5 items-center justify-center rounded-full bg-cyan-600 px-1 text-xs font-bold text-white flex-shrink-0">
           {conversation.unreadCount > 99 ? '99+' : conversation.unreadCount}
         </span>
       )}

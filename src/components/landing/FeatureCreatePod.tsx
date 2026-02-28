@@ -19,7 +19,7 @@ export const FeatureCreatePod: React.FC = () => {
           >
             <div className="bg-white dark:bg-[#0D0D0D] border border-gray-200 dark:border-gray-700 rounded-none overflow-hidden">
               {/* Header */}
-              <div className="px-4 py-3 border-b border-gray-200 dark:border-white/[0.06]">
+              <div className="px-4 py-3 border-b border-gray-200 dark:border-gray-800">
                 <span className="text-gray-900 dark:text-white font-semibold">Create a Pod</span>
               </div>
 
@@ -38,7 +38,7 @@ export const FeatureCreatePod: React.FC = () => {
                   <label className="text-gray-500 dark:text-gray-500 text-xs uppercase tracking-wider mb-2 block">Access Type</label>
                   <div className="flex gap-4">
                     <div className="flex items-center gap-2">
-                      <div className="w-3 h-3 bg-cyan-600 dark:bg-cyan-400" />
+                      <div className="w-3 h-3 bg-cyan-600" />
                       <span className="text-gray-900 dark:text-white text-sm">Token-Gated</span>
                     </div>
                     <div className="flex items-center gap-2">
@@ -57,7 +57,7 @@ export const FeatureCreatePod: React.FC = () => {
                 </div>
 
                 {/* Create Button */}
-                <button className="w-full bg-cyan-600 dark:bg-cyan-400 text-white dark:text-black font-bold py-3 rounded-none hover:bg-cyan-500 dark:hover:bg-cyan-300 transition-colors mt-4">
+                <button className="w-full bg-cyan-600 text-white font-bold py-3 rounded-none hover:bg-cyan-700 transition-colors mt-4">
                   Create Pod
                 </button>
               </div>
@@ -66,10 +66,10 @@ export const FeatureCreatePod: React.FC = () => {
 
           {/* Right side - Text */}
           <div className={`transition-all duration-700 delay-200 ${inView ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-8'}`}>
-            <div className="text-cyan-600 dark:text-cyan-400 font-mono text-sm uppercase tracking-widest mb-4">
+            <div className="text-cyan-600 font-mono text-xs uppercase tracking-[0.2em] mb-4">
               #04 / Your Rules
             </div>
-            <h2 className="font-heading text-3xl md:text-4xl font-bold text-gray-900 dark:text-white mt-4">
+            <h2 className="font-display text-3xl md:text-4xl font-bold text-gray-900 dark:text-white mt-4">
               Build your own gated community.
             </h2>
             <p className="text-gray-600 dark:text-gray-400 text-lg mt-6 leading-relaxed">

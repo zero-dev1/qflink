@@ -10,10 +10,10 @@ interface BadgeProps {
 }
 
 const variantStyles: Record<BadgeVariant, string> = {
-  default: 'bg-qf-border-prominent text-qf-text-secondary',
-  success: 'bg-qf-success/20 text-qf-success',
-  warning: 'bg-qf-warning/20 text-qf-warning',
-  error: 'bg-qf-error/20 text-qf-error',
+  default: 'bg-qx-border-prominent text-qx-text-secondary',
+  success: 'bg-qx-success/20 text-qx-success',
+  warning: 'bg-qx-warning/20 text-qx-warning',
+  error: 'bg-qx-error/20 text-qx-error',
 }
 
 export const Badge: React.FC<BadgeProps> = ({ variant = 'default', children, className }) => {

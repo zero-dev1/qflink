@@ -5,11 +5,11 @@ import { Link } from 'react-router-dom'
 const AnimatedBlock: React.FC<{ index: number; blockNum: number }> = ({ index, blockNum }) => {
   return (
     <div 
-      className="block-item flex flex-col items-center justify-center px-4 py-3 border border-cyan-600/30 dark:border-cyan-400/30 bg-cyan-600/5 dark:bg-cyan-400/5 min-w-[100px]"
+      className="block-item flex flex-col items-center justify-center px-4 py-3 border border-cyan-600/30 bg-cyan-600/5 min-w-[100px]"
       style={{ animationDelay: `${index * 0.5}s` }}
     >
-      <span className="text-[10px] text-gray-500 font-mono uppercase tracking-wider">Block</span>
-      <span className="text-sm text-cyan-600 dark:text-cyan-400 font-mono font-bold">#{blockNum.toLocaleString()}</span>
+      <span className="text-[10px] text-gray-500 font-mono uppercase tracking-[0.2em]">Block</span>
+      <span className="text-sm text-cyan-600 font-mono font-bold">#{blockNum.toLocaleString()}</span>
     </div>
   )
 }
@@ -31,21 +31,21 @@ export const HeroSection: React.FC = () => {
       <div 
         className="absolute inset-0 pointer-events-none hidden dark:block"
         style={{
-          background: 'radial-gradient(ellipse at center, rgba(0,229,255,0.08) 0%, #0D0D0D 70%)'
+          background: 'radial-gradient(ellipse at center, rgba(8,145,178,0.08) 0%, #0D0D0D 70%)'
         }}
       />
       {/* Radial gradient glow - Light mode */}
       <div 
         className="absolute inset-0 pointer-events-none dark:hidden"
         style={{
-          background: 'radial-gradient(ellipse at center, rgba(0,229,255,0.04) 0%, #FFFFFF 70%)'
+          background: 'radial-gradient(ellipse at center, rgba(8,145,178,0.06) 0%, #FFFFFF 70%)'
         }}
       />
 
       {/* Content */}
       <div className="relative z-10 max-w-5xl mx-auto text-center pt-20">
         {/* Headline */}
-        <h1 className="font-heading text-5xl md:text-7xl lg:text-8xl font-bold tracking-tight leading-none text-gray-900 dark:text-white">
+        <h1 className="font-display text-5xl md:text-7xl lg:text-8xl font-bold tracking-tight leading-none text-gray-900 dark:text-white">
           <span className="block">Every Message.</span>
           <span className="block">On-Chain.</span>
           <span className="block">Forever.</span>
@@ -59,8 +59,8 @@ export const HeroSection: React.FC = () => {
         {/* CTA Button */}
         <div className="mt-10">
           <Link
-            to="/home"
-            className="inline-block bg-cyan-600 dark:bg-cyan-400 text-white dark:text-black font-bold text-lg px-8 py-3 rounded-none hover:bg-cyan-500 dark:hover:bg-cyan-300 transition-colors duration-200"
+            to="/connect"
+            className="inline-block bg-cyan-600 text-white font-bold text-lg px-8 py-3 rounded-none hover:bg-cyan-700 transition-colors duration-200"
           >
             Launch App &rarr;
           </Link>

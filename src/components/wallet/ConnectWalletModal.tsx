@@ -120,18 +120,18 @@ export const ConnectWalletModal: React.FC = () => {
         <div className="space-y-4">
           {/* EVM Wallets Section */}
           <div>
-            <p className="text-sm text-qf-text-secondary mb-3">EVM Wallets:</p>
+            <p className="text-sm text-qx-text-secondary mb-3">EVM Wallets:</p>
             <button
               onClick={handleMetaMaskConnect}
               disabled={loadingWallet !== null}
-              className="flex w-full items-center gap-3 rounded-lg border border-qf-border-subtle p-4 text-left transition-colors hover:bg-qf-elevated hover:border-qf-border-prominent disabled:opacity-50"
+              className="flex w-full items-center gap-3 rounded-lg border border-qx-border-subtle p-4 text-left transition-colors hover:bg-qx-elevated hover:border-qx-border-prominent disabled:opacity-50"
             >
               <span className="text-2xl">🦊</span>
-              <span className="flex-1 text-sm font-medium text-qf-text-primary">MetaMask</span>
+              <span className="flex-1 text-sm font-medium text-qx-text-primary">MetaMask</span>
               {loadingWallet === 'metamask' ? (
                 <Spinner size="sm" />
               ) : (
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-qf-text-muted">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-qx-text-muted">
                   <polyline points="9 18 15 12 9 6" />
                 </svg>
               )}
@@ -141,30 +141,30 @@ export const ConnectWalletModal: React.FC = () => {
           {/* Divider */}
           <div className="relative">
             <div className="absolute inset-0 flex items-center">
-              <div className="w-full border-t border-qf-border-subtle"></div>
+              <div className="w-full border-t border-qx-border-subtle"></div>
             </div>
             <div className="relative flex justify-center text-xs">
-              <span className="px-2 bg-qf-card text-qf-text-muted">or</span>
+              <span className="px-2 bg-qx-card text-qx-text-muted">or</span>
             </div>
           </div>
 
           {/* Substrate Wallets Section */}
           <div>
-            <p className="text-sm text-qf-text-secondary mb-3">Substrate Wallets:</p>
+            <p className="text-sm text-qx-text-secondary mb-3">Substrate Wallets:</p>
             <div className="space-y-2">
               {SUBSTRATE_WALLETS.map((wallet) => (
                 <button
                   key={wallet.id}
                   onClick={() => handleExtensionConnect(wallet)}
                   disabled={loadingWallet !== null}
-                  className="flex w-full items-center gap-3 rounded-lg border border-qf-border-subtle p-4 text-left transition-colors hover:bg-qf-elevated hover:border-qf-border-prominent disabled:opacity-50"
+                  className="flex w-full items-center gap-3 rounded-lg border border-qx-border-subtle p-4 text-left transition-colors hover:bg-qx-elevated hover:border-qx-border-prominent disabled:opacity-50"
                 >
                   <span className="text-2xl">{wallet.icon}</span>
-                  <span className="flex-1 text-sm font-medium text-qf-text-primary">{wallet.name}</span>
+                  <span className="flex-1 text-sm font-medium text-qx-text-primary">{wallet.name}</span>
                   {loadingWallet === wallet.id ? (
                     <Spinner size="sm" />
                   ) : (
-                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-qf-text-muted">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-qx-text-muted">
                       <polyline points="9 18 15 12 9 6" />
                     </svg>
                   )}
@@ -173,17 +173,17 @@ export const ConnectWalletModal: React.FC = () => {
             </div>
           </div>
 
-          <p className="text-xs text-qf-text-muted text-center pt-2">
+          <p className="text-xs text-qx-text-muted text-center pt-2">
             Don't have a wallet?{' '}
-            <a href="https://talisman.xyz" target="_blank" rel="noopener noreferrer" className="dark:text-qf-accent text-qf-text-primary hover:underline">
+            <a href="https://talisman.xyz" target="_blank" rel="noopener noreferrer" className="text-cyan-600 hover:underline">
               Get Talisman
             </a>
             {' · '}
-            <a href="https://subwallet.app" target="_blank" rel="noopener noreferrer" className="dark:text-qf-accent text-qf-text-primary hover:underline">
+            <a href="https://subwallet.app" target="_blank" rel="noopener noreferrer" className="text-cyan-600 hover:underline">
               Get SubWallet
             </a>
             {' · '}
-            <a href="https://metamask.io" target="_blank" rel="noopener noreferrer" className="dark:text-qf-accent text-qf-text-primary hover:underline">
+            <a href="https://metamask.io" target="_blank" rel="noopener noreferrer" className="text-cyan-600 hover:underline">
               Get MetaMask
             </a>
           </p>

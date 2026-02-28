@@ -269,7 +269,7 @@ export const useWalletStore = create<WalletState>((set, get) => ({
 
       // Set up MetaMask event listeners (only once)
       if (!metamaskListenersSetup && window.ethereum) {
-        const handleAccountsChanged = (accounts: string[]) => {
+        const handleAccountsChanged = async (accounts: string[]) => {
           if (accounts.length === 0) {
             // User disconnected
             get().disconnect()
@@ -280,9 +280,18 @@ export const useWalletStore = create<WalletState>((set, get) => ({
               address: newAddress,
               evmAddress: newAddress,
             })
-            // Refresh profile
-            const { useProfileStore } = require('./profile')
-            useProfileStore.getState().fetchProfile(newAddress)
+            // Refresh profile for new account
+            const { useProfileStore } = await import('./profile')
+            const profileStore = useProfileStore.getState()
+            await profileStore.fetchProfile(newAddress)
+            
+            // If new account doesn't have a profile, redirect to /connect
+            if (profileStore.needsRegistration || !profileStore.isRegistered) {
+              console.log('🔀 [accountsChanged] New account has no profile, redirecting to /connect')
+              if (typeof window !== 'undefined' && window.location.pathname !== '/connect') {
+                window.location.href = '/connect'
+              }
+            }
           }
         }
 
@@ -326,6 +335,11 @@ export const useWalletStore = create<WalletState>((set, get) => ({
     const { useProfileStore } = await import('./profile')
     useProfileStore.getState().reset()
     console.log('✅ Wallet disconnected')
+    
+    // Redirect to /connect page (only if in browser and not already there)
+    if (typeof window !== 'undefined' && window.location.pathname !== '/connect' && window.location.pathname !== '/') {
+      window.location.href = '/connect'
+    }
   },
 
   ensureMapping: async () => {

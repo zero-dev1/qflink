@@ -27,7 +27,7 @@ export const FeatureOnChain: React.FC = () => {
             }`}
           >
             <div className="bg-white dark:bg-[#0D0D0D] border border-gray-200 dark:border-gray-700 p-6 font-mono text-sm">
-              <div className="flex items-center justify-between mb-4 pb-4 border-b border-gray-200 dark:border-white/10">
+              <div className="flex items-center justify-between mb-4 pb-4 border-b border-gray-200 dark:border-gray-800">
                 <span className="text-gray-500 dark:text-gray-500">Block</span>
                 <span className="text-gray-900 dark:text-white font-bold">#{blockNumber.toLocaleString()}</span>
               </div>
@@ -52,9 +52,9 @@ export const FeatureOnChain: React.FC = () => {
                   <span className="text-gray-500 dark:text-gray-500 w-24 flex-shrink-0">Data:</span>
                   <span className="text-gray-700 dark:text-gray-300">0x8f2e...a7c1</span>
                 </div>
-                <div className="flex items-center pt-4 mt-4 border-t border-gray-200 dark:border-white/10">
+                <div className="flex items-center pt-4 mt-4 border-t border-gray-200 dark:border-gray-800">
                   <span className="text-gray-500 dark:text-gray-500 w-24 flex-shrink-0">Status:</span>
-                  <span className="text-cyan-600 dark:text-cyan-400 flex items-center gap-2">
+                  <span className="text-cyan-600 flex items-center gap-2">
                     <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3">
                       <polyline points="20 6 9 17 4 12" strokeLinecap="round" strokeLinejoin="round"/>
                     </svg>
@@ -67,10 +67,10 @@ export const FeatureOnChain: React.FC = () => {
 
           {/* Right side - Text */}
           <div className={`transition-all duration-700 delay-200 ${inView ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-8'}`}>
-            <div className="text-cyan-600 dark:text-cyan-400 font-mono text-sm uppercase tracking-widest mb-4">
+            <div className="text-cyan-600 font-mono text-xs uppercase tracking-[0.2em] mb-4">
               #02 / Permanent Record
             </div>
-            <h2 className="font-heading text-3xl md:text-4xl font-bold text-gray-900 dark:text-white mt-4">
+            <h2 className="font-display text-3xl md:text-4xl font-bold text-gray-900 dark:text-white mt-4">
               Messages that outlive servers.
             </h2>
             <p className="text-gray-600 dark:text-gray-400 text-lg mt-6 leading-relaxed">

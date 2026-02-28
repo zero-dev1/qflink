@@ -1,4 +1,4 @@
-import React, { useEffect } from 'react'
+import React, { useEffect, useMemo } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { useMessages } from '@/hooks/useMessages'
 import { useWallet } from '@/hooks/useWallet'
@@ -6,7 +6,7 @@ import { useWalletStore } from '@/stores/wallet'
 import { ChatView, EmptyChatView } from '@/components/messages/ChatView'
 import { ConversationList } from '@/components/messages/ConversationList'
 import { NewMessageModal } from '@/components/messages/NewMessageModal'
-import { useState, useMemo } from 'react'
+import { useState } from 'react'
 import { isSubstrateAddress } from '@/lib/utils'
 import { deriveEvmAddress } from '@/lib/chain'
 
@@ -55,6 +55,9 @@ const DMChatPage: React.FC = () => {
 
   const currentMessages = peerAddress ? (messages[peerAddress] || []) : []
 
+  // Track if we're on mobile and a chat is selected
+  const isMobileChatActive = peerAddress ? true : false
+
   const handleSendFromModal = (recipient: string, content: string) => {
     // Convert Substrate address to EVM if needed
     let evmRecipient = recipient.toLowerCase()
@@ -67,22 +70,27 @@ const DMChatPage: React.FC = () => {
 
   return (
     <div className="flex h-[calc(100vh-3.5rem)]">
-      {/* Left: conversation list */}
-      <ConversationList
-        conversations={conversations}
-        activeAddress={peerAddress || null}
-        onSelect={(addr) => navigate(`/direct/${addr}`)}
-        onNewMessage={() => setShowNewMessage(true)}
-      />
-
-      {/* Right: chat or empty state */}
-      {peerAddress ? (
-        <ChatView
-          address={peerAddress}
-          messages={currentMessages}
-          currentUserAddress={evmAddress || ''}
-          onSend={(content) => sendMessage(peerAddress, content)}
+      {/* Left: conversation list - hidden on mobile when chat is active */}
+      <div className={`${isMobileChatActive ? 'hidden lg:flex' : 'flex'} h-full w-full lg:w-72 flex-shrink-0`}>
+        <ConversationList
+          conversations={conversations}
+          activeAddress={peerAddress || null}
+          onSelect={(addr) => navigate(`/direct/${addr}`)}
+          onNewMessage={() => setShowNewMessage(true)}
         />
+      </div>
+
+      {/* Right: chat or empty state - full width on mobile when active */}
+      {peerAddress ? (
+        <div className="fixed inset-0 z-50 flex flex-col bg-white dark:bg-[#0D0D0D] lg:static lg:z-auto lg:inset-auto lg:flex-1 lg:min-w-0 lg:h-full lg:w-full lg:overflow-hidden">
+          <ChatView
+            address={peerAddress}
+            messages={currentMessages}
+            currentUserAddress={evmAddress || ''}
+            onSend={(content) => sendMessage(peerAddress, content)}
+            onBack={() => navigate('/direct')}
+          />
+        </div>
       ) : (
         <EmptyChatView />
       )}

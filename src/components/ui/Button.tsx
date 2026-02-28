@@ -13,10 +13,10 @@ interface ButtonProps extends React.ButtonHTMLAttributes<HTMLButtonElement> {
 }
 
 const variantStyles: Record<ButtonVariant, string> = {
-  primary: 'bg-qf-accent text-black hover:bg-qf-accent-hover',
-  secondary: 'bg-transparent border border-qf-border-prominent text-qf-text-primary hover:bg-qf-elevated',
-  danger: 'bg-qf-error text-white hover:bg-red-600',
-  ghost: 'bg-transparent text-qf-text-secondary hover:text-qf-text-primary hover:bg-qf-elevated',
+  primary: 'bg-cyan-600 text-white hover:bg-cyan-700',
+  secondary: 'bg-transparent border border-qx-border-prominent text-qx-text-primary hover:bg-qx-elevated',
+  danger: 'bg-qx-error text-white hover:bg-red-600',
+  ghost: 'bg-transparent text-qx-text-secondary hover:text-qx-text-primary hover:bg-qx-elevated',
 }
 
 const sizeStyles: Record<ButtonSize, string> = {
@@ -38,7 +38,7 @@ export const Button: React.FC<ButtonProps> = ({
     <button
       className={cn(
         'inline-flex items-center justify-center gap-2 rounded-lg font-medium transition-colors duration-150',
-        'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-qf-accent focus-visible:ring-offset-2 focus-visible:ring-offset-qf-bg',
+        'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-600 focus-visible:ring-offset-2 focus-visible:ring-offset-qx-bg',
         variantStyles[variant],
         sizeStyles[size],
         (disabled || loading) && 'opacity-50 cursor-not-allowed',

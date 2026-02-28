@@ -1,163 +1,145 @@
-# QFLink - Encrypted Messaging dApp
+# QFLink
 
-QFLink is a Web3 encrypted messaging application with balance-gated group chats ("Whale Pods") built for the QF Network (QuantumFusion).
+**Every Message. On-Chain. Forever.**
+
+QFLink is the first fully on-chain messaging application built on [QF Network](https://qfnetwork.xyz). Token-gated group chats (Pods), encrypted direct messages, no database, no server — just the chain.
+
+---
+
+## Overview
+
+QFLink enables censorship-resistant communication through two core features:
+
+**Pods** — Token-gated group chats where access is determined by your QF holdings. The more you hold, the higher-tier Pods you can enter. Three default tiers exist: Chefs (10+ QF), Whale (250K+ QF), and Kraken (500K+ QF). Custom Pods with user-defined requirements are on the roadmap.
+
+**Direct Messages** — Encrypted wallet-to-wallet messaging. No intermediary, no server, no database. Messages are stored on-chain and encrypted end-to-end between sender and recipient.
+
+Every message is an on-chain transaction. Nothing can be deleted, censored, or tampered with.
+
+---
 
 ## Features
 
-- **Encrypted Direct Messages** — End-to-end encrypted messaging using TweetNaCl box encryption
-- **Whale Pods** — Tiered balance-gated group chats (Standard / Premium / Elite)
-- **Pod Tier System** — Creation fees (500 / 5,000 / 50,000 QF) with 25% treasury + 75% burn split
-- **Real Chain Connection** — Connects via `@polkadot/api` WebSocket, fetches real balances
-- **Balance Subscription** — Live balance updates from chain
-- **Linked Wallets** — Aggregate balances across multiple wallets for pod access
-- **Wallet Support** — Polkadot.js, Talisman, SubWallet extensions + demo wallet
-- **Network Switcher** — Toggle between Local Dev, QF Testnet, and QF Mainnet
-- **Network Health** — Auto-reconnect, stale block detection, connection status indicators
+- **Wallet-Gated Access** — Connect your Substrate wallet and create an on-chain profile to enter the app.
+- **Token-Gated Pods** — Group chats gated by QF token balance. Holdings are verified across up to 3 linked wallets.
+- **Encrypted DMs** — End-to-end encrypted direct messages between any two wallet addresses.
+- **On-Chain Identity** — Display names and profiles stored on-chain via a registry contract.
+- **Dark & Light Mode** — Full theme support across the entire application.
+- **Mobile Responsive** — Optimised for both desktop and mobile browsers.
+- **Live Block Feed** — Real-time block numbers displayed on the landing page, demonstrating chain liveness.
 
-## QF Network
-
-| | Local Dev | Testnet | Mainnet |
-|---|---|---|---|
-| **WSS** | `ws://127.0.0.1:9944` | `wss://test.qfnetwork.xyz` | `wss://rpc.qfnetwork.xyz` |
-| **Explorer** | [Polkadot.js Apps](https://polkadot.js.org/apps/?rpc=ws%3A%2F%2F127.0.0.1%3A9944#/explorer) | [portal.qfnetwork.xyz](https://portal.qfnetwork.xyz/#/explorer) | [portal.qfnetwork.xyz](https://portal.qfnetwork.xyz/#/explorer) |
-| **Faucet** | Dev accounts (Alice, Bob, etc.) | [faucet.qfnetwork.xyz](https://faucet.qfnetwork.xyz) | — |
-| **Token** | QF (18 decimals) | QF (18 decimals) | QF (18 decimals) |
+---
 
 ## Tech Stack
 
-- **Frontend**: React 18, TypeScript, Vite, TailwindCSS, Zustand
-- **Chain**: @polkadot/api + @polkadot/extension-dapp
-- **Encryption**: TweetNaCl (NaCl box)
-- **Contracts**: Rust → PolkaVM (qf-polkavm-sdk)
+- **Frontend:** React + TypeScript + Vite
+- **Styling:** Tailwind CSS
+- **Fonts:** Urbanist (UI), Geist Mono (code/addresses)
+- **Blockchain:** Substrate (QF Network)
+- **Contracts:** ink! smart contracts (messaging, registry, pod management)
+- **Wallet Integration:** Polkadot.js, Talisman, SubWallet, MetaMask (EVM)
+
+---
 
 ## Getting Started
 
 ### Prerequisites
 
 - Node.js 18+
-- pnpm 8+
-- Browser wallet extension (optional — demo wallet available)
+- A Substrate wallet browser extension (Polkadot.js, Talisman, or SubWallet)
+- A local Substrate node running (for development)
 
-### Install & Run
-
-```bash
-pnpm install
-cp .env.example .env
-pnpm dev
-```
-
-Open http://localhost:5173
-
-### Build for Production
+### Run the Local Node
 
 ```bash
-pnpm build
-pnpm preview
-```
-
-### Test Chain Connection
-
-```bash
-npx tsx scripts/test-connection.ts
-```
-
-## Local Development
-
-1. Clone and build QF node:
-```bash
-git clone https://github.com/QuantumFusion-network/qf-solochain.git
-cd qf-solochain
+cd /path/to/your-substrate-node
 cargo build --release
-```
+./target/release/node-template --dev --tmp
+Copy
+Deploy Contracts
+Copycd /path/to/your-contracts
+cargo contract build
+cargo contract instantiate --constructor new --args ... --suri //Alice --url ws://127.0.0.1:9944
+Note the contract addresses and update your .env file.
 
-2. Run local devnet:
-```bash
-./target/release/qf-node --dev --state-pruning archive
-```
+Run the Frontend
+Copycd qflink-frontend
+npm install
+npm run dev
+The app will be available at http://localhost:5173.
 
-3. Node runs on `ws://127.0.0.1:9944`
+Environment Variables
+Create a .env file in the project root:
 
-4. Dev accounts with tokens:
+VITE_WS_URL=ws://127.0.0.1:9944
+VITE_MESSAGING_CONTRACT_ADDRESS=<your_messaging_contract_address>
+VITE_REGISTRY_CONTRACT_ADDRESS=<your_registry_contract_address>
+VITE_POD_CONTRACT_ADDRESS=<your_pod_contract_address>
+User Flow
+Landing Page — Learn about QFLink and click "Launch App".
+Connect Wallet — Select and connect your Substrate or EVM wallet.
+Create Profile — Choose a display name (stored on-chain).
+Home — View your Pods and recent Direct Messages.
+Explore — Browse and join token-gated Pods based on your holdings.
+Pod Chat — Send messages in group chats. All messages are on-chain transactions.
+Direct Messages — Send encrypted wallet-to-wallet messages.
+Profile — Edit your display name, bio, and manage linked wallets.
+Roadmap
+Phase 1 (Current — MVP)
 
-| Account | Address | Seed | Role |
-|---|---|---|---|
-| **Alice** | `5GrwvaEF...utQY` | `//Alice` | bank |
-| **Bob** | `5FHneW46...94ty` | `//Bob` | whale |
-| **Charlie** | `5FLSigC9...s59Y` | `//Charlie` | dolphin |
-| **Dave** | `5DAAnrj7...TXFy` | `//Dave` | shrimp |
-| **Eve** | `5HGjWAeF...Maw` | `//Eve` | plankton |
-| **Ferdie** | `5CiPPseX...Rmhv` | `//Ferdie` | broke |
+Free-balance token gating for 3 default Pod tiers
+On-chain messaging (Pods + DMs)
+Wallet-gated onboarding with profile creation
+Dark/light mode, mobile responsive
+Phase 2 — Mainnet Launch
 
-Use `//Alice` or `//Bob` seed in Polkadot.js extension to import.
+Staking-aware Pod access (read from QF Network staking)
+Weighted balance mode (staked tokens valued higher than free balance)
+Mainnet deployment
+Phase 3 — Monetisation
 
-5. Start QFLink:
-```bash
-pnpm dev
-```
+Paid Pods with creator revenue share (80/20 split)
+One-off entry fees for premium Pods
+Phase 4 — Scaling
 
-6. Select "Local Dev" network in Settings
+Tiered Pod creation fees (Free / Standard / Premium)
+Recurring subscription Pods
+Wallet delegation (cold wallet to hot wallet)
+NFT mod badges and cosmetics
+Activity tracking and decay indicators
+Architecture
+Landing Page (public)
+    ↓ Launch App
+Connect Wallet Screen (public, always dark)
+    ↓ Wallet connected
+Profile Creation (if new wallet)
+    ↓ Profile created
+App Shell (auth-guarded)
+    ├── Home (Pods + DMs overview)
+    ├── Explore (browse/join Pods)
+    ├── Pods (your joined Pods + chat)
+    ├── Direct (encrypted DM conversations)
+    ├── Profile (edit name, bio, linked wallets)
+    └── Settings
+Design System
+Colors
 
-## Environment Variables
+Accent: #0891B2 (cyan-600) — used across both light and dark modes
+Dark background: #0D0D0D
+Light background: #FFFFFF
+Typography
 
-Copy `.env.example` to `.env`:
+UI/Body: Urbanist (Google Fonts, variable 100–900)
+Code/Addresses: Geist Mono (Google Fonts)
+Logo
 
-```
-VITE_DEFAULT_NETWORK=local
-VITE_MESSAGING_CONTRACT_ADDRESS=
-VITE_PODS_CONTRACT_ADDRESS=
-VITE_LINKED_WALLETS_CONTRACT_ADDRESS=
-```
+Icon: Interlocking link mark (rounded square + diagonal)
+Wordmark: Icon + "QFLink" (QF in cyan, Link in primary text color)
+Variants: dark background (logo-full-dark.svg), light background (logo-full-light.svg)
+Built On
+QF Network — A Substrate-based blockchain.
 
-Environment-specific files:
-- `.env.development` → `VITE_DEFAULT_NETWORK=local`
-- `.env.staging` → `VITE_DEFAULT_NETWORK=testnet`
-- `.env.production` → `VITE_DEFAULT_NETWORK=mainnet`
-
-Contract addresses are empty until deployed. The app uses mock data when addresses are empty and switches to real contract calls when filled in.
-
-## Pod Tiers
-
-| Tier | Fee | Max Members | Features |
-|---|---|---|---|
-| **Standard** | 500 QF | 100 | Public/private, basic chat |
-| **Premium** | 5,000 QF | Unlimited | Custom avatar, pin messages, assign mods |
-| **Elite** | 50,000 QF | Unlimited | Verified badge ✓, featured placement, analytics |
-
-Fee distribution: **25% → Treasury**, **75% → Burned**
-
-## Smart Contracts
-
-Contracts are in `/contracts` and compile to PolkaVM:
-
-```bash
-cd contracts
-chmod +x build.sh
-./build.sh
-```
-
-Three contracts:
-- **messaging** — On-chain encrypted message storage
-- **pods** — Pod creation with tier fees, member management, balance gating
-- **linked_wallets** — Multi-wallet linking via signature verification
-
-## Project Structure
-
-```
-src/
-├── components/
-│   ├── ui/         # Button, Input, Card, Modal, Avatar, Badge, Spinner, Toast
-│   ├── layout/     # Sidebar, Layout, WalletButton
-│   ├── messages/   # ConversationList, ChatView, MessageBubble, NewMessageModal
-│   └── pods/       # PodCard, PodGrid, PodChat, MemberList, CreatePodModal
-├── pages/          # MessagesPage, PodsPage, SettingsPage
-├── stores/         # wallet, messages, pods, ui (Zustand)
-├── hooks/          # useWallet, useMessages, usePods, useToast
-├── lib/            # network, chain, contracts, encryption, fees, utils
-└── types/          # TypeScript type definitions
-contracts/          # Rust PolkaVM smart contracts
-scripts/            # deploy.ts, test-connection.ts
-```
-
-## License
-
+License
 MIT
+
+Sovereign. On-Chain. Yours.

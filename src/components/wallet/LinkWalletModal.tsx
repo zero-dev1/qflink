@@ -100,10 +100,10 @@ export const LinkWalletModal: React.FC<LinkWalletModalProps> = ({ isOpen, onClos
             <React.Fragment key={s}>
               <div className={`flex h-6 w-6 flex-shrink-0 items-center justify-center rounded-full text-xs font-bold transition-colors ${
                 s < step
-                  ? 'bg-qf-accent text-black'
+                  ? 'bg-cyan-600 text-white'
                   : s === step
-                  ? 'bg-qf-accent/20 border border-qf-accent text-qf-accent'
-                  : 'bg-qf-elevated text-qf-text-muted'
+                  ? 'bg-cyan-600/20 border border-cyan-600 text-cyan-600'
+                  : 'bg-qx-elevated text-qx-text-muted'
               }`}>
                 {s < step ? (
                   <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
@@ -111,20 +111,20 @@ export const LinkWalletModal: React.FC<LinkWalletModalProps> = ({ isOpen, onClos
                   </svg>
                 ) : s}
               </div>
-              {s < 4 && <div className={`flex-1 h-px transition-colors ${s < step ? 'bg-qf-accent' : 'bg-qf-border-subtle'}`} />}
+              {s < 4 && <div className={`flex-1 h-px transition-colors ${s < step ? 'bg-cyan-600' : 'bg-qx-border-subtle'}`} />}
             </React.Fragment>
           ))}
         </div>
-        <p className="text-xs text-qf-text-muted">Step {step}: {stepLabels[step - 1]}</p>
+        <p className="text-xs text-qx-text-muted">Step {step}: {stepLabels[step - 1]}</p>
 
         {/* Step 1: Enter address */}
         {step === 1 && (
           <div className="space-y-3">
-            <p className="text-sm text-qf-text-secondary">
+            <p className="text-sm text-qx-text-secondary">
               Link another wallet to aggregate your balance.
             </p>
             <div>
-              <label className="text-xs font-medium text-qf-text-secondary mb-1.5 block">
+              <label className="text-xs font-medium text-qx-text-secondary mb-1.5 block">
                 Wallet address to link
               </label>
               <input
@@ -132,10 +132,10 @@ export const LinkWalletModal: React.FC<LinkWalletModalProps> = ({ isOpen, onClos
                 value={walletAddress}
                 onChange={(e) => { setWalletAddress(e.target.value); setAddressError('') }}
                 placeholder="5... or 0x..."
-                className={`w-full border bg-qf-card px-3 py-2 text-sm text-qf-text-primary placeholder:text-qf-text-muted focus:outline-none focus:ring-1 transition-colors ${
+                className={`w-full border bg-qx-card px-3 py-2 text-sm text-qx-text-primary placeholder:text-qx-text-muted focus:outline-none focus:ring-1 transition-colors ${
                   addressError
                     ? 'border-red-500 focus:border-red-500 focus:ring-red-500'
-                    : 'border-qf-border-prominent focus:border-qf-accent focus:ring-qf-accent'
+                    : 'border-qx-border-prominent focus:border-cyan-600 focus:ring-cyan-600'
                 }`}
               />
               {addressError && (
@@ -145,7 +145,7 @@ export const LinkWalletModal: React.FC<LinkWalletModalProps> = ({ isOpen, onClos
             <div className="flex justify-end">
               <button
                 onClick={handleStep1Continue}
-                className="rounded-md bg-qf-accent px-4 py-2 text-sm font-medium text-black hover:bg-qf-accent-hover transition-colors"
+                className="rounded-md bg-cyan-600 px-4 py-2 text-sm font-medium text-white hover:bg-cyan-700 transition-colors"
               >
                 Continue
               </button>
@@ -156,17 +156,17 @@ export const LinkWalletModal: React.FC<LinkWalletModalProps> = ({ isOpen, onClos
         {/* Step 2: Sign message */}
         {step === 2 && (
           <div className="space-y-3">
-            <p className="text-sm text-qf-text-secondary">
-              Sign this message with <span className="font-mono dark:text-qf-accent text-qf-text-primary">{walletAddress.slice(0, 8)}...{walletAddress.slice(-6)}</span> to prove ownership:
+            <p className="text-sm text-qx-text-secondary">
+              Sign this message with <span className="font-mono text-cyan-600">{walletAddress.slice(0, 8)}...{walletAddress.slice(-6)}</span> to prove ownership:
             </p>
-            <div className="border border-qf-card-border bg-qf-elevated p-3">
-              <p className="text-xs text-qf-text-secondary font-mono leading-relaxed break-all">
+            <div className="border border-gray-200 dark:border-gray-800 bg-transparent p-3">
+              <p className="text-xs text-qx-text-secondary font-mono leading-relaxed break-all">
                 "{signMessage}"
               </p>
             </div>
             <button
               onClick={handleCopyMessage}
-              className="flex items-center gap-2 text-xs font-medium dark:text-qf-accent text-qf-text-primary hover:text-qf-accent-hover transition-colors"
+              className="flex items-center gap-2 text-xs font-medium text-cyan-600 hover:text-cyan-700 transition-colors"
             >
               {copiedMsg ? (
                 <>
@@ -185,16 +185,16 @@ export const LinkWalletModal: React.FC<LinkWalletModalProps> = ({ isOpen, onClos
                 </>
               )}
             </button>
-            <p className="text-xs text-qf-text-muted">
+            <p className="text-xs text-qx-text-muted">
               Switch to that wallet in your extension, sign the message above, then click Continue.
             </p>
             <div className="flex justify-between">
-              <button onClick={() => setStep(1)} className="text-sm text-qf-text-muted hover:text-qf-text-secondary transition-colors">
+              <button onClick={() => setStep(1)} className="text-sm text-qx-text-muted hover:text-qx-text-secondary transition-colors">
                 ← Back
               </button>
               <button
                 onClick={() => setStep(3)}
-                className="rounded-md bg-qf-accent px-4 py-2 text-sm font-medium text-black hover:bg-qf-accent-hover transition-colors"
+                className="rounded-md bg-cyan-600 px-4 py-2 text-sm font-medium text-white hover:bg-cyan-700 transition-colors"
               >
                 Continue
               </button>
@@ -205,7 +205,7 @@ export const LinkWalletModal: React.FC<LinkWalletModalProps> = ({ isOpen, onClos
         {/* Step 3: Paste signature */}
         {step === 3 && (
           <div className="space-y-3">
-            <p className="text-sm text-qf-text-secondary">
+            <p className="text-sm text-qx-text-secondary">
               Paste the signature from your wallet:
             </p>
             <textarea
@@ -213,16 +213,16 @@ export const LinkWalletModal: React.FC<LinkWalletModalProps> = ({ isOpen, onClos
               onChange={(e) => setSignature(e.target.value)}
               placeholder="0x..."
               rows={3}
-              className="w-full rounded-lg border border-qf-border-prominent bg-qf-card px-3 py-2 text-sm text-qf-text-primary placeholder:text-qf-text-muted focus:border-qf-accent focus:outline-none focus:ring-1 focus:ring-qf-accent resize-none font-mono"
+              className="w-full rounded-lg border border-qx-border-prominent bg-qx-card px-3 py-2 text-sm text-qx-text-primary placeholder:text-qx-text-muted focus:border-cyan-600 focus:outline-none focus:ring-1 focus:ring-cyan-600 resize-none font-mono"
             />
             <div className="flex justify-between">
-              <button onClick={() => setStep(2)} className="text-sm text-qf-text-muted hover:text-qf-text-secondary transition-colors">
+              <button onClick={() => setStep(2)} className="text-sm text-qx-text-muted hover:text-qx-text-secondary transition-colors">
                 ← Back
               </button>
               <button
                 onClick={handleStep3Continue}
                 disabled={!signature.trim()}
-                className="rounded-lg bg-qf-accent px-4 py-2 text-sm font-medium text-black hover:bg-qf-accent-hover transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                className="rounded-lg bg-cyan-600 px-4 py-2 text-sm font-medium text-white hover:bg-cyan-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 Continue
               </button>
@@ -233,27 +233,27 @@ export const LinkWalletModal: React.FC<LinkWalletModalProps> = ({ isOpen, onClos
         {/* Step 4: Confirm */}
         {step === 4 && (
           <div className="space-y-3">
-            <p className="text-sm text-qf-text-secondary">
+            <p className="text-sm text-qx-text-secondary">
               Review and confirm the wallet link:
             </p>
-            <div className="rounded-lg border border-qf-border-subtle bg-qf-elevated p-3 space-y-2">
+            <div className="rounded-lg border border-qx-border-subtle bg-qx-elevated p-3 space-y-2">
               <div className="flex justify-between text-sm">
-                <span className="text-qf-text-muted">Wallet to link</span>
-                <span className="font-mono text-qf-text-primary text-xs">{walletAddress.slice(0, 10)}...{walletAddress.slice(-8)}</span>
+                <span className="text-qx-text-muted">Wallet to link</span>
+                <span className="font-mono text-qx-text-primary text-xs">{walletAddress.slice(0, 10)}...{walletAddress.slice(-8)}</span>
               </div>
               <div className="flex justify-between text-sm">
-                <span className="text-qf-text-muted">Primary wallet</span>
-                <span className="font-mono text-qf-text-primary text-xs">{address?.slice(0, 10)}...{address?.slice(-8)}</span>
+                <span className="text-qx-text-muted">Primary wallet</span>
+                <span className="font-mono text-qx-text-primary text-xs">{address?.slice(0, 10)}...{address?.slice(-8)}</span>
               </div>
             </div>
             <div className="flex justify-between">
-              <button onClick={() => setStep(3)} className="text-sm text-qf-text-muted hover:text-qf-text-secondary transition-colors">
+              <button onClick={() => setStep(3)} className="text-sm text-qx-text-muted hover:text-qx-text-secondary transition-colors">
                 ← Back
               </button>
               <button
                 onClick={handleSubmit}
                 disabled={isSubmitting}
-                className="flex items-center gap-2 rounded-lg bg-qf-accent px-4 py-2 text-sm font-medium text-black hover:bg-qf-accent-hover transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                className="flex items-center gap-2 rounded-lg bg-cyan-600 px-4 py-2 text-sm font-medium text-white hover:bg-cyan-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 {isSubmitting && (
                   <svg className="animate-spin" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">

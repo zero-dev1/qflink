@@ -49,14 +49,14 @@ export const ConversationList: React.FC<ConversationListProps> = ({
     fetchProfiles()
   }, [conversations])
   return (
-    <div className="flex h-full w-full md:w-72 flex-col border-r border-qf-border-subtle">
+    <div className="flex h-full w-full md:w-72 flex-col border-r border-gray-200 dark:border-gray-800 bg-white dark:bg-[#0D0D0D]">
       {/* Header */}
-      <div className="flex items-center justify-between px-4 py-3 border-b border-qf-border-subtle">
-        <p className="text-[10px] font-semibold uppercase tracking-widest text-qf-text-muted">Direct Messages</p>
+      <div className="flex items-center justify-between px-4 py-3 border-b border-gray-200 dark:border-gray-800">
+        <p className="text-[10px] font-semibold uppercase tracking-widest text-qx-text-muted">Direct Messages</p>
         <div className="flex items-center gap-1">
           <button
             onClick={onNewMessage}
-            className="flex h-7 w-7 items-center justify-center rounded-md text-qf-text-secondary hover:bg-qf-elevated hover:text-qf-text-primary transition-colors"
+            className="flex h-7 w-7 items-center justify-center rounded-md text-qx-text-secondary hover:bg-qx-elevated hover:text-qx-text-primary transition-colors"
             title="New message"
           >
             <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -65,7 +65,7 @@ export const ConversationList: React.FC<ConversationListProps> = ({
             </svg>
           </button>
           <button
-            className="flex h-7 w-7 items-center justify-center rounded-md text-qf-text-secondary hover:bg-qf-elevated hover:text-qf-text-primary transition-colors md:hidden"
+            className="flex h-7 w-7 items-center justify-center rounded-md text-qx-text-secondary hover:bg-qx-elevated hover:text-qx-text-primary transition-colors md:hidden"
             title="Back"
           >
             <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -78,8 +78,8 @@ export const ConversationList: React.FC<ConversationListProps> = ({
       <div className="flex-1 overflow-y-auto py-1">
         {conversations.length === 0 ? (
           <div className="flex flex-col items-center justify-center py-12 text-center px-4">
-            <p className="text-sm text-qf-text-muted">No conversations yet</p>
-            <p className="text-xs text-qf-text-muted mt-1">Start a new message</p>
+            <p className="text-sm text-qx-text-muted">No conversations yet</p>
+            <p className="text-xs text-qx-text-muted mt-1">Start a new message</p>
           </div>
         ) : (
           conversations.map((convo) => {
