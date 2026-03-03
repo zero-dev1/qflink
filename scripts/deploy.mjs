@@ -19,6 +19,7 @@ const WS_URL = 'ws://127.0.0.1:9944';
 const GAS = { refTime: 10_000_000_000n, proofSize: 10_000_000_000n };
 const STORAGE_DEPOSIT = 100_000_000_000_000_000_000n;
 const INIT_PODS_SELECTOR = '0xe414e067';
+const GET_POD_COUNT_SELECTOR = '0x6e2de47f';
 
 const CONTRACT_PATHS = {
   registry: path.join(ROOT, 'contracts/qflink-registry/qflink-registry.polkavm'),
@@ -29,7 +30,7 @@ const CONTRACT_PATHS = {
 const ENV_PATH = path.join(ROOT, '.env');
 
 // Selector for get_user_count() - used to check if contract is responsive
-const CHECK_SELECTOR = '0x0bec3bfa';
+const CHECK_SELECTOR = '0xfd33482d';
 
 // ─── Helpers ───────────────────────────────────────────────
 
@@ -72,27 +73,13 @@ function extractContractAddress(events) {
 }
 
 function updateEnvFile(addresses) {
-  let env = '';
-  if (fs.existsSync(ENV_PATH)) {
-    env = fs.readFileSync(ENV_PATH, 'utf8');
-  }
-
-  const updates = {
-    VITE_REGISTRY_ADDRESS: addresses.registry,
-    VITE_PODS_ADDRESS: addresses.pods,
-    VITE_MESSAGES_ADDRESS: addresses.messages,
-  };
-
-  for (const [key, value] of Object.entries(updates)) {
-    const regex = new RegExp(`^${key}=.*$`, 'm');
-    if (regex.test(env)) {
-      env = env.replace(regex, `${key}=${value}`);
-    } else {
-      env += `\n${key}=${value}`;
-    }
-  }
-
-  fs.writeFileSync(ENV_PATH, env.trim() + '\n');
+  // Write a clean .env with only the three contract addresses
+  const env = [
+    `VITE_REGISTRY_ADDRESS=${addresses.registry}`,
+    `VITE_PODS_ADDRESS=${addresses.pods}`,
+    `VITE_MESSAGES_ADDRESS=${addresses.messages}`,
+  ].join('\n');
+  fs.writeFileSync(ENV_PATH, env + '\n');
 }
 
 function loadExistingAddresses() {
@@ -111,6 +98,48 @@ function loadExistingAddresses() {
   if (messagesMatch) addresses.messages = messagesMatch[1].trim();
   
   return Object.keys(addresses).length === 3 ? addresses : null;
+}
+
+async function getAliceH160(api) {
+  try {
+    const entries = await api.query.revive.originalAccount.entries();
+    const alice32 = '5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY';
+    const mapped = entries.find(([_key, value]) => value.toString() === alice32);
+    if (mapped) {
+      return mapped[0].args[0].toString();
+    }
+    return null;
+  } catch {
+    return null;
+  }
+}
+
+async function queryPodCount(api, podsAddress) {
+  try {
+    const result = await api.call.reviveApi.call(
+      '5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY',
+      podsAddress,
+      '0',
+      null,
+      null,
+      GET_POD_COUNT_SELECTOR
+    );
+    const execResult = result?.result;
+    if (execResult && execResult.isOk) {
+      const data = execResult.asOk.data;
+      if (data && data.length >= 8) {
+        // Decode SCALE-encoded u64 (little-endian)
+        let count = 0n;
+        for (let i = 0; i < 8; i++) {
+          count |= BigInt(data[i]) << BigInt(i * 8);
+        }
+        return Number(count);
+      }
+    }
+    return 0;
+  } catch {
+    return 0;
+  }
 }
 
 async function checkContractDeployed(api, address) {
@@ -151,6 +180,15 @@ async function main() {
     console.log('   ✅ Alice mapped');
   } catch (e) {
     console.log('   ⚠️  Alice already mapped or error:', e.message);
+  }
+
+  // Print Alice's H160 for DEPLOYER verification
+  const aliceH160 = await getAliceH160(api);
+  if (aliceH160) {
+    console.log(`   📋 Alice H160: ${aliceH160}`);
+    console.log('   ℹ️  This must match DEPLOYER constant in qflink-pods/src/main.rs');
+  } else {
+    console.warn('   ⚠️  Could not query Alice H160 — verify DEPLOYER manually');
   }
 
   console.log('📍 Mapping Bob...');
@@ -216,7 +254,21 @@ async function main() {
     INIT_PODS_SELECTOR // data
   );
   await sendTx(initTx, alice);
-  console.log('   ✅ Pods initialized');
+
+  // Verify initialization actually worked (contract reverts are silent at dispatch level)
+  const podCount = await queryPodCount(api, addresses.pods);
+  if (podCount >= 3) {
+    console.log(`   ✅ Pods initialized — ${podCount} pods created`);
+  } else {
+    console.error(`   ❌ Pods initialization FAILED — pod count is ${podCount} (expected >= 3)`);
+    console.error('      The DEPLOYER constant in qflink-pods/src/main.rs may not match Alice\'s H160.');
+    if (aliceH160) {
+      console.error(`      Alice H160: ${aliceH160}`);
+      console.error('      Update DEPLOYER in the contract to match, rebuild, and redeploy.');
+    }
+    await api.disconnect();
+    process.exit(1);
+  }
 
   // Step 4 — Update .env
   console.log('\n📝 Updating .env...');

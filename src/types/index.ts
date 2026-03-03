@@ -227,7 +227,6 @@ export interface PodsState {
   podMods: Record<number, string[]>
   bannedAddresses: Record<number, string[]>
   isLoading: boolean
-  joinedPods: Set<number>
   setPods: (pods: Pod[]) => void
   setMyPods: (pods: Pod[]) => void
   setDefaultPods: (pods: DefaultPod[]) => void
@@ -239,8 +238,6 @@ export interface PodsState {
   setPodMods: (podId: number, mods: string[]) => void
   setBannedAddresses: (podId: number, addresses: string[]) => void
   setLoading: (loading: boolean) => void
-  joinPod: (podId: number) => void
-  hasJoined: (podId: number) => boolean
   fetchPods: () => Promise<void>
   fetchPodMessages: (podId: number) => Promise<void>
   sendPodMessage: (podId: number, content: string) => Promise<void>

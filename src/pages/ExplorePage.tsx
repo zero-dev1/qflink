@@ -8,7 +8,7 @@ import { Button } from '@/components/ui/Button'
 import { POD_CATEGORIES } from '@/types'
 import type { Pod, DefaultPod, CustomPod } from '@/types'
 import { cn } from '@/lib/utils'
-import { joinPodOnChain, podsHasPaid } from '@/lib/contracts'
+import { joinPodOnChain, podsHasPaid, invalidateCache } from '@/lib/contracts'
 import { useWalletStore } from '@/stores/wallet'
 import { usePodsStore } from '@/stores/pods'
 
@@ -60,7 +60,6 @@ const ExplorePage: React.FC = () => {
   const handlePodSelect = async (pod: Pod) => {
     const entryFee = !pod.isDefault ? ((pod as CustomPod).entryFee || 0n) : 0n
     const evmAddress = useWalletStore.getState().evmAddress
-    const joinPod = usePodsStore.getState().joinPod
 
     // Creator always goes straight to chat, never sees the modal
     if (!pod.isDefault && (pod as CustomPod).creator?.toLowerCase() === evmAddress?.toLowerCase()) {
@@ -79,8 +78,21 @@ const ExplorePage: React.FC = () => {
         setPaidPodModalPod(pod)
       }
     } else {
-      // Free pod - record join in store BEFORE navigating
-      joinPod(pod.id)
+      // Free pod (default or custom) - join on-chain first so user_pods reverse index is updated
+      if (!myPodIds.includes(pod.id) && address) {
+        setIsJoining(true)
+        try {
+          await joinPodOnChain(pod.id, address, 0n)
+          invalidateCache()
+          await usePodsStore.getState().fetchPods()
+          navigate(`/pods/${pod.id}`)
+          return
+        } catch (err) {
+          console.error('Failed to join free pod:', err)
+        } finally {
+          setIsJoining(false)
+        }
+      }
       navigate(`/pods/${pod.id}`)
     }
   }
@@ -92,7 +104,6 @@ const ExplorePage: React.FC = () => {
     setIsJoining(true)
     try {
       const entryFee = ((paidPodModalPod as CustomPod).entryFee || 0n)
-      const joinPod = usePodsStore.getState().joinPod
       const fetchPods = usePodsStore.getState().fetchPods
       
       if (!address) {
@@ -100,11 +111,8 @@ const ExplorePage: React.FC = () => {
       }
       
       await joinPodOnChain(paidPodModalPod.id, address, entryFee)
-      
-      // Record join after successful payment
-      joinPod(paidPodModalPod.id)
-      
-      // Refresh pods to update sidebar immediately
+      invalidateCache()
+      // Refresh pods to update sidebar immediately (myPods now comes from on-chain check)
       await fetchPods()
       
       navigate(`/pods/${paidPodModalPod.id}`)
@@ -217,6 +225,7 @@ const ExplorePodCard: React.FC<ExplorePodCardProps> = ({
 }) => {
   const [hasPaid, setHasPaid] = React.useState<boolean | null>(null)
   const evmAddress = useWalletStore((s) => s.evmAddress)
+
   
   const isDefault = pod.isDefault
   const description = isDefault
@@ -315,8 +324,8 @@ const ExplorePodCard: React.FC<ExplorePodCardProps> = ({
         >
           Coming Soon
         </button>
-      ) : isCreator || (hasEntryFee && hasPaid === true) || (isMember && !hasEntryFee) ? (
-        // STATE 1: View Pod (creator OR already paid OR already member of free pod)
+      ) : isCreator || isMember || (hasEntryFee && hasPaid === true) ? (
+        // STATE 1: View Pod (creator OR member per chain OR already paid)
         <button
           onClick={onView}
           className="w-full bg-cyan-600 py-2.5 text-sm font-semibold text-white hover:bg-cyan-700 transition-colors"

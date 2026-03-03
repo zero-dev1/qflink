@@ -10,7 +10,7 @@ import { Spinner } from '@/components/ui/Spinner'
 const PodPage: React.FC = () => {
   const { id } = useParams<{ id: string }>()
   const navigate = useNavigate()
-  const { address, balance } = useWallet()
+  const { address, balance, evmAddress } = useWallet()
   const {
     pods,
     myPods,
@@ -49,11 +49,25 @@ const PodPage: React.FC = () => {
   const members = podMembers[podId] || []
 
   const [showInvite, setShowInvite] = useState(false)
+  const [podLoadAttempts, setPodLoadAttempts] = useState(0)
+
+  // Retry loading pod data if not found (for newly created pods)
+  useEffect(() => {
+    if (!pod && !isLoading && podLoadAttempts < 3) {
+      const timer = setTimeout(() => {
+        setPodLoadAttempts((prev) => prev + 1)
+      }, 500)
+      return () => clearTimeout(timer)
+    }
+  }, [pod, isLoading, podLoadAttempts])
 
   if (isLoading || !pod) {
     return (
-      <div className="flex items-center justify-center h-[calc(100vh-3.5rem)]">
+      <div className="flex flex-col items-center justify-center h-[calc(100vh-3.5rem)] gap-4">
         <Spinner size="lg" />
+        <p className="text-sm text-gray-500">
+          {podLoadAttempts > 0 ? 'Loading pod data...' : 'Checking authentication...'}
+        </p>
       </div>
     )
   }
@@ -76,7 +90,7 @@ const PodPage: React.FC = () => {
         pod={pod}
         messages={messages}
         members={members}
-        currentUserAddress={address}
+        currentUserAddress={evmAddress || address}
         userBalance={balance}
         onSend={(content) => sendPodMessage(podId, content)}
         onBack={() => navigate(-1)}

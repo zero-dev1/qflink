@@ -5,7 +5,8 @@ import { useProfileStore } from '@/stores/profile'
 import { useUIStore } from '@/stores/ui'
 import { truncateAddress } from '@/lib/utils'
 import { deriveEncryptionKeypair } from '@/lib/encryption'
-import { ensureAccountMapped } from '@/lib/chain'
+import { ensureAccountMapped, getApi } from '@/lib/chain'
+import { registryGetProfile } from '@/lib/contracts'
 import { Spinner } from '@/components/ui/Spinner'
 import { QFLinkWordmark } from '@/components/QFLinkWordmark'
 import type { InjectedAccountWithMeta } from '@/lib/chain'
@@ -42,29 +43,85 @@ const ConnectPage: React.FC = () => {
   const addToast = useUIStore((s) => s.addToast)
   const profile = useProfileStore()
 
-  // Check if user already has wallet connected and profile on mount
+  // After wallet connects, do a fresh on-chain profile check to decide next step.
+  // We do NOT rely on the profile store's cached isRegistered — we always query
+  // registryGetProfile directly so a mapped-but-unregistered account is never
+  // accidentally treated as registered.
   useEffect(() => {
-    // Get the return URL from location state, default to /home
-    const returnTo = (location.state as any)?.from?.pathname || '/home'
-    
-    if (isConnected && profile.isRegistered) {
-      navigate(returnTo, { replace: true })
-    } else if (isConnected && !profile.isRegistered && step === 1) {
-      // Wallet connected but no profile - auto advance to step 2
-      setStep(2)
+    console.log('[AUTH_TRACE] ConnectPage.tsx useEffect[checkAndRoute] FIRED, isConnected:', isConnected, 'evmAddress:', evmAddress)
+    if (!isConnected || !evmAddress) {
+      console.log('[AUTH_TRACE] ConnectPage.tsx useEffect[checkAndRoute] EARLY RETURN - !isConnected:', !isConnected, '!evmAddress:', !evmAddress)
+      return
     }
-  }, [isConnected, profile.isRegistered, navigate, step])
 
-  // Watch for profile changes - navigate when registration completes (with delay)
-  useEffect(() => {
+    let cancelled = false
     const returnTo = (location.state as any)?.from?.pathname || '/home'
-    
-    if (profile.isRegistered && isConnected) {
-      // 2-second delay to ensure chain state is updated before navigating
-      const timer = setTimeout(() => {
-        navigate(returnTo, { replace: true })
-      }, 2000)
-      return () => clearTimeout(timer)
+    console.log('[AUTH_TRACE] ConnectPage.tsx useEffect[checkAndRoute] returnTo:', returnTo)
+
+    const checkAndRoute = async () => {
+      console.log('[AUTH_TRACE] ConnectPage.tsx checkAndRoute() ENTRY')
+      try {
+        const api = await getApi()
+        console.log('[AUTH_TRACE] ConnectPage.tsx checkAndRoute() CALLING registryGetProfile')
+        const profileData = await registryGetProfile(api, evmAddress)
+        console.log('[AUTH_TRACE] ConnectPage.tsx checkAndRoute() registryGetProfile response:', profileData)
+        if (cancelled) {
+          console.log('[AUTH_TRACE] ConnectPage.tsx checkAndRoute() CANCELLED, returning')
+          return
+        }
+
+        const hasProfile = !!(profileData
+          && profileData.displayName
+          && profileData.displayName.trim().length > 0
+          && profileData.registeredAt
+          && profileData.registeredAt > 0n)
+        console.log('[AUTH_TRACE] ConnectPage.tsx checkAndRoute() hasProfile:', hasProfile, 'displayName:', profileData?.displayName, 'registeredAt:', profileData?.registeredAt)
+
+        if (hasProfile) {
+          console.log('[AUTH_TRACE] ConnectPage.tsx checkAndRoute() HAS VALID PROFILE, navigating to', returnTo)
+          navigate(returnTo, { replace: true })
+        } else {
+          // No valid profile — stay on connect page at step 2 for registration
+          console.log('[AUTH_TRACE] ConnectPage.tsx checkAndRoute() NO VALID PROFILE, setting step=2')
+          setStep(2)
+        }
+      } catch (err) {
+        // Network error — fall back to store state to avoid blocking the user
+        console.log('[AUTH_TRACE] ConnectPage.tsx checkAndRoute() ERROR:', err)
+        if (cancelled) return
+        if (profile.isRegistered) {
+          console.log('[AUTH_TRACE] ConnectPage.tsx checkAndRoute() FALLBACK navigate to', returnTo, '(profile.isRegistered=true)')
+          navigate(returnTo, { replace: true })
+        } else {
+          console.log('[AUTH_TRACE] ConnectPage.tsx checkAndRoute() FALLBACK setting step=2 (profile.isRegistered=false)')
+          setStep(2)
+        }
+      }
+    }
+
+    checkAndRoute()
+    return () => { 
+      console.log('[AUTH_TRACE] ConnectPage.tsx useEffect[checkAndRoute] CLEANUP')
+      cancelled = true 
+    }
+  }, [isConnected, evmAddress])
+
+  // Navigate after profile registration completes (with delay for chain indexing)
+  useEffect(() => {
+    console.log('[AUTH_TRACE] ConnectPage.tsx useEffect[postRegistration] FIRED, profile.isRegistered:', profile.isRegistered, 'isConnected:', isConnected)
+    if (!profile.isRegistered || !isConnected) {
+      console.log('[AUTH_TRACE] ConnectPage.tsx useEffect[postRegistration] EARLY RETURN')
+      return
+    }
+    const returnTo = (location.state as any)?.from?.pathname || '/home'
+    console.log('[AUTH_TRACE] ConnectPage.tsx useEffect[postRegistration] Setting 2s timer to navigate to', returnTo)
+    const timer = setTimeout(() => {
+      console.log('[AUTH_TRACE] ConnectPage.tsx useEffect[postRegistration] TIMER FIRED, navigating to', returnTo)
+      navigate(returnTo, { replace: true })
+    }, 2000)
+    return () => {
+      console.log('[AUTH_TRACE] ConnectPage.tsx useEffect[postRegistration] CLEANUP (clearing timer)')
+      clearTimeout(timer)
     }
   }, [profile.isRegistered, isConnected, navigate, location])
 

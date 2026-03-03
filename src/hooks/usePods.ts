@@ -112,7 +112,7 @@ export function usePods() {
       try {
         await podsJoinPod(podId, fee)
         addToast('success', 'Successfully joined pod')
-        // Refresh pods to update state
+        // Refresh pods to update state from on-chain
         await fetchPods()
       } catch (err) {
         const msg = err instanceof Error ? err.message : 'Failed to join pod'

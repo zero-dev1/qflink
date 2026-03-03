@@ -21,7 +21,7 @@ const ProfilePage: React.FC = () => {
   const [showEditProfile, setShowEditProfile] = useState(false)
 
   const totalBalance = linkedWallets.reduce((sum, w) => sum + w.balance, balance)
-  const podsJoined = myPods.length + defaultPods.length
+  const podsJoined = myPods.length
 
   const handleCopy = () => {
     if (address) {

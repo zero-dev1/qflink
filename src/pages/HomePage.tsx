@@ -95,12 +95,10 @@ const HomePage: React.FC = () => {
     fetchProfiles()
   }, [conversations])
 
-  // Show accessible pods + threshold-0 pods (as "Coming Soon" cards)
-  // myPods is already filtered by access check (excludes threshold-0)
-  // We add threshold-0 default pods back for "Coming Soon" display
-  const accessiblePods = myPods
-  const comingSoonPods = defaultPods.filter(p => p.minBalance === 0n)
-  const allDisplayPods = [...accessiblePods, ...comingSoonPods].filter((p, i, arr) => 
+  // Show user's joined pods + all default pods for discovery
+  // Per spec: Home page shows default pods (Chefs, Whale, Builders) alongside user's pods
+  // Dedup ensures no double-showing if user has joined a default pod
+  const allDisplayPods = [...myPods, ...defaultPods].filter((p, i, arr) => 
     arr.findIndex(x => x.id === p.id) === i
   )
 
@@ -144,15 +142,18 @@ const HomePage: React.FC = () => {
           </div>
         ) : (
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-            {allDisplayPods.map((pod) => (
-              <PodHomeCard
-                key={pod.id}
-                pod={pod}
-                userBalance={balance}
-                unreadCount={0}
-                onClick={() => navigate(`/pods/${pod.id}`)}
-              />
-            ))}
+            {allDisplayPods.map((pod) => {
+              const isMember = myPods.some(p => p.id === pod.id)
+              return (
+                <PodHomeCard
+                  key={pod.id}
+                  pod={pod}
+                  userBalance={balance}
+                  unreadCount={0}
+                  onClick={() => navigate(isMember ? `/pods/${pod.id}` : '/explore')}
+                />
+              )
+            })}
           </div>
         )}
       </section>

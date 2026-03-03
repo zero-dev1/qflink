@@ -64,10 +64,13 @@ export const useProfileStore = create<ProfileState>((set, get) => ({
   },
 
   fetchProfile: async (address?: string) => {
+    console.log('[AUTH_TRACE] profile.ts fetchProfile() ENTRY, address param:', address)
     const { evmAddress } = useWalletStore.getState()
     const targetAddress = address || evmAddress
+    console.log('[AUTH_TRACE] profile.ts fetchProfile() targetAddress:', targetAddress)
 
     if (!targetAddress) {
+      console.log('[AUTH_TRACE] profile.ts fetchProfile() no targetAddress, setting needsRegistration=true')
       set({ needsRegistration: true, isRegistered: false })
       return
     }
@@ -76,8 +79,17 @@ export const useProfileStore = create<ProfileState>((set, get) => ({
     try {
       const api = await getApi()
       const profile = await registryGetProfile(api, targetAddress)
+      console.log('[AUTH_TRACE] profile.ts fetchProfile() raw contract response:', profile)
 
-      if (profile) {
+      const hasValidProfile = profile
+        && profile.displayName
+        && profile.displayName.trim().length > 0
+        && profile.registeredAt
+        && profile.registeredAt > 0n
+      console.log('[AUTH_TRACE] profile validation:', { displayName: profile?.displayName, registeredAt: profile?.registeredAt, hasValidProfile })
+
+      if (hasValidProfile) {
+        console.log('[AUTH_TRACE] profile.ts fetchProfile() has valid profile, setting isRegistered=true, needsRegistration=false')
         set({
           displayName: profile.displayName,
           encryptionPubkey: profile.encryptionPubkey,
@@ -91,7 +103,8 @@ export const useProfileStore = create<ProfileState>((set, get) => ({
           secretKey: new Uint8Array(32),
         })
       } else {
-        // Query succeeded and explicitly returned null — confirmed no profile
+        // Query succeeded but returned default/empty struct — confirmed no profile
+        console.log('[AUTH_TRACE] profile.ts fetchProfile() no valid profile found (empty/default struct), setting isRegistered=false, needsRegistration=true')
         set({
           needsRegistration: true,
           isRegistered: false,
@@ -106,6 +119,8 @@ export const useProfileStore = create<ProfileState>((set, get) => ({
       console.error('❌ [fetchProfile] Network error fetching profile:', err)
       throw err
     } finally {
+      const finalState = get()
+      console.log('[AUTH_TRACE] profile.ts fetchProfile() EXIT, isRegistered:', finalState.isRegistered, 'needsRegistration:', finalState.needsRegistration)
       set({ isLoading: false })
     }
   },
@@ -187,7 +202,7 @@ export const useProfileStore = create<ProfileState>((set, get) => ({
     encryptionPubkey: null,
     registeredAt: null,
     isRegistered: false,
-    needsRegistration: false,
+    needsRegistration: true,
     linkedWallets: [],
     isLoading: false,
   }),

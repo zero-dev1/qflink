@@ -33,22 +33,6 @@ export function invalidateCache(keyPrefix?: string): void {
   }
 }
 
-// BUG 4: Detect pods contract address change (e.g. after chain reset) and clear stale join data
-;(() => {
-  try {
-    const PODS_CONTRACT_KEY = 'qflink_pods_contract'
-    const JOINED_PODS_KEY = 'qflink_joined_pods'
-    const storedAddress = localStorage.getItem(PODS_CONTRACT_KEY)
-    const currentAddress = CONTRACT_ADDRESSES.pods
-    if (storedAddress !== currentAddress) {
-      localStorage.removeItem(JOINED_PODS_KEY)
-      localStorage.setItem(PODS_CONTRACT_KEY, currentAddress)
-    }
-  } catch (err) {
-    // Silently handle localStorage errors
-  }
-})()
-
 const DECIMALS_18 = BigInt(10) ** BigInt(18)
 const DEFAULT_GAS_LIMIT = { refTime: BigInt(10000000000), proofSize: BigInt(10000000000) }
 const BATCH_GAS_LIMIT = { refTime: BigInt(1000000000), proofSize: BigInt(1000000000) }
@@ -380,6 +364,17 @@ export async function queryContract(
     if (result && typeof result.isOk === 'boolean') {
       if (result.isOk) {
         const execResult = result.asOk
+        
+        // Check REVERT flag (bit 0 of flags) — contract returned an error
+        const flags = execResult.flags
+        if (flags) {
+          const flagsNum = typeof flags.toNumber === 'function' ? flags.toNumber() : Number(flags)
+          if (flagsNum & 1) {
+            // Contract reverted — return empty (not valid data)
+            return new Uint8Array(0)
+          }
+        }
+        
         const data = execResult.data
         
         // Handle different data types
@@ -405,6 +400,11 @@ export async function queryContract(
     
     // Try JSON structure access
     const resultJson = result?.toJSON ? result.toJSON() : result
+    
+    // Check REVERT flag in JSON path too
+    if (resultJson?.Ok?.flags && (Number(resultJson.Ok.flags) & 1)) {
+      return new Uint8Array(0)
+    }
     
     if (resultJson?.Ok?.data) {
       const data = resultJson.Ok.data
@@ -1115,9 +1115,17 @@ export async function podsGetProFee(): Promise<bigint> {
     const api = await getApi()
     const sel = selector('get_pro_fee()')
     const result = await queryContract(api, CONTRACT_ADDRESSES.pods, sel)
-    return decodeU256(result, 0)
-  } catch {
-    return BigInt(0)
+    console.log('[podsGetProFee] raw result length:', result.length)
+    const fee = decodeU256(result, 0)
+    console.log('[podsGetProFee] decoded fee:', fee.toString())
+    if (fee === BigInt(0)) {
+      console.warn('[podsGetProFee] Fee query returned 0, using fallback 500 QF')
+      return BigInt('500000000000000000000')
+    }
+    return fee
+  } catch (err) {
+    console.error('[podsGetProFee] Query failed, using fallback:', err)
+    return BigInt('500000000000000000000')
   }
 }
 
@@ -1220,6 +1228,52 @@ export async function podsGetPodMemberCount(podId: number): Promise<number> {
     return value
   } catch {
     return 0
+  }
+}
+
+/**
+ * Get all pod IDs that a user is a member of (on-chain reverse index)
+ * This is the production-grade replacement for localStorage-based membership tracking
+ */
+export async function podsGetUserPods(address: string): Promise<number[]> {
+  const cacheKey = `get_user_pods:${address.toLowerCase()}`
+  const cached = getCached(cacheKey)
+  if (cached !== null) return cached
+
+  try {
+    const api = await getApi()
+    const sel = selector('get_user_pods(address)')
+    const callData = concat(sel, encodeAddress(address))
+    const result = await queryContract(api, CONTRACT_ADDRESSES.pods, callData)
+    
+    console.log('[podsGetUserPods] raw result length:', result.length)
+    
+    if (result.length === 0) {
+      console.log('[podsGetUserPods] empty result, user has no pods')
+      setCache(cacheKey, [])
+      return []
+    }
+    
+    const { length, bytesRead } = decodeCompactLength(result, 0)
+    console.log('[podsGetUserPods] vec length:', length, 'bytesRead:', bytesRead)
+    const pods: number[] = []
+    let offset = bytesRead
+    
+    for (let i = 0; i < length; i++) {
+      if (offset + 8 > result.length) {
+        console.warn('[podsGetUserPods] truncated at index', i)
+        break
+      }
+      pods.push(Number(decodeU64(result, offset)))
+      offset += 8
+    }
+    
+    console.log('[podsGetUserPods] decoded pods:', pods)
+    setCache(cacheKey, pods)
+    return pods
+  } catch (err) {
+    console.error('[podsGetUserPods] Error:', err)
+    return []
   }
 }
 
@@ -1346,9 +1400,9 @@ export async function getPublicPods(): Promise<any[]> {
   }
 }
 
-export async function getUserPods(address: string): Promise<any[]> {
-  // For now, return empty array - this would need a contract function to track user's joined pods
-  return []
+export async function getUserPods(address: string): Promise<number[]> {
+  // Call the contract's get_user_pods function
+  return podsGetUserPods(address)
 }
 
 // Removed hardcoded getDefaultPods - all pods come from contract
@@ -1394,8 +1448,27 @@ export async function getPodMessages(podId: number): Promise<any[]> {
 }
 
 export async function getPodMembers(podId: number): Promise<string[]> {
-  // This would need a contract function to track pod members
-  return []
+  try {
+    const api = await getApi()
+    const sel = selector('get_pod_members(uint64)')
+    const callData = concat(sel, encodeU64(podId))
+    const result = await queryContract(api, CONTRACT_ADDRESSES.pods, callData)
+    
+    // Decode SCALE-encoded Vec<[u8; 20]>
+    const { length, bytesRead } = decodeCompactLength(result, 0)
+    const members: string[] = []
+    let offset = bytesRead
+    
+    for (let i = 0; i < length; i++) {
+      members.push(decodeAddress(result, offset))
+      offset += 20
+    }
+    
+    return members
+  } catch (err) {
+    console.error('getPodMembers error:', err)
+    return []
+  }
 }
 
 export async function createPodOnChain(
@@ -1433,10 +1506,14 @@ export async function createPodOnChain(
 
   const api = await getApi()
   
-  // Get pro fee if creating a Pro pod
+  // Contract uses exact fee matching (==): if entryFee > 0, msg.value must == pro_fee
   let creationFee = BigInt(0)
-  if (tier === 'pro') {
+  if (tier === 'pro' || entryFee > BigInt(0)) {
     creationFee = await podsGetProFee()
+    console.log('[createPodOnChain] creationFee to send:', creationFee.toString())
+    if (creationFee === BigInt(0)) {
+      throw new Error('Could not determine pro creation fee — cannot create paid pod')
+    }
   }
   
   // Use payout wallet or default to creator

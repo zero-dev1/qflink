@@ -199,7 +199,7 @@ const WhitepaperPage: React.FC = () => {
           <section id="section-04" className="scroll-mt-24">
             <SectionNum>04 — Architecture</SectionNum>
             <H2>Architecture &amp; Smart Contracts</H2>
-            <P>QFLink is composed of two primary smart contracts deployed on QuantumFusion using the <Code>ink!</Code> smart contract language, compiled to PolkaVM bytecode. Both contracts are immutable once deployed per version, with upgrade paths managed through a master controller contract.</P>
+            <P>QFLink is composed of two primary smart contracts deployed on QuantumFusion, written in plain Rust using the <Code>qf-polkavm-sdk</Code> and <Code>pallet-revive-uapi</Code> crates, compiled to PolkaVM bytecode. Both contracts are <Code>#![no_std]</Code> / <Code>#![no_main]</Code> binaries — there is no <Code>ink!</Code> DSL or macro layer. Both contracts are immutable once deployed per version, with upgrade paths managed through a master controller contract.</P>
             <H3>qflink-pods</H3>
             <P>The Pods contract manages community spaces. It handles Pod creation, configuration, member management, and message storage for Pod channels. Key storage structures include:</P>
             <UL>
@@ -218,7 +218,7 @@ const WhitepaperPage: React.FC = () => {
               <P>On-chain storage is finite and metered. Every message written to contract storage consumes storage deposit on QF Network. QFLink is designed to make this cost transparent and predictable, surfacing estimated fees to users before every message send. Future versions will support configurable message retention windows with partial on-chain storage and content-addressed IPFS fallback for archived messages.</P>
             </HighlightBox>
             <H3>Contract Interactions</H3>
-            <P>The frontend communicates with both contracts via <Code>@polkadot/api-contract</Code>. All reads are performed as RPC dry-run calls (no fee, no signature). All writes — creating a Pod, sending a message, joining a Pod — are submitted as signed extrinsics and confirmed on-chain before the UI updates.</P>
+            <P>The frontend communicates with both contracts via <Code>@polkadot/api</Code> directly, using <Code>api.call.reviveApi.call()</Code> for dry-run reads and <Code>api.tx.revive.call()</Code> for signed writes. All reads are performed as RPC dry-run calls (no fee, no signature). All writes — creating a Pod, sending a message, joining a Pod — are submitted as signed extrinsics and confirmed on-chain before the UI updates.</P>
             <P>This means the QFLink UI has <Strong>no optimistic updates</Strong> for write operations. The UI waits for on-chain confirmation before reflecting a new message or membership state. While this introduces a 2–6 second latency per write on current QF Network block times, it guarantees that the UI state is always a faithful representation of the on-chain state.</P>
           </section>
 

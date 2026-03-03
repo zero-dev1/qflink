@@ -11,6 +11,8 @@ import {
   podsIsGloballyBanned,
   podsGetMods,
   podsHasPaid,
+  podsGetUserPods,
+  invalidateCache,
 } from '@/lib/contracts'
 import { useWalletStore } from './wallet'
 
@@ -18,33 +20,6 @@ import { useWalletStore } from './wallet'
 const getEvmAddress = async (): Promise<string | null> => {
   const { useWalletStore } = await import('./wallet')
   return useWalletStore.getState().evmAddress
-}
-
-// LocalStorage key for joined pods
-const JOINED_PODS_KEY = 'qflink_joined_pods'
-
-// Load joined pods from localStorage
-const loadJoinedPods = (): Set<number> => {
-  try {
-    const stored = localStorage.getItem(JOINED_PODS_KEY)
-    if (stored) {
-      const arr = JSON.parse(stored) as number[]
-      return new Set(arr)
-    }
-  } catch (err) {
-    // Silently handle localStorage errors
-  }
-  return new Set()
-}
-
-// Save joined pods to localStorage
-const saveJoinedPods = (joinedPods: Set<number>) => {
-  try {
-    const arr = Array.from(joinedPods)
-    localStorage.setItem(JOINED_PODS_KEY, JSON.stringify(arr))
-  } catch (err) {
-    // Silently handle localStorage errors
-  }
 }
 
 export const usePodsStore = create<PodsState>((set, get) => ({
@@ -57,7 +32,6 @@ export const usePodsStore = create<PodsState>((set, get) => ({
   podMods: {},
   bannedAddresses: {},
   isLoading: false,
-  joinedPods: loadJoinedPods(),
 
   setPods: (pods: Pod[]) => set({ pods }),
   setMyPods: (pods: Pod[]) => set({ myPods: pods }),
@@ -108,26 +82,13 @@ export const usePodsStore = create<PodsState>((set, get) => ({
 
   setLoading: (loading: boolean) => set({ isLoading: loading }),
 
-  joinPod: (podId: number) => {
-    const state = get()
-    const newJoinedPods = new Set(state.joinedPods)
-    newJoinedPods.add(podId)
-    saveJoinedPods(newJoinedPods)
-    set({ joinedPods: newJoinedPods })
-  },
 
-  hasJoined: (podId: number): boolean => {
-    return get().joinedPods.has(podId)
-  },
 
   fetchPods: async () => {
-    // Prevent concurrent fetches
-    if (get().isLoading) {
-      return
-    }
+    // Invalidate all cached contract query results so we get fresh chain data
+    invalidateCache()
     
-    // Clear existing pods and set loading state
-    set({ pods: [], defaultPods: [], myPods: [], isLoading: true })
+    set({ isLoading: true })
     try {
       const api = await getApi()
       const count = await podsGetPodCount(api)
@@ -169,40 +130,45 @@ export const usePodsStore = create<PodsState>((set, get) => ({
       const defaultPods = uniquePods.filter(p => (p as any).isDefault) as DefaultPod[]
       const customPods = uniquePods.filter(p => !(p as any).isDefault)
       
-      // Derive myPods from:
-      // 1. User is creator
-      // 2. User has joined (localStorage)
-      // 3. User meets balance threshold (existing logic)
-      // 4. User has paid (on-chain check)
+      // Derive myPods from on-chain reverse index:
+      // This is the production-grade approach - contract maintains user_pods mapping
       let myPods: Pod[] = []
       const evmAddress = await getEvmAddress()
-      const joinedPods = get().joinedPods
       
       if (evmAddress) {
-        // Sync on-chain paid status: if user has paid for a pod, add it to joinedPods
-        for (const pod of uniquePods) {
-          try {
-            const entryFee = (pod as any).entryFee || 0n
-            if (entryFee > 0n && !joinedPods.has(pod.id)) {
-              const hasPaid = await podsHasPaid(pod.id, evmAddress)
-              if (hasPaid) {
-                get().joinPod(pod.id)
-              }
-            }
-          } catch (err) {
-            console.error(`Failed to sync paid status for pod ${pod.id}:`, err)
+        // Get user's pods from on-chain reverse index (O(1) lookup, scalable)
+        const userPodIds = await podsGetUserPods(evmAddress)
+        
+        // Build myPods from the pod IDs returned by the contract
+        for (const podId of userPodIds) {
+          const pod = uniquePods.find(p => p.id === podId)
+          if (pod) {
+            myPods.push(pod)
           }
         }
-
-        // Refresh joinedPods after sync
-        const updatedJoinedPods = get().joinedPods
-
-        // myPods = pods where user is creator OR user has explicitly joined
-        myPods = uniquePods.filter(pod => {
+        
+        // Also include pods where user is creator (for creator tracking)
+        for (const pod of uniquePods) {
           const isCreator = (pod as any).creator?.toLowerCase() === evmAddress.toLowerCase()
-          const hasJoined = updatedJoinedPods.has(pod.id)
-          return isCreator || hasJoined
-        })
+          if (isCreator && !myPods.some(p => p.id === pod.id)) {
+            myPods.push(pod)
+          }
+        }
+        
+        // Only auto-add Chefs (pod 0) to sidebar — per spec, Whale and Builders
+        // require explicit join via join_pod to appear in sidebar
+        const chefsPod = uniquePods.find(p => p.id === 0)
+        if (chefsPod && !myPods.some(p => p.id === 0)) {
+          try {
+            const api2 = await getApi()
+            const access = await podsCheckAccess(api2, 0, evmAddress)
+            if (access.granted) {
+              myPods.push(chefsPod)
+            }
+          } catch (err) {
+            console.error('Failed to check Chefs pod access:', err)
+          }
+        }
       }
       
       // Deduplicate myPods by ID to prevent duplicates in sidebar

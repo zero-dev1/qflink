@@ -2,6 +2,7 @@ import React, { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useWallet } from '@/hooks/useWallet'
 import { usePods } from '@/hooks/usePods'
+import { usePodsStore } from '@/stores/pods'
 import { useUIStore } from '@/stores/ui'
 import { Button } from '@/components/ui/Button'
 import { Input, Textarea } from '@/components/ui/Input'
@@ -16,6 +17,7 @@ const CreatePodPage: React.FC = () => {
   const navigate = useNavigate()
   const { balance, isConnected } = useWallet()
   const { createPod } = usePods()
+  const fetchPods = usePodsStore((s) => s.fetchPods)
   const setShowConnectWallet = useUIStore((s) => s.setShowConnectWallet)
 
   const [step, setStep] = useState<1 | 2 | 3>(1)
@@ -70,6 +72,8 @@ const CreatePodPage: React.FC = () => {
     const entryFeeBigInt = BigInt(Math.floor(entryFeeBal * 1e18))
     const pod = await createPod(name.trim(), description.trim(), balanceBigInt, true, tier, entryFeeBigInt, payoutWallet.trim())
     if (pod) {
+      // Wait for pods store to refresh before navigating to ensure pod data is available
+      await fetchPods()
       navigate(`/pods/${pod.id}`)
     } else {
       navigate('/explore')

@@ -874,7 +874,7 @@
       <span class="section-num">04 — Architecture</span>
       <h2>Architecture &amp; Smart Contracts</h2>
       <p>
-        QFLink is composed of two primary smart contracts deployed on QuantumFusion using the <code>ink!</code> smart contract language, compiled to PolkaVM bytecode. Both contracts are immutable once deployed per version, with upgrade paths managed through a master controller contract.
+        QFLink is composed of two primary smart contracts deployed on QuantumFusion, written in plain Rust using the <code>qf-polkavm-sdk</code> and <code>pallet-revive-uapi</code> crates, compiled to PolkaVM bytecode. Both contracts are <code>#![no_std]</code> / <code>#![no_main]</code> binaries — there is no <code>ink!</code> DSL or macro layer. Both contracts are immutable once deployed per version, with upgrade paths managed through a master controller contract.
       </p>
 
       <h3>qflink-pods</h3>
@@ -904,7 +904,7 @@
 
       <h3>Contract Interactions</h3>
       <p>
-        The frontend communicates with both contracts via <code>@polkadot/api-contract</code>. All reads are performed as RPC dry-run calls (no fee, no signature). All writes — creating a Pod, sending a message, joining a Pod — are submitted as signed extrinsics and confirmed on-chain before the UI updates.
+        The frontend communicates with both contracts via <code>@polkadot/api</code> directly, using <code>api.call.reviveApi.call()</code> for dry-run reads and <code>api.tx.revive.call()</code> for signed writes. All reads are performed as RPC dry-run calls (no fee, no signature). All writes — creating a Pod, sending a message, joining a Pod — are submitted as signed extrinsics and confirmed on-chain before the UI updates.
       </p>
       <p>
         This means the QFLink UI has <strong>no optimistic updates</strong> for write operations. The UI waits for on-chain confirmation before reflecting a new message or membership state. While this introduces a 2–6 second latency per write on current QF Network block times, it guarantees that the UI state is always a faithful representation of the on-chain state.
