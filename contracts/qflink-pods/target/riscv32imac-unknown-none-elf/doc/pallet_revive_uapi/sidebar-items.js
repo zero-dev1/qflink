@@ -1,1 +1,0 @@
-window.SIDEBAR_ITEMS = {"enum":["HostFnImpl","ReturnErrorCode"],"fn":["pack_hi_lo","u256_bytes"],"macro":["input","output","u64_output","unwrap_output"],"struct":["CallFlags","ReturnCode","ReturnFlags","StorageFlags"],"trait":["HostFn"]};

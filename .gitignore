@@ -1,5 +1,9 @@
 node_modules/
 dist/
-dev-data/
 .env
+.env.local
 *.log
+.DS_Store
+target/
+contracts/*/target/
+.vite/
