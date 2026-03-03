@@ -14,9 +14,9 @@ import type { DefaultPod, Pod } from '@/types'
 
 const formatHolderLabel = (minBal: bigint): string => {
   const whole = minBal / (10n ** 18n)
-  if (whole >= 1_000_000n) return `${(Number(whole) / 1_000_000).toFixed(0)}M+ Holders`
-  if (whole >= 1_000n) return `${(Number(whole) / 1_000).toFixed(0)}K+ Holders`
-  return `${whole}+ Holders`
+  if (whole >= 1_000_000n) return `${(Number(whole) / 1_000_000).toFixed(0)}M+ QF`
+  if (whole >= 1_000n) return `${(Number(whole) / 1_000).toFixed(0)}K+ QF`
+  return `${whole.toLocaleString()}+ QF`
 }
 
 const relativeTimeHome = (timestamp: number): string => {
@@ -95,7 +95,12 @@ const HomePage: React.FC = () => {
     fetchProfiles()
   }, [conversations])
 
-  const allMyPods = [...defaultPods, ...myPods].filter((p, i, arr) => 
+  // Show accessible pods + threshold-0 pods (as "Coming Soon" cards)
+  // myPods is already filtered by access check (excludes threshold-0)
+  // We add threshold-0 default pods back for "Coming Soon" display
+  const accessiblePods = myPods
+  const comingSoonPods = defaultPods.filter(p => p.minBalance === 0n)
+  const allDisplayPods = [...accessiblePods, ...comingSoonPods].filter((p, i, arr) => 
     arr.findIndex(x => x.id === p.id) === i
   )
 
@@ -113,7 +118,7 @@ const HomePage: React.FC = () => {
         </p>
         <button
           onClick={() => setShowConnectWallet(true)}
-          className="rounded-lg bg-cyan-600 px-6 py-3 text-sm font-semibold text-white hover:bg-cyan-700 transition-colors"
+          className="bg-cyan-600 px-6 py-3 text-sm font-semibold text-white hover:bg-cyan-700 transition-colors"
         >
           Connect Wallet
         </button>
@@ -131,7 +136,7 @@ const HomePage: React.FC = () => {
           <div className="border border-gray-200 dark:border-gray-800 bg-transparent p-8 text-center">
             <p className="text-sm text-qx-text-secondary">Loading pods...</p>
           </div>
-        ) : allMyPods.length === 0 ? (
+        ) : allDisplayPods.length === 0 ? (
           <div className="border border-gray-200 dark:border-gray-800 bg-transparent p-8 text-center">
             <p className="text-sm text-qx-text-secondary">
               You don't have enough QF to join any pods. Get more QF to unlock exclusive communities.
@@ -139,7 +144,7 @@ const HomePage: React.FC = () => {
           </div>
         ) : (
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-            {allMyPods.map((pod) => (
+            {allDisplayPods.map((pod) => (
               <PodHomeCard
                 key={pod.id}
                 pod={pod}
@@ -164,15 +169,6 @@ const HomePage: React.FC = () => {
           </div>
         ) : (
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            {(() => {
-              console.log('[HomePage] conversations:', conversations.map(c => ({ 
-                address: c.address, 
-                lastMessage: c.lastMessage, 
-                lastMessageTime: c.lastMessageTime,
-                keys: Object.keys(c)
-              })))
-              return null
-            })()}
             {conversations.slice(0, 4).map((convo) => (
               <button
                 key={convo.address}
@@ -226,6 +222,7 @@ const PodHomeCard: React.FC<PodHomeCardProps> = ({
 }) => {
   const isDefault = 'isDefault' in pod && pod.isDefault
   const minBal = isDefault ? (pod as DefaultPod).minBalance : ((pod as any).minBalance || 0n)
+  const isComingSoon = isDefault && minBal === 0n
   const holderLabel = isDefault ? formatHolderLabel(minBal) : 'Open'
 
   const podMessages = usePodsStore((s) => s.podMessages)
@@ -233,29 +230,47 @@ const PodHomeCard: React.FC<PodHomeCardProps> = ({
 
   return (
     <button
-      onClick={onClick}
-      className="flex flex-col border border-gray-200 dark:border-gray-800 bg-transparent p-4 text-left transition-[border-color,transform] duration-150 hover:border-cyan-600 hover:-translate-y-0.5"
+      onClick={isComingSoon ? undefined : onClick}
+      disabled={isComingSoon}
+      className={`
+        flex flex-col border border-gray-200 dark:border-gray-800 bg-transparent p-4 text-left
+        ${isComingSoon 
+          ? 'opacity-70 cursor-not-allowed' 
+          : 'transition-[border-color,transform] duration-150 hover:border-cyan-600 hover:-translate-y-0.5'}
+      `}
     >
-      {/* Row 1: name + unread badge + arrow */}
+      {/* Row 1: name + badge + arrow */}
       <div className="flex items-center justify-between mb-1">
         <div className="flex items-center gap-2 min-w-0">
-          <h3 className="text-base font-semibold text-qx-text-primary truncate">{pod.name}</h3>
-          {unreadCount > 0 && (
+          <h3 className={isComingSoon ? 'text-base font-semibold text-gray-500 truncate' : 'text-base font-semibold text-qx-text-primary truncate'}>
+            {pod.name}
+          </h3>
+          {unreadCount > 0 && !isComingSoon && (
             <span className="flex-shrink-0 flex h-5 min-w-5 items-center justify-center rounded-full bg-cyan-600 px-1 text-xs font-bold text-white">
               {unreadCount > 99 ? '99+' : unreadCount}
             </span>
           )}
         </div>
-        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-qx-text-muted flex-shrink-0">
-          <polyline points="9 18 15 12 9 6" />
-        </svg>
+        {isComingSoon ? (
+          <span className="text-[10px] uppercase tracking-wider text-gray-500">Coming Soon</span>
+        ) : (
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-qx-text-muted flex-shrink-0">
+            <polyline points="9 18 15 12 9 6" />
+          </svg>
+        )}
       </div>
 
       {/* Row 2: holder label */}
-      <p className="text-xs text-qx-text-secondary mb-3">{holderLabel}</p>
+      <p className={isComingSoon ? 'text-xs text-gray-500 mb-3' : 'text-xs text-qx-text-secondary mb-3'}>
+        {isComingSoon ? 'Deploy a contract on QF Network' : (isDefault ? holderLabel : 'Open')}
+      </p>
 
-      {/* Row 3: progress bar (default pods) OR last message */}
-      {isDefault && minBal > 0n ? (
+      {/* Row 3: progress bar (default pods with threshold > 0) OR last message OR coming soon message */}
+      {isComingSoon ? (
+        <div className="mt-auto">
+          <p className="text-xs text-gray-500">Coming Soon</p>
+        </div>
+      ) : isDefault && minBal > 0n ? (
         <>
           <ProgressBar current={userBalance} target={minBal} showLabels={false} />
           <div className="flex items-center justify-between mt-1.5">

@@ -1,13 +1,50 @@
 import { create } from 'zustand'
 import type { PodsState, Pod, PodMessage, DefaultPod } from '@/types'
 import { getApi, type InjectedAccountWithMeta } from '@/lib/chain'
-import { podsGetPodCount, podsGetPod, podsGetPodMessages, sendPodMessageOnChain, podsCheckAccess } from '@/lib/contracts'
+import { 
+  podsGetPodCount, 
+  podsGetPod, 
+  podsGetPodMessages, 
+  sendPodMessageOnChain, 
+  podsCheckAccess,
+  podsIsBanned,
+  podsIsGloballyBanned,
+  podsGetMods,
+  podsHasPaid,
+} from '@/lib/contracts'
 import { useWalletStore } from './wallet'
 
 // Helper to get EVM address from wallet store (for access checks)
 const getEvmAddress = async (): Promise<string | null> => {
   const { useWalletStore } = await import('./wallet')
   return useWalletStore.getState().evmAddress
+}
+
+// LocalStorage key for joined pods
+const JOINED_PODS_KEY = 'qflink_joined_pods'
+
+// Load joined pods from localStorage
+const loadJoinedPods = (): Set<number> => {
+  try {
+    const stored = localStorage.getItem(JOINED_PODS_KEY)
+    if (stored) {
+      const arr = JSON.parse(stored) as number[]
+      return new Set(arr)
+    }
+  } catch (err) {
+    // Silently handle localStorage errors
+  }
+  return new Set()
+}
+
+// Save joined pods to localStorage
+const saveJoinedPods = (joinedPods: Set<number>) => {
+  try {
+    const arr = Array.from(joinedPods)
+    localStorage.setItem(JOINED_PODS_KEY, JSON.stringify(arr))
+  } catch (err) {
+    // Silently handle localStorage errors
+  }
 }
 
 export const usePodsStore = create<PodsState>((set, get) => ({
@@ -17,7 +54,10 @@ export const usePodsStore = create<PodsState>((set, get) => ({
   activePod: null,
   podMessages: {},
   podMembers: {},
+  podMods: {},
+  bannedAddresses: {},
   isLoading: false,
+  joinedPods: loadJoinedPods(),
 
   setPods: (pods: Pod[]) => set({ pods }),
   setMyPods: (pods: Pod[]) => set({ myPods: pods }),
@@ -39,11 +79,9 @@ export const usePodsStore = create<PodsState>((set, get) => ({
     // Check for duplicate ID before adding
     const isDuplicate = existing.some(m => m.id === message.id)
     if (isDuplicate) {
-      console.warn('[addPodMessage] Duplicate message ID, skipping:', message.id)
       return
     }
     
-    console.log('[addPodMessage] Adding message:', { id: message.id, sender: message.sender?.slice(0, 10), contentPreview: message.content?.slice(0, 30) })
     set({
       podMessages: {
         ...state.podMessages,
@@ -53,7 +91,6 @@ export const usePodsStore = create<PodsState>((set, get) => ({
   },
 
   setPodMessages: (podId: number, messages: PodMessage[]) => {
-    console.log('[store] pod messages set, count:', messages.length, 'podId:', podId)
     set({ podMessages: { ...get().podMessages, [podId]: messages } })
   },
 
@@ -61,42 +98,67 @@ export const usePodsStore = create<PodsState>((set, get) => ({
     set({ podMembers: { ...get().podMembers, [podId]: members } })
   },
 
+  setPodMods: (podId: number, mods: string[]) => {
+    set({ podMods: { ...get().podMods, [podId]: mods } })
+  },
+
+  setBannedAddresses: (podId: number, addresses: string[]) => {
+    set({ bannedAddresses: { ...get().bannedAddresses, [podId]: addresses } })
+  },
+
   setLoading: (loading: boolean) => set({ isLoading: loading }),
+
+  joinPod: (podId: number) => {
+    const state = get()
+    const newJoinedPods = new Set(state.joinedPods)
+    newJoinedPods.add(podId)
+    saveJoinedPods(newJoinedPods)
+    set({ joinedPods: newJoinedPods })
+  },
+
+  hasJoined: (podId: number): boolean => {
+    return get().joinedPods.has(podId)
+  },
 
   fetchPods: async () => {
     // Prevent concurrent fetches
     if (get().isLoading) {
-      console.log('📦 [fetchPods] Already fetching, skipping...')
       return
     }
     
-    console.log('📦 [fetchPods] Starting pod fetch...')
     // Clear existing pods and set loading state
     set({ pods: [], defaultPods: [], myPods: [], isLoading: true })
     try {
-      console.log('📦 [fetchPods] Awaiting fully ready API...')
       const api = await getApi()
-      console.log('📦 [fetchPods] API ready, fetching pod count...')
       const count = await podsGetPodCount(api)
-      console.log('📦 [fetchPods] Pod count:', count)
+      
+      if (count === 0) {
+        set({ pods: [], isLoading: false })
+        return
+      }
       
       const pods: Pod[] = []
       
       for (let i = 0; i < count; i++) {
-        console.log(`Fetching pod ${i}...`)
         const pod = await podsGetPod(api, i)
         if (pod) {
-          console.log(`✅ Pod ${i}:`, pod.name, 'minBalance:', pod.minBalance.toString())
           pods.push({
             id: Number(pod.id),
             name: pod.name,
             description: pod.description,
             minBalance: pod.minBalance,
-            memberCount: 0,
+            memberCount: pod.memberCount || 0,
             isDefault: pod.isDefault,
+            creator: pod.creator,
+            createdAt: pod.createdAt,
+            tier: pod.tier === 1 ? 'pro' : 'free',
+            entryFee: pod.entryFee || 0n,
+            payoutWallet: pod.payoutWallet,
+            category: 'trading',
+            isActive: true,
+            maxMembers: pod.tier === 1 ? Infinity : 50,
+            joinMethod: 'balance',
           } as any)
-        } else {
-          console.warn(`⚠️ Pod ${i} returned null`)
         }
       }
       
@@ -107,31 +169,45 @@ export const usePodsStore = create<PodsState>((set, get) => ({
       const defaultPods = uniquePods.filter(p => (p as any).isDefault) as DefaultPod[]
       const customPods = uniquePods.filter(p => !(p as any).isDefault)
       
-      // Derive myPods from balance check (token-gated access)
+      // Derive myPods from:
+      // 1. User is creator
+      // 2. User has joined (localStorage)
+      // 3. User meets balance threshold (existing logic)
+      // 4. User has paid (on-chain check)
       let myPods: Pod[] = []
       const evmAddress = await getEvmAddress()
+      const joinedPods = get().joinedPods
+      
       if (evmAddress) {
-        const accessiblePods: Pod[] = []
+        // Sync on-chain paid status: if user has paid for a pod, add it to joinedPods
         for (const pod of uniquePods) {
           try {
-            const hasAccess = await podsCheckAccess(api, pod.id, evmAddress)
-            if (hasAccess) {
-              accessiblePods.push(pod)
+            const entryFee = (pod as any).entryFee || 0n
+            if (entryFee > 0n && !joinedPods.has(pod.id)) {
+              const hasPaid = await podsHasPaid(pod.id, evmAddress)
+              if (hasPaid) {
+                get().joinPod(pod.id)
+              }
             }
           } catch (err) {
-            console.warn(`Failed to check access for pod ${pod.id}:`, err)
+            console.error(`Failed to sync paid status for pod ${pod.id}:`, err)
           }
         }
-        myPods = accessiblePods
-        console.log(`🔓 Access check complete: ${myPods.length} pods accessible`)
+
+        // Refresh joinedPods after sync
+        const updatedJoinedPods = get().joinedPods
+
+        // myPods = pods where user is creator OR user has explicitly joined
+        myPods = uniquePods.filter(pod => {
+          const isCreator = (pod as any).creator?.toLowerCase() === evmAddress.toLowerCase()
+          const hasJoined = updatedJoinedPods.has(pod.id)
+          return isCreator || hasJoined
+        })
       }
       
       // Deduplicate myPods by ID to prevent duplicates in sidebar
       const uniqueMyPods = [...new Map(myPods.map(p => [p.id, p])).values()]
-      console.log('[fetchPods] all pods from contract:', pods.map(p => ({ id: p.id, name: p.name })))
-      console.log('[fetchPods] defaultPods:', defaultPods.map(p => ({ id: p.id, name: p.name })))
-      console.log('[fetchPods] myPods before dedup:', myPods.map(p => ({ id: p.id, name: p.name })))
-      console.log(`✅ Fetched ${uniquePods.length} pods (${defaultPods.length} default, ${customPods.length} custom, ${uniqueMyPods.length} accessible)`)
+      
       set({ pods: uniquePods, defaultPods, myPods: uniqueMyPods })
     } catch (err) {
       console.error('❌ Failed to fetch pods:', err)
@@ -217,6 +293,39 @@ export const usePodsStore = create<PodsState>((set, get) => ({
       return await podsCheckAccess(api, podId, address)
     } catch (err) {
       console.error('Failed to check pod access:', err)
+      return { granted: false, code: 255 }
+    }
+  },
+
+  fetchPodMods: async (podId: number) => {
+    try {
+      const mods = await podsGetMods(podId)
+      set({ podMods: { ...get().podMods, [podId]: mods } })
+      return mods
+    } catch (err) {
+      console.error('Failed to fetch pod mods:', err)
+      return []
+    }
+  },
+
+  checkIsBanned: async (podId: number, address: string) => {
+    try {
+      const [isBanned, isGloballyBanned] = await Promise.all([
+        podsIsBanned(podId, address),
+        podsIsGloballyBanned(address)
+      ])
+      return { isBanned, isGloballyBanned }
+    } catch (err) {
+      console.error('Failed to check ban status:', err)
+      return { isBanned: false, isGloballyBanned: false }
+    }
+  },
+
+  checkHasPaid: async (podId: number, address: string) => {
+    try {
+      return await podsHasPaid(podId, address)
+    } catch (err) {
+      console.error('Failed to check payment status:', err)
       return false
     }
   },

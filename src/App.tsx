@@ -17,6 +17,7 @@ const DMChatPage = lazy(() => import('@/pages/DMChatPage'))
 const ProfilePage = lazy(() => import('@/pages/ProfilePage'))
 const SettingsPage = lazy(() => import('@/pages/SettingsPage'))
 const CreatePodPage = lazy(() => import('@/pages/CreatePodPage'))
+const WhitepaperPage = lazy(() => import('@/pages/WhitepaperPage'))
 
 const PageLoader: React.FC = () => (
   <div className="flex h-screen items-center justify-center">
@@ -52,6 +53,9 @@ const App: React.FC = () => {
           
           {/* Connect page - public, no layout wrapper, no auth guard */}
           <Route path="/connect" element={<ConnectPage />} />
+          
+          {/* Whitepaper - public, no layout wrapper, no auth guard */}
+          <Route path="/whitepaper" element={<WhitepaperPage />} />
           
           {/* App routes - protected with AuthGuard and wrapped with Layout */}
           <Route element={<ProtectedLayout />}>

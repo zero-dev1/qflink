@@ -67,12 +67,7 @@ export const useProfileStore = create<ProfileState>((set, get) => ({
     const { evmAddress } = useWalletStore.getState()
     const targetAddress = address || evmAddress
 
-    console.log('🔍 [fetchProfile] Starting profile fetch...')
-    console.log('   evmAddress:', evmAddress)
-    console.log('   targetAddress:', targetAddress)
-
     if (!targetAddress) {
-      console.log('❌ [fetchProfile] No target address, setting needsRegistration = true')
       set({ needsRegistration: true, isRegistered: false })
       return
     }
@@ -80,13 +75,9 @@ export const useProfileStore = create<ProfileState>((set, get) => ({
     set({ isLoading: true })
     try {
       const api = await getApi()
-      console.log('✅ [fetchProfile] API connected, querying contract...')
       const profile = await registryGetProfile(api, targetAddress)
-      console.log('📊 [fetchProfile] Contract returned:', profile)
 
       if (profile) {
-        console.log('✅ [fetchProfile] Profile exists! Setting needsRegistration = false')
-        console.log('   displayName:', profile.displayName)
         set({
           displayName: profile.displayName,
           encryptionPubkey: profile.encryptionPubkey,
@@ -100,7 +91,7 @@ export const useProfileStore = create<ProfileState>((set, get) => ({
           secretKey: new Uint8Array(32),
         })
       } else {
-        console.log('⚠️ [fetchProfile] Profile is null, setting needsRegistration = true')
+        // Query succeeded and explicitly returned null — confirmed no profile
         set({
           needsRegistration: true,
           isRegistered: false,
@@ -110,15 +101,12 @@ export const useProfileStore = create<ProfileState>((set, get) => ({
         })
       }
     } catch (err) {
-      console.error('❌ [fetchProfile] Error fetching profile:', err)
-      set({ needsRegistration: true, isRegistered: false })
+      // Network/rate-limit error — do NOT conclude the user has no profile.
+      // Re-throw so the caller (AuthGuard) can retry instead of redirecting.
+      console.error('❌ [fetchProfile] Network error fetching profile:', err)
+      throw err
     } finally {
       set({ isLoading: false })
-      const state = get()
-      console.log('🏁 [fetchProfile] Final state:')
-      console.log('   needsRegistration:', state.needsRegistration)
-      console.log('   isRegistered:', state.isRegistered)
-      console.log('   displayName:', state.displayName)
     }
   },
 

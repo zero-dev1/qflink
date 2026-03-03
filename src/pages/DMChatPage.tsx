@@ -48,7 +48,6 @@ const DMChatPage: React.FC = () => {
 
   useEffect(() => {
     if (address && evmAddress) {
-      console.log('[DMChatPage] Both address and EVM address available, calling loadConversations()...')
       loadConversations()
     }
   }, [address, evmAddress, loadConversations])

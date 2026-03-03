@@ -1,0 +1,8 @@
+/Users/ismaelwali/CascadeProjects/QFDapps/qflink/contracts/qflink-pods/target/riscv32imac-unknown-none-elf/debug/deps/pallet_revive_uapi-c5b2990a2c49cdc1.d: /Users/ismaelwali/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/pallet-revive-uapi-0.4.0/src/lib.rs /Users/ismaelwali/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/pallet-revive-uapi-0.4.0/src/flags.rs /Users/ismaelwali/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/pallet-revive-uapi-0.4.0/src/host.rs /Users/ismaelwali/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/pallet-revive-uapi-0.4.0/src/macros.rs
+
+/Users/ismaelwali/CascadeProjects/QFDapps/qflink/contracts/qflink-pods/target/riscv32imac-unknown-none-elf/debug/deps/libpallet_revive_uapi-c5b2990a2c49cdc1.rmeta: /Users/ismaelwali/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/pallet-revive-uapi-0.4.0/src/lib.rs /Users/ismaelwali/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/pallet-revive-uapi-0.4.0/src/flags.rs /Users/ismaelwali/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/pallet-revive-uapi-0.4.0/src/host.rs /Users/ismaelwali/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/pallet-revive-uapi-0.4.0/src/macros.rs
+
+/Users/ismaelwali/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/pallet-revive-uapi-0.4.0/src/lib.rs:
+/Users/ismaelwali/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/pallet-revive-uapi-0.4.0/src/flags.rs:
+/Users/ismaelwali/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/pallet-revive-uapi-0.4.0/src/host.rs:
+/Users/ismaelwali/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/pallet-revive-uapi-0.4.0/src/macros.rs:

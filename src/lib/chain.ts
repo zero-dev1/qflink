@@ -98,7 +98,6 @@ async function waitForReviveApi(chainApi: ApiPromise): Promise<void> {
     try {
       // Check if api.call.reviveApi.call exists and is callable
       if (chainApi.call && (chainApi.call as any).reviveApi && typeof (chainApi.call as any).reviveApi.call === 'function') {
-        console.log('✅ [waitForReviveApi] reviveApi.call is available')
         return
       }
     } catch {
@@ -108,8 +107,6 @@ async function waitForReviveApi(chainApi: ApiPromise): Promise<void> {
     // Wait before next poll
     await new Promise(resolve => setTimeout(resolve, REVIVE_API_POLL_INTERVAL_MS))
   }
-  
-  console.warn('⚠️ [waitForReviveApi] Timeout waiting for reviveApi - proceeding anyway')
 }
 
 /**
@@ -190,7 +187,6 @@ export async function queryBalance(address: string): Promise<bigint> {
     const { data } = await chainApi.query.system.account(address) as any
     return BigInt(data.free.toString())
   } catch (err) {
-    console.warn('Failed to query balance:', err)
     return BigInt(0)
   }
 }
@@ -210,7 +206,6 @@ export async function subscribeBalance(
     })
     return unsub as unknown as () => void
   } catch (err) {
-    console.warn('Failed to subscribe to balance:', err)
     return () => {}
   }
 }
@@ -260,10 +255,10 @@ export async function ensureAccountMapped(
 ): Promise<string> {
   const chainApi = await getApi()
   
+  // Check if already mapped
   const entries = await chainApi.query.revive.originalAccount.entries()
-  const mapped = entries.find(([key, value]) => {
-    const accountId = value.toString()
-    return accountId === account.address
+  const mapped = entries.find(([_key, value]) => {
+    return value.toString() === account.address
   })
   
   if (mapped) {
@@ -271,16 +266,66 @@ export async function ensureAccountMapped(
     return evmAddress
   }
   
+  // Check balance before attempting — mapAccount requires a small existential deposit
+  try {
+    const { data } = await chainApi.query.system.account(account.address) as any
+    const freeBalance = BigInt(data.free.toString())
+    // pallet-revive mapAccount requires at minimum 1 planck to cover existential deposit
+    // We warn below a practical threshold (e.g. 0.01 QF = 1e16 planck)
+    if (freeBalance === 0n) {
+      throw new Error('INSUFFICIENT_BALANCE_FOR_MAPPING')
+    }
+  } catch (err: any) {
+    if (err?.message === 'INSUFFICIENT_BALANCE_FOR_MAPPING') throw err
+    // balance check failure is non-fatal — proceed anyway
+  }
+  
   return new Promise((resolve, reject) => {
     chainApi.tx.revive
       .mapAccount()
       .signAndSend(account.address, { signer: account.signer }, async (result) => {
+        if (result.isError) {
+          console.error('[mapAccount] Transaction error (isError flag)')
+          reject(new Error('Account mapping transaction failed'))
+          return
+        }
+
         if (result.status.isInBlock || result.status.isFinalized) {
+          // Surface dispatch errors (e.g. 1010 Inability to pay, AlreadyMapped)
+          const dispatchError = (result as any).dispatchError
+          if (dispatchError) {
+            let errMsg = 'Account mapping failed'
+            try {
+              if (dispatchError.isModule) {
+                const decoded = chainApi.registry.findMetaError(dispatchError.asModule)
+                errMsg = `${decoded.section}.${decoded.name}: ${decoded.docs.join(' ')}`
+              } else {
+                errMsg = dispatchError.toString()
+              }
+            } catch {
+              errMsg = dispatchError.toString()
+            }
+            console.error('[mapAccount] Dispatch error:', errMsg)
+            // AlreadyMapped is not actually an error — query and return the address
+            if (errMsg.toLowerCase().includes('alreadymapped') || errMsg.toLowerCase().includes('already')) {
+              try {
+                const postEntries = await chainApi.query.revive.originalAccount.entries()
+                const existing = postEntries.find(([_k, v]) => v.toString() === account.address)
+                if (existing) {
+                  const evmAddress = existing[0].args[0].toString()
+                  resolve(evmAddress)
+                  return
+                }
+              } catch { /* fall through to reject */ }
+            }
+            reject(new Error(errMsg))
+            return
+          }
+
+          // Success — look up the newly created mapping
           try {
-            const entries = await chainApi.query.revive.originalAccount.entries()
-            const newMapping = entries.find(([key, value]) => {
-              return value.toString() === account.address
-            })
+            const postEntries = await chainApi.query.revive.originalAccount.entries()
+            const newMapping = postEntries.find(([_k, v]) => v.toString() === account.address)
             if (newMapping) {
               const evmAddress = newMapping[0].args[0].toString()
               resolve(evmAddress)
@@ -291,11 +336,12 @@ export async function ensureAccountMapped(
             reject(err)
           }
         }
-        if (result.isError) {
-          reject(new Error('Account mapping failed'))
-        }
       })
-      .catch(reject)
+      .catch((err: any) => {
+        const msg = err?.message || String(err) || 'Account mapping failed'
+        console.error('[mapAccount] Failed:', msg)
+        reject(new Error(msg))
+      })
   })
 }
 
@@ -330,7 +376,6 @@ export async function subscribeContractEvents(
     })
     return unsub as unknown as () => void
   } catch (err) {
-    console.warn('Failed to subscribe to contract events:', err)
     return () => {}
   }
 }

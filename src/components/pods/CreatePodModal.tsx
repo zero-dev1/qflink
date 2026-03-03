@@ -4,51 +4,41 @@ import { Input } from '@/components/ui/Input'
 import { Button } from '@/components/ui/Button'
 import type { PodTier } from '@/types'
 import { POD_TIER_INFO } from '@/types'
-import type { CustomPod } from '@/types'
 import { formatBalance } from '@/lib/utils'
 
 interface CreatePodModalProps {
   isOpen: boolean
   onClose: () => void
-  onCreate: (name: string, description: string, minBalance: bigint, isPublic: boolean, tier: PodTier) => void | Promise<void>
+  onCreate: (name: string, description: string, minBalance: bigint, isPublic: boolean, tier: PodTier, entryFee: bigint, payoutWallet: string) => void | Promise<void>
   userBalance: bigint
 }
 
-const TIERS: PodTier[] = ['standard', 'premium', 'elite']
-
-const TIER_COLORS: Record<PodTier, string> = {
-  standard: 'border-qx-border-subtle hover:border-qx-text-secondary',
-  premium: 'border-cyan-600/40 hover:border-cyan-700',
-  elite: 'border-yellow-500/40 hover:border-yellow-400',
-}
-
-const TIER_SELECTED: Record<PodTier, string> = {
-  standard: 'border-cyan-600 bg-cyan-600/10',
-  premium: 'border-cyan-600 bg-cyan-600/10',
-  elite: 'border-yellow-400 bg-yellow-400/10',
-}
+const TIERS: PodTier[] = ['free', 'pro']
 
 const TIER_LABEL_COLORS: Record<PodTier, string> = {
-  standard: 'text-qx-text-primary',
-  premium: 'text-cyan-600',
-  elite: 'text-yellow-400',
+  free: 'text-qx-text-primary',
+  pro: 'text-cyan-600',
 }
 
 export const CreatePodModal: React.FC<CreatePodModalProps> = ({ isOpen, onClose, onCreate, userBalance }) => {
   const [step, setStep] = useState<1 | 2 | 3>(1)
-  const [tier, setTier] = useState<PodTier>('standard')
+  const [tier, setTier] = useState<PodTier>('free')
   const [name, setName] = useState('')
   const [description, setDescription] = useState('')
   const [minBalance, setMinBalance] = useState('')
+  const [entryFee, setEntryFee] = useState('')
+  const [payoutWallet, setPayoutWallet] = useState('')
   const [isPublic, setIsPublic] = useState(true)
   const [error, setError] = useState('')
 
   const reset = () => {
     setStep(1)
-    setTier('standard')
+    setTier('free')
     setName('')
     setDescription('')
     setMinBalance('')
+    setEntryFee('')
+    setPayoutWallet('')
     setIsPublic(true)
     setError('')
   }
@@ -59,7 +49,7 @@ export const CreatePodModal: React.FC<CreatePodModalProps> = ({ isOpen, onClose,
   }
 
   const tierInfo = POD_TIER_INFO[tier]
-  const canAfford = (t: PodTier) => userBalance >= POD_TIER_INFO[t].fee
+  const canAfford = (t: PodTier) => userBalance >= POD_TIER_INFO[t].creationFee
 
   const handleNext = () => {
     if (step === 1) {
@@ -74,13 +64,18 @@ export const CreatePodModal: React.FC<CreatePodModalProps> = ({ isOpen, onClose,
         setError('Pod name is required')
         return
       }
-      if (name.trim().length > 64) {
-        setError('Pod name must be 64 characters or less')
+      if (name.trim().length > 32) {
+        setError('Pod name must be 32 characters or less')
         return
       }
       const bal = parseFloat(minBalance || '0')
       if (isNaN(bal) || bal < 0) {
         setError('Invalid minimum balance')
+        return
+      }
+      // Free pods cannot have entry fees
+      if (tier === 'free' && entryFee && parseFloat(entryFee) > 0) {
+        setError('Free pods cannot charge entry fees. Upgrade to Pro.')
         return
       }
       setError('')
@@ -91,13 +86,17 @@ export const CreatePodModal: React.FC<CreatePodModalProps> = ({ isOpen, onClose,
   const handleCreate = () => {
     const bal = parseFloat(minBalance || '0')
     const balanceBigInt = BigInt(Math.floor(bal * 1e18))
-    onCreate(name.trim(), description.trim(), balanceBigInt, isPublic, tier)
+    const entryFeeBal = parseFloat(entryFee || '0')
+    const entryFeeBigInt = BigInt(Math.floor(entryFeeBal * 1e18))
+    onCreate(name.trim(), description.trim(), balanceBigInt, isPublic, tier, entryFeeBigInt, payoutWallet.trim())
     reset()
     onClose()
   }
 
-  const treasuryAmount = tierInfo.feeDisplay * 25 / 100
-  const burnAmount = tierInfo.feeDisplay * 75 / 100
+  // Fee breakdown for Pro tier: 95% treasury, 5% burn
+  const creationFee = tierInfo.creationFeeDisplay
+  const treasuryAmount = creationFee * 95 / 100
+  const burnAmount = creationFee * 5 / 100
 
   return (
     <Modal
@@ -164,7 +163,7 @@ export const CreatePodModal: React.FC<CreatePodModalProps> = ({ isOpen, onClose,
                 >
                   <div className="flex items-center justify-between mb-2">
                     <span className={`text-sm font-bold ${TIER_LABEL_COLORS[t]}`}>
-                      {info.name} — {info.feeDisplay.toLocaleString()} QF
+                      {info.name} {info.creationFeeDisplay > 0 ? `— ${info.creationFeeDisplay.toLocaleString()} QF` : '— Free'}
                     </span>
                     {selected && affordable && (
                       <div className="h-2.5 w-2.5 rounded-full bg-cyan-600" />
@@ -212,6 +211,27 @@ export const CreatePodModal: React.FC<CreatePodModalProps> = ({ isOpen, onClose,
             onChange={(e) => { setMinBalance(e.target.value); setError('') }}
             error={error && error.includes('balance') ? error : undefined}
           />
+          {tier === 'pro' && (
+            <>
+              <Input
+                label="Entry Fee (QF)"
+                placeholder="e.g. 100 (optional)"
+                type="number"
+                value={entryFee}
+                onChange={(e) => { setEntryFee(e.target.value); setError('') }}
+                error={error && error.includes('entry') ? error : undefined}
+              />
+              <p className="text-xs text-qx-text-muted -mt-2">
+                One-time fee for members to join. 95% goes to your payout wallet, 5% to treasury.
+              </p>
+              <Input
+                label="Payout Wallet (optional)"
+                placeholder="0x... (defaults to your address)"
+                value={payoutWallet}
+                onChange={(e) => setPayoutWallet(e.target.value)}
+              />
+            </>
+          )}
           <div className="flex items-center justify-between">
             <label className="text-sm font-medium text-qx-text-secondary">Public Pod</label>
             <button
@@ -247,29 +267,37 @@ export const CreatePodModal: React.FC<CreatePodModalProps> = ({ isOpen, onClose,
               <span className="text-qx-text-muted">Min Balance</span>
               <span className="text-qx-text-primary">{minBalance || '0'} QF</span>
             </div>
+            {tier === 'pro' && entryFee && (
+              <div className="flex justify-between text-sm">
+                <span className="text-qx-text-muted">Entry Fee</span>
+                <span className="text-qx-text-primary">{entryFee} QF</span>
+              </div>
+            )}
             <div className="flex justify-between text-sm">
               <span className="text-qx-text-muted">Visibility</span>
               <span className="dark:text-qx-text-primary">{isPublic ? 'Public' : 'Private'}</span>
             </div>
           </div>
 
-          <div className="border border-gray-200 dark:border-gray-800 bg-transparent p-4">
-            <p className="text-sm font-medium text-qx-text-primary mb-3">Fee Breakdown</p>
-            <div className="space-y-2 font-mono text-sm">
-              <div className="flex justify-between">
-                <span className="text-qx-text-muted">Total</span>
-                <span className="text-qx-text-primary font-bold">{tierInfo.feeDisplay.toLocaleString()} QF</span>
-              </div>
-              <div className="flex justify-between">
-                <span className="text-qx-text-muted">├─ Treasury (25%)</span>
-                <span className="text-qx-text-secondary">{treasuryAmount.toLocaleString()} QF</span>
-              </div>
-              <div className="flex justify-between">
-                <span className="text-qx-text-muted">└─ Burned (75%)</span>
-                <span className="text-orange-400">{burnAmount.toLocaleString()} QF</span>
+          {tier === 'pro' && creationFee > 0 && (
+            <div className="border border-gray-200 dark:border-gray-800 bg-transparent p-4">
+              <p className="text-sm font-medium text-qx-text-primary mb-3">Creation Fee Breakdown</p>
+              <div className="space-y-2 font-mono text-sm">
+                <div className="flex justify-between">
+                  <span className="text-qx-text-muted">Total</span>
+                  <span className="text-qx-text-primary font-bold">{creationFee.toLocaleString()} QF</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-qx-text-muted">├─ Treasury (95%)</span>
+                  <span className="text-qx-text-secondary">{treasuryAmount.toLocaleString()} QF</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-qx-text-muted">└─ Burned (5%)</span>
+                  <span className="text-orange-400">{burnAmount.toLocaleString()} QF</span>
+                </div>
               </div>
             </div>
-          </div>
+          )}
         </div>
       )}
     </Modal>

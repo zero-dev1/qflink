@@ -35,23 +35,37 @@ export interface UserProfile {
 }
 
 // ── Pods ──
-export type PodTier = 'standard' | 'premium' | 'elite'
-export type PodTierNumeric = 0 | 1 | 2
-export type JoinMethod = 'balance' | 'invite'
+export type PodTier = 'free' | 'pro'
+export type PodTierNumeric = 0 | 1
+export type JoinMethod = 'balance' | 'invite' | 'payment'
 export type PodCategory = 'trading' | 'builders' | 'nfts' | 'macro' | 'meme'
 
 export const POD_CATEGORIES: PodCategory[] = ['trading', 'builders', 'nfts', 'macro', 'meme']
 
 export const POD_TIER_INFO: Record<PodTier, {
   name: string
-  fee: bigint
-  feeDisplay: number
+  creationFee: bigint
+  creationFeeDisplay: number
   maxMembers: number
+  maxMods: number
   features: string[]
 }> = {
-  standard: { name: 'Standard', fee: BigInt('500000000000000000000'), feeDisplay: 500, maxMembers: 100, features: ['Up to 100 members', 'Balance or invite gating', 'Basic chat'] },
-  premium: { name: 'Premium', fee: BigInt('5000000000000000000000'), feeDisplay: 5000, maxMembers: 250, features: ['Up to 250 members', 'All Standard features', 'Priority support'] },
-  elite: { name: 'Elite', fee: BigInt('50000000000000000000000'), feeDisplay: 50000, maxMembers: Infinity, features: ['Unlimited members', 'All Premium features', 'Featured placement', 'Verified badge'] },
+  free: { 
+    name: 'Free', 
+    creationFee: BigInt(0), 
+    creationFeeDisplay: 0, 
+    maxMembers: 50, 
+    maxMods: 1,
+    features: ['Up to 50 members', '1 moderator', 'No entry fees', 'Balance-based access'] 
+  },
+  pro: { 
+    name: 'Pro', 
+    creationFee: BigInt('500000000000000000000'), // 500 QF
+    creationFeeDisplay: 500, 
+    maxMembers: Infinity, 
+    maxMods: 3,
+    features: ['Unlimited members', '3 moderators', 'Entry fees allowed', 'All access types', 'Verified badge'] 
+  },
 }
 
 export interface DefaultPod {
@@ -62,6 +76,9 @@ export interface DefaultPod {
   description: string
   memberCount: number
   isDefault: true
+  tier?: number  // 0=Free, 1=Pro
+  entryFee?: bigint
+  payoutWallet?: string
 }
 
 export interface CustomPod {
@@ -79,9 +96,22 @@ export interface CustomPod {
   category: PodCategory
   isActive: boolean
   isDefault: false
+  entryFee?: bigint
+  payoutWallet?: string
 }
 
 export type Pod = DefaultPod | CustomPod
+
+// Access check result codes
+export type PodAccessCode = 
+  | 0   // granted
+  | 1   // pod-banned
+  | 2   // globally banned
+  | 3   // insufficient balance
+  | 4   // payment required
+  | 5   // locked (threshold=0 and fee=0)
+  | 6   // free pod full (50 members)
+  | 255 // error
 
 export interface PodMember {
   address: string
@@ -157,6 +187,7 @@ export interface WalletState {
   linkedWallets: LinkedWallet[]
   evmAddress: string | null
   accountMapped: boolean
+  isMappingAccount: boolean
   walletType: WalletType
   connect: (selectedAccount?: any) => Promise<void>
   connectMetaMask: () => Promise<void>
@@ -193,7 +224,10 @@ export interface PodsState {
   activePod: number | null
   podMessages: Record<number, PodMessage[]>
   podMembers: Record<number, string[]>
+  podMods: Record<number, string[]>
+  bannedAddresses: Record<number, string[]>
   isLoading: boolean
+  joinedPods: Set<number>
   setPods: (pods: Pod[]) => void
   setMyPods: (pods: Pod[]) => void
   setDefaultPods: (pods: DefaultPod[]) => void
@@ -202,11 +236,18 @@ export interface PodsState {
   addPodMessage: (message: PodMessage) => void
   setPodMessages: (podId: number, messages: PodMessage[]) => void
   setPodMembers: (podId: number, members: string[]) => void
+  setPodMods: (podId: number, mods: string[]) => void
+  setBannedAddresses: (podId: number, addresses: string[]) => void
   setLoading: (loading: boolean) => void
+  joinPod: (podId: number) => void
+  hasJoined: (podId: number) => boolean
   fetchPods: () => Promise<void>
   fetchPodMessages: (podId: number) => Promise<void>
   sendPodMessage: (podId: number, content: string) => Promise<void>
-  checkAccess: (podId: number, address: string) => Promise<boolean>
+  checkAccess: (podId: number, address: string) => Promise<{ granted: boolean; code: number }>
+  fetchPodMods: (podId: number) => Promise<string[]>
+  checkIsBanned: (podId: number, address: string) => Promise<{ isBanned: boolean; isGloballyBanned: boolean }>
+  checkHasPaid: (podId: number, address: string) => Promise<boolean>
 }
 
 export type ToastType = 'success' | 'error' | 'info' | 'warning'

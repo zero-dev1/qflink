@@ -55,6 +55,9 @@ const PodsPage: React.FC = () => {
     sendPodMessage,
   } = usePods()
 
+  // Access check state
+  const [hasAccess, setHasAccess] = useState<boolean | null>(null)
+
   // Sync selectedPodId with URL param
   useEffect(() => {
     if (podIdParam) {
@@ -62,12 +65,35 @@ const PodsPage: React.FC = () => {
     }
   }, [podIdParam])
 
-  // Combine all my pods
-  const allMyPods: Pod[] = useMemo(() => {
-    const combined = [...defaultPods, ...myPods]
-    // Deduplicate by ID
-    return combined.filter((p, i, arr) => arr.findIndex(x => x.id === p.id) === i)
-  }, [defaultPods, myPods])
+  // Check access when selectedPodId changes
+  useEffect(() => {
+    const verifyAccess = async () => {
+      if (selectedPodId === null) {
+        setHasAccess(null)
+        return
+      }
+      
+      // If pod is in accessiblePods, user has access
+      const canAccess = myPods.some(p => p.id === selectedPodId)
+      setHasAccess(canAccess)
+      
+      // If user doesn't have access, redirect to /pods list
+      if (!canAccess) {
+        navigate('/pods', { replace: true })
+      }
+    }
+    
+    verifyAccess()
+  }, [selectedPodId, myPods, navigate])
+
+  // Only show pods the user has access to (myPods is already filtered by checkAccess)
+  // Also ensure pods have been loaded (myPods not empty after initial load)
+  const accessiblePods: Pod[] = useMemo(() => {
+    return myPods
+  }, [myPods])
+
+  // Show loading or empty state while determining accessible pods
+  const showPodsList = !isLoading && accessiblePods.length > 0
 
   // Get last message for each pod
   const getPodLastMessage = (podId: number): PodMessage | undefined => {
@@ -130,7 +156,7 @@ const PodsPage: React.FC = () => {
         <p className="text-sm text-qx-text-muted mb-6">Connect your wallet to view your pods</p>
         <button
           onClick={() => setShowConnectWallet(true)}
-          className="rounded-lg bg-cyan-600 px-6 py-3 text-sm font-semibold text-white hover:bg-cyan-700 transition-colors"
+          className="bg-cyan-600 px-6 py-3 text-sm font-semibold text-white hover:bg-cyan-700 transition-colors"
         >
           Connect Wallet
         </button>
@@ -176,7 +202,7 @@ const PodsPage: React.FC = () => {
           <p className="text-[10px] font-semibold uppercase tracking-widest text-qx-text-muted">Your Pods</p>
           <button
             onClick={() => navigate('/explore')}
-            className="flex h-7 w-7 items-center justify-center rounded-md text-qx-text-secondary hover:bg-qx-elevated hover:text-qx-text-primary transition-colors"
+            className="flex h-7 w-7 items-center justify-center text-qx-text-secondary hover:bg-qx-elevated hover:text-qx-text-primary transition-colors"
             title="Explore pods"
           >
             <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -192,43 +218,60 @@ const PodsPage: React.FC = () => {
             <div className="flex items-center justify-center py-12">
               <Spinner size="md" />
             </div>
-          ) : allMyPods.length === 0 ? (
+          ) : accessiblePods.length === 0 ? (
             <div className="flex flex-col items-center justify-center py-12 text-center px-4">
-              <p className="text-sm text-qx-text-muted">No pods yet</p>
-              <p className="text-xs text-qx-text-muted mt-1">Explore to join a pod</p>
+              <p className="text-sm text-gray-500">No pods yet</p>
+              <p className="text-xs text-gray-500 mt-1">Join a pod from Explore or create your own</p>
             </div>
           ) : (
-            allMyPods.map((pod) => {
+            accessiblePods.map((pod) => {
               const isDefault = (pod as DefaultPod).isDefault === true
-              const holderReq = isDefault 
-                ? formatHolderReq((pod as DefaultPod).minBalance) 
-                : 'Open'
+              const minBal = isDefault ? (pod as DefaultPod).minBalance : ((pod as any).minBalance || 0n)
+              const isComingSoon = isDefault && minBal === 0n
+              const holderReq = isComingSoon 
+                ? 'Coming Soon' 
+                : (isDefault ? formatHolderReq(minBal) : 'Open')
               const lastMsg = getPodLastMessage(pod.id)
               const isActive = selectedPodId === pod.id
 
               return (
                 <button
                   key={pod.id}
-                  onClick={() => handlePodSelect(pod.id)}
+                  onClick={isComingSoon ? undefined : () => handlePodSelect(pod.id)}
+                  disabled={isComingSoon}
                   className={cn(
                     'w-full px-4 py-3 text-left transition-colors border-b border-b-gray-200 dark:border-b-gray-800 border-l-2',
-                    isActive
-                      ? 'border-l-cyan-600 bg-gray-100 dark:bg-white/5'
-                      : 'border-l-transparent bg-transparent hover:bg-gray-50 dark:hover:bg-white/[0.03]'
+                    isComingSoon
+                      ? 'border-l-transparent bg-transparent opacity-70 cursor-not-allowed'
+                      : isActive
+                        ? 'border-l-cyan-600 bg-gray-100 dark:bg-white/5'
+                        : 'border-l-transparent bg-transparent hover:bg-gray-50 dark:hover:bg-white/[0.03]'
                   )}
                 >
                   <div className="flex items-center justify-between mb-0.5">
-                    <p className="text-sm font-semibold truncate text-qx-text-primary">
+                    <p className={cn(
+                      'text-sm font-semibold truncate',
+                      isComingSoon ? 'text-gray-500' : 'text-qx-text-primary'
+                    )}>
                       {pod.name}
                     </p>
-                    {lastMsg && (
+                    {isComingSoon ? (
+                      <span className="text-[10px] uppercase tracking-wider text-gray-500 flex-shrink-0 ml-2">
+                        Coming Soon
+                      </span>
+                    ) : lastMsg && (
                       <span className="text-xs text-qx-text-muted flex-shrink-0 ml-2">
                         {formatMessageTime(lastMsg.timestamp)}
                       </span>
                     )}
                   </div>
-                  <p className="text-xs text-qx-text-muted truncate">{holderReq}</p>
-                  {lastMsg && (
+                  <p className={cn(
+                    'text-xs truncate',
+                    isComingSoon ? 'text-gray-500' : 'text-qx-text-muted'
+                  )}>
+                    {isComingSoon ? 'Deploy a contract on QF Network' : (isDefault ? holderReq : 'Open')}
+                  </p>
+                  {lastMsg && !isComingSoon && (
                     <p className="text-xs text-qx-text-secondary truncate mt-1">
                       {lastMsg.content}
                     </p>

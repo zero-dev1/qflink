@@ -24,9 +24,7 @@ const DirectMessagesPage: React.FC = () => {
   const [selectedChatId, setSelectedChatId] = useState<string | null>(null)
 
   useEffect(() => {
-    console.log('[DirectMessagesPage] useEffect triggered - isConnected:', isConnected, 'evmAddress:', evmAddress)
     if (isConnected && evmAddress) {
-      console.log('[DirectMessagesPage] Both connected and EVM address available, calling loadConversations()...')
       loadConversations()
     }
   }, [isConnected, evmAddress, loadConversations])

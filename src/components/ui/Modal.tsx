@@ -32,12 +32,12 @@ export const Modal: React.FC<ModalProps> = ({ isOpen, onClose, title, children, 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center">
       <div className="absolute inset-0 bg-black/80 animate-fade-in" onClick={onClose} />
-      <div className="relative z-10 w-full max-w-md rounded-xl border border-qx-border-subtle bg-qx-card shadow-card animate-scale-in">
+      <div className="relative z-10 w-full max-w-md border border-qx-border-subtle bg-qx-card shadow-card animate-scale-in">
         <div className="flex items-center justify-between border-b border-qx-border-subtle p-4">
           <h2 className="font-display text-lg font-semibold text-qx-text-primary">{title}</h2>
           <button
             onClick={onClose}
-            className="flex h-8 w-8 items-center justify-center rounded-md text-qx-text-secondary transition-colors hover:bg-qx-elevated hover:text-qx-text-primary"
+            className="flex h-8 w-8 items-center justify-center text-qx-text-secondary transition-colors hover:bg-qx-elevated hover:text-qx-text-primary"
           >
             <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="2">
               <path d="M4 4l8 8M12 4l-8 8" />

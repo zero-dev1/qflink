@@ -61,6 +61,12 @@ export const FooterCTA: React.FC = () => {
               >
                 App
               </Link>
+              <Link
+                to="/whitepaper"
+                className="text-gray-500 hover:text-gray-900 dark:hover:text-white transition-colors text-sm"
+              >
+                Whitepaper
+              </Link>
               <a 
                 href="https://qfnetwork.xyz" 
                 target="_blank"

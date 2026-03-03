@@ -47,6 +47,7 @@ export const useWalletStore = create<WalletState>((set, get) => ({
   linkedWallets: [],
   evmAddress: null,
   accountMapped: false,
+  isMappingAccount: false,
   walletType: null,
 
   connect: async (selectedAccount?: InjectedAccountWithMeta) => {
@@ -76,7 +77,13 @@ export const useWalletStore = create<WalletState>((set, get) => ({
 
       const address = account.address
       const source = account.meta?.source || 'polkadot-js'
-      console.log('✅ Connected to wallet:', { address, source })
+
+      // Attach signer to account and API before any tx (fixes "No signer specified" error)
+      const { web3FromAddress } = await import('@polkadot/extension-dapp')
+      const injector = await web3FromAddress(address)
+      account = { ...account, signer: injector.signer }
+      const chainApi = await getApi()
+      chainApi.setSigner(injector.signer)
 
       // Fetch initial balance and set up subscription
       let initialBalance = BigInt(0)
@@ -92,58 +99,57 @@ export const useWalletStore = create<WalletState>((set, get) => ({
           set({ balance: free })
         })
       } catch (err) {
-        console.warn('Could not fetch on-chain balance, using 0:', err)
+        // Silently handle balance fetch errors
       }
 
       let evmAddr: string | null = null
-      try {
-        const api = await getApi()
-        evmAddr = await getEvmAddress(address)
-        
-        // If no chain mapping exists, derive EVM address locally (same algorithm as pallet-revive)
-        if (!evmAddr) {
-          evmAddr = deriveEvmAddress(address)
-          console.log('📍 Derived EVM address locally:', evmAddr)
-        } else {
-          console.log('📍 Found EVM address from chain:', evmAddr)
-        }
-      } catch (err) {
-        console.warn('Could not check EVM address mapping:', err)
-        // Fallback to derived address
-        evmAddr = deriveEvmAddress(address)
-      }
 
-      // Final fallback
-      if (!evmAddr) {
-        evmAddr = deriveEvmAddress(address)
-      }
+      // Ensure account is mapped BEFORE setting isConnected=true.
+      // Contract queries (registryGetProfile, etc.) will fail with AccountUnmapped
+      // if we allow components to fire them against an unmapped account.
+      evmAddr = await getEvmAddress(address)
 
       if (evmAddr) {
-        saveSession(address, source, 'substrate')
-        
-        // Set all state atomically - components will see complete state at once
-        set({
-          address,
-          evmAddress: evmAddr.toLowerCase(),
-          isConnected: true,
-          isConnecting: false,
-          walletSource: source,
-          accountMapped: true,
-          walletType: 'substrate',
-          balance: initialBalance,
-        })
-        
-        const { useProfileStore } = await import('./profile')
-        await useProfileStore.getState().fetchProfile(evmAddr)
-        
-        // Fetch pods after profile is loaded so Home page has data ready
-        const { usePodsStore } = await import('./pods')
-        await usePodsStore.getState().fetchPods()
+        // Mapping already exists on-chain — proceed immediately
       } else {
-        // This should never happen since we always derive, but handle gracefully
-        set({ isConnecting: false })
-        throw new Error('Could not determine EVM address')
+        // No mapping — submit mapAccount and WAIT for finalization before continuing
+        set({ isMappingAccount: true })
+        try {
+          evmAddr = await ensureAccountMapped(account)
+        } catch (mapErr: any) {
+          // Surface the error to the UI — do NOT fall back to a derived address
+          // and do NOT set isConnected=true. The user must resolve this first.
+          set({ isMappingAccount: false, isConnecting: false })
+          throw mapErr
+        }
+        set({ isMappingAccount: false })
       }
+
+      if (!evmAddr) {
+        set({ isConnecting: false })
+        throw new Error('Could not determine EVM address after mapping')
+      }
+
+      saveSession(address, source, 'substrate')
+
+      // Only NOW set isConnected=true — mapping is confirmed, contract queries are safe
+      set({
+        address,
+        evmAddress: evmAddr.toLowerCase(),
+        isConnected: true,
+        isConnecting: false,
+        walletSource: source,
+        accountMapped: true,
+        walletType: 'substrate',
+        balance: initialBalance,
+      })
+
+      const { useProfileStore } = await import('./profile')
+      await useProfileStore.getState().fetchProfile(evmAddr)
+
+      // Fetch pods after profile is loaded so Home page has data ready
+      const { usePodsStore } = await import('./pods')
+      await usePodsStore.getState().fetchPods()
     } catch (error) {
       set({ isConnecting: false })
       throw error
@@ -169,7 +175,6 @@ export const useWalletStore = create<WalletState>((set, get) => ({
       }
 
       const evmAddress = accounts[0].toLowerCase()
-      console.log('✅ Connected to MetaMask:', evmAddress)
       
       await get().finalizeMetaMaskConnection(evmAddress)
     } catch (error) {
@@ -204,8 +209,6 @@ export const useWalletStore = create<WalletState>((set, get) => ({
         return false
       }
 
-      console.log('🔄 [silentConnectMetaMask] Restoring session:', evmAddress)
-      
       await get().finalizeMetaMaskConnection(evmAddress)
       return true
     } catch (error) {
@@ -241,7 +244,7 @@ export const useWalletStore = create<WalletState>((set, get) => ({
           }
         }
       } catch (err) {
-        console.warn('Could not fetch ETH balance, using 0:', err)
+        // Silently handle balance fetch errors
       }
 
       // Save session
@@ -287,7 +290,6 @@ export const useWalletStore = create<WalletState>((set, get) => ({
             
             // If new account doesn't have a profile, redirect to /connect
             if (profileStore.needsRegistration || !profileStore.isRegistered) {
-              console.log('🔀 [accountsChanged] New account has no profile, redirecting to /connect')
               if (typeof window !== 'undefined' && window.location.pathname !== '/connect') {
                 window.location.href = '/connect'
               }
@@ -304,7 +306,6 @@ export const useWalletStore = create<WalletState>((set, get) => ({
         window.ethereum.on('chainChanged', handleChainChanged)
         
         metamaskListenersSetup = true
-        console.log('📡 [connectMetaMask] Event listeners registered')
       }
 
     } catch (error) {
@@ -334,7 +335,6 @@ export const useWalletStore = create<WalletState>((set, get) => ({
 
     const { useProfileStore } = await import('./profile')
     useProfileStore.getState().reset()
-    console.log('✅ Wallet disconnected')
     
     // Redirect to /connect page (only if in browser and not already there)
     if (typeof window !== 'undefined' && window.location.pathname !== '/connect' && window.location.pathname !== '/') {
@@ -398,17 +398,13 @@ export const useWalletStore = create<WalletState>((set, get) => ({
 if (typeof window !== 'undefined') {
   const session = loadSession()
   if (session) {
-    console.log('🔄 Restoring wallet session...', session)
     ;(async () => {
       try {
         // Check wallet type and reconnect accordingly
         if (session.walletType === 'evm') {
           // For EVM wallets, use silent connect (no popup)
           const restored = await useWalletStore.getState().silentConnectMetaMask()
-          if (restored) {
-            console.log('✅ EVM wallet session restored silently')
-          } else {
-            console.warn('⚠️ Could not restore EVM session silently, clearing session')
+          if (!restored) {
             clearSession()
           }
         } else {
@@ -420,9 +416,7 @@ if (typeof window !== 'undefined') {
           
           if (account) {
             await useWalletStore.getState().connect(account)
-            console.log('✅ Substrate wallet session restored')
           } else {
-            console.warn('⚠️ Saved account not found, clearing session')
             clearSession()
           }
         }

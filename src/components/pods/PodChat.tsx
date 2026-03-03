@@ -41,15 +41,6 @@ export const PodChat: React.FC<PodChatProps> = ({
   onInvite,
   onLeave,
 }) => {
-  // Debug: log when messages update
-  console.log('[PodChat] rendering messages:', messages?.length)
-  console.log('[PodChat] messages data:', messages?.map((m, i) => ({
-    index: i,
-    id: m.id,
-    sender: m.sender?.substring(0, 10),
-    contentPreview: m.content?.substring(0, 30),
-    timestamp: m.timestamp
-  })))
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const chatContainerRef = useRef<HTMLDivElement>(null)
   const isNearBottom = useRef(true)
@@ -58,10 +49,7 @@ export const PodChat: React.FC<PodChatProps> = ({
   const profilesFetchedRef = useRef<Set<string>>(new Set())
   const [showPodInfo, setShowPodInfo] = useState(false)
   
-  const defaultPods = usePodsStore((s) => s.defaultPods)
   const myPods = usePodsStore((s) => s.myPods)
-  // Deduplicate pods when combining defaultPods and myPods
-  const allMyPods = [...new Map([...defaultPods, ...myPods].map(p => [p.id, p])).values()]
   const evmAddress = useWalletStore((s) => s.evmAddress)
   
   const getSenderName = (senderAddress: string): string => {
@@ -257,7 +245,7 @@ export const PodChat: React.FC<PodChatProps> = ({
           <p className="text-[10px] font-semibold uppercase tracking-widest text-qx-text-muted">Your Pods</p>
         </div>
         <div className="flex-1 overflow-y-auto py-1">
-          {allMyPods.map((p) => {
+          {myPods.map((p) => {
             const isActive = p.id === pod.id
             const pIsDefault = (p as DefaultPod).isDefault === true
             const pHolderReq = pIsDefault ? formatHolderReq((p as DefaultPod).minBalance) : 'Open'

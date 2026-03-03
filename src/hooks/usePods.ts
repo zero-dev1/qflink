@@ -10,6 +10,16 @@ import {
   getUserPods,
   getPodMessages,
   getPodMembers,
+  podsBanMember,
+  podsUnbanMember,
+  podsAddMod,
+  podsRemoveMod,
+  podsIsBanned,
+  podsGetMods,
+  podsJoinPod,
+  podsGetPodFee,
+  podsGetProFee,
+  podsUpgradePod,
 } from '@/lib/contracts'
 
 
@@ -64,14 +74,22 @@ export function usePods() {
   }, [setLoading, setMyPods])
 
   const createPod = useCallback(
-    async (name: string, description: string, minBalance: bigint, isPublic: boolean, tier: PodTier = 'standard') => {
+    async (
+      name: string, 
+      description: string, 
+      minBalance: bigint, 
+      isPublic: boolean, 
+      tier: 'free' | 'pro' = 'free',
+      entryFee: bigint = BigInt(0),
+      payoutWallet: string = ''
+    ) => {
       const addr = walletAddressRef.current
       if (!addr) {
         addToast('error', 'Please connect your wallet first')
         return
       }
       try {
-        const pod = await createPodOnChain(addr, name, description, minBalance, isPublic, tier)
+        const pod = await createPodOnChain(addr, name, description, minBalance, isPublic, tier, entryFee, payoutWallet)
         addPod(pod)
         addToast('success', `Pod "${name}" created successfully`)
         return pod
@@ -83,14 +101,25 @@ export function usePods() {
     [addToast, addPod]
   )
 
-  // Token-gated pods: membership is automatic based on balance
-  // joinPod/leavePod are kept for future invite-only pods, but currently just refresh
+  // Join a pod (handles paid pods and free pods)
   const joinPod = useCallback(
-    async (podId: number) => {
-      // Refresh pods to get current access state
-      await fetchPods()
+    async (podId: number, fee: bigint = BigInt(0)) => {
+      const addr = walletAddressRef.current
+      if (!addr) {
+        addToast('error', 'Please connect your wallet first')
+        return
+      }
+      try {
+        await podsJoinPod(podId, fee)
+        addToast('success', 'Successfully joined pod')
+        // Refresh pods to update state
+        await fetchPods()
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : 'Failed to join pod'
+        addToast('error', msg)
+      }
     },
-    [fetchPods]
+    [addToast, fetchPods]
   )
 
   const leavePod = useCallback(
@@ -146,6 +175,59 @@ export function usePods() {
     [setPodMembers]
   )
 
+  // Moderation functions
+  const banMember = useCallback(
+    async (podId: number, memberAddress: string) => {
+      try {
+        await podsBanMember(podId, memberAddress)
+        addToast('success', 'Member banned')
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : 'Failed to ban member'
+        addToast('error', msg)
+      }
+    },
+    [addToast]
+  )
+
+  const unbanMember = useCallback(
+    async (podId: number, memberAddress: string) => {
+      try {
+        await podsUnbanMember(podId, memberAddress)
+        addToast('success', 'Member unbanned')
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : 'Failed to unban member'
+        addToast('error', msg)
+      }
+    },
+    [addToast]
+  )
+
+  const addMod = useCallback(
+    async (podId: number, moderatorAddress: string) => {
+      try {
+        await podsAddMod(podId, moderatorAddress)
+        addToast('success', 'Moderator added')
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : 'Failed to add moderator'
+        addToast('error', msg)
+      }
+    },
+    [addToast]
+  )
+
+  const removeMod = useCallback(
+    async (podId: number, moderatorAddress: string) => {
+      try {
+        await podsRemoveMod(podId, moderatorAddress)
+        addToast('success', 'Moderator removed')
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : 'Failed to remove moderator'
+        addToast('error', msg)
+      }
+    },
+    [addToast]
+  )
+
   return {
     pods,
     myPods,
@@ -163,5 +245,9 @@ export function usePods() {
     sendPodMessage,
     loadPodMessages,
     loadPodMembers,
+    banMember,
+    unbanMember,
+    addMod,
+    removeMod,
   }
 }

@@ -89,8 +89,8 @@ const SidebarContent: React.FC<{ onClose?: () => void }> = ({ onClose }) => (
                 cn(
                   'flex items-center gap-3 px-3 py-2.5 text-sm font-medium transition-colors duration-150',
                   isActive
-                    ? 'text-qx-active-text bg-qx-active-bg font-semibold'
-                    : 'text-qx-text-secondary hover:text-qx-text-primary hover:bg-qx-elevated'
+                    ? 'text-white bg-cyan-600 font-semibold'
+                    : 'text-gray-400 hover:bg-gray-800'
                 )
               }
             >

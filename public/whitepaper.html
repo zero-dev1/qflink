@@ -1,0 +1,1409 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>QFLink Whitepaper — The On-Chain Community Layer for QuantumFusion</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
+  <style>
+    /* ─── Reset & Base ─────────────────────────────────────────────────────── */
+    *, *::before, *::after {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+      border-radius: 0 !important;
+    }
+
+    :root {
+      --bg-primary:    #0a0a0f;
+      --bg-secondary:  #111118;
+      --bg-tertiary:   #1a1a24;
+      --accent:        #0891b2;
+      --accent-light:  #22d3ee;
+      --border:        #1e293b;
+      --text-body:     #94a3b8;
+      --text-strong:   #f1f5f9;
+      --text-muted:    #475569;
+      --text-em:       #22d3ee;
+    }
+
+    html {
+      font-size: 16px;
+      scroll-behavior: smooth;
+    }
+
+    body {
+      font-family: 'Inter', system-ui, -apple-system, sans-serif;
+      background-color: var(--bg-primary);
+      color: var(--text-body);
+      font-size: 0.95rem;
+      line-height: 1.8;
+      -webkit-font-smoothing: antialiased;
+      -moz-osx-font-smoothing: grayscale;
+    }
+
+    /* ─── Typography ────────────────────────────────────────────────────────── */
+    h1 {
+      font-size: 2rem;
+      font-weight: 700;
+      color: var(--text-strong);
+      line-height: 1.2;
+      letter-spacing: -0.02em;
+    }
+
+    h2 {
+      font-size: 1.5rem;
+      font-weight: 700;
+      color: var(--text-strong);
+      line-height: 1.3;
+      margin-bottom: 1rem;
+    }
+
+    h3 {
+      font-size: 1.1rem;
+      font-weight: 600;
+      color: var(--text-strong);
+      line-height: 1.4;
+      margin-bottom: 0.65rem;
+    }
+
+    p {
+      margin-bottom: 1.1rem;
+    }
+
+    p:last-child {
+      margin-bottom: 0;
+    }
+
+    strong {
+      color: var(--text-strong);
+      font-weight: 600;
+    }
+
+    em {
+      color: var(--text-em);
+      font-style: italic;
+    }
+
+    ul, ol {
+      padding-left: 1.4rem;
+      margin-bottom: 1.1rem;
+    }
+
+    li {
+      margin-bottom: 0.4rem;
+    }
+
+    code {
+      font-family: 'Geist Mono', 'ui-monospace', monospace;
+      font-size: 0.85rem;
+      color: var(--accent-light);
+      background: var(--bg-tertiary);
+      padding: 0.1em 0.4em;
+      border: 1px solid var(--border);
+    }
+
+    /* ─── Layout Containers ─────────────────────────────────────────────────── */
+    .page-wrap {
+      max-width: 860px;
+      margin: 0 auto;
+      padding: 0 2rem;
+    }
+
+    /* ─── Cover Page ────────────────────────────────────────────────────────── */
+    .cover {
+      min-height: 100vh;
+      background: var(--bg-primary);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      text-align: center;
+      padding: 4rem 2rem;
+      position: relative;
+      overflow: hidden;
+      page-break-after: always;
+    }
+
+    .cover::before {
+      content: '';
+      position: absolute;
+      inset: 0;
+      background: radial-gradient(ellipse at center, rgba(8,145,178,0.09) 0%, #0a0a0f 68%);
+      pointer-events: none;
+    }
+
+    .cover-inner {
+      position: relative;
+      z-index: 1;
+      max-width: 720px;
+    }
+
+    .cover-logo {
+      width: 280px;
+      max-width: 80vw;
+      margin-bottom: 2.5rem;
+      display: block;
+      margin-left: auto;
+      margin-right: auto;
+    }
+
+    .cover-tag {
+      font-size: 0.7rem;
+      font-weight: 700;
+      letter-spacing: 0.22em;
+      text-transform: uppercase;
+      color: var(--accent);
+      margin-bottom: 1.2rem;
+    }
+
+    .cover-subtitle {
+      font-size: 1.25rem;
+      font-weight: 500;
+      color: var(--text-body);
+      max-width: 520px;
+      margin: 0 auto 2.5rem;
+      line-height: 1.6;
+    }
+
+    .cover-meta {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 0;
+      margin-top: 2rem;
+    }
+
+    .cover-meta-item {
+      padding: 0.6rem 1.4rem;
+      border: 1px solid var(--border);
+      background: var(--bg-secondary);
+    }
+
+    .cover-meta-item + .cover-meta-item {
+      border-left: none;
+    }
+
+    .cover-meta-label {
+      display: block;
+      font-size: 0.65rem;
+      font-weight: 700;
+      letter-spacing: 0.18em;
+      text-transform: uppercase;
+      color: var(--text-muted);
+      margin-bottom: 0.15rem;
+    }
+
+    .cover-meta-value {
+      display: block;
+      font-size: 0.85rem;
+      font-weight: 600;
+      color: var(--text-strong);
+    }
+
+    .cover-border-top {
+      position: absolute;
+      top: 0;
+      left: 0;
+      right: 0;
+      height: 2px;
+      background: linear-gradient(90deg, transparent, var(--accent), transparent);
+    }
+
+    /* ─── Table of Contents ─────────────────────────────────────────────────── */
+    .toc {
+      padding: 5rem 0 4rem;
+      page-break-after: always;
+    }
+
+    .toc-header {
+      margin-bottom: 2rem;
+    }
+
+    .toc-section-num {
+      font-size: 0.75rem;
+      font-weight: 700;
+      letter-spacing: 0.15em;
+      text-transform: uppercase;
+      color: var(--accent);
+      display: block;
+      margin-bottom: 0.4rem;
+    }
+
+    .toc-list {
+      list-style: none;
+      padding: 0;
+      margin: 0;
+    }
+
+    .toc-list li {
+      border-bottom: 1px solid var(--border);
+      margin-bottom: 0;
+    }
+
+    .toc-list li a {
+      display: flex;
+      align-items: baseline;
+      justify-content: space-between;
+      padding: 0.75rem 0;
+      text-decoration: none;
+      color: var(--text-body);
+      transition: color 0.15s;
+    }
+
+    .toc-list li a:hover {
+      color: var(--text-strong);
+    }
+
+    .toc-list li a:hover .toc-num {
+      color: var(--accent);
+    }
+
+    .toc-num {
+      font-size: 0.75rem;
+      font-weight: 700;
+      color: var(--accent);
+      letter-spacing: 0.08em;
+      margin-right: 0.8rem;
+      flex-shrink: 0;
+    }
+
+    .toc-title {
+      flex: 1;
+      font-size: 0.95rem;
+    }
+
+    .toc-dots {
+      flex: 1;
+      border-bottom: 1px dotted var(--border);
+      margin: 0 0.6rem;
+      position: relative;
+      top: -3px;
+    }
+
+    .toc-page {
+      font-size: 0.8rem;
+      color: var(--text-muted);
+      flex-shrink: 0;
+    }
+
+    /* ─── Section Divider ───────────────────────────────────────────────────── */
+    .section-divider {
+      border: none;
+      border-top: 1px solid var(--border);
+      margin: 3.5rem 0 0;
+    }
+
+    /* ─── Document Section ──────────────────────────────────────────────────── */
+    .doc-section {
+      padding: 3.5rem 0;
+      page-break-inside: avoid;
+    }
+
+    .section-num {
+      font-size: 0.75rem;
+      font-weight: 700;
+      letter-spacing: 0.15em;
+      text-transform: uppercase;
+      color: var(--accent);
+      display: block;
+      margin-bottom: 0.5rem;
+    }
+
+    .doc-section h2 {
+      margin-top: 0;
+      margin-bottom: 1.5rem;
+    }
+
+    .doc-section h3 {
+      margin-top: 1.8rem;
+    }
+
+    /* ─── Blockquote ────────────────────────────────────────────────────────── */
+    blockquote {
+      border-left: 3px solid var(--accent);
+      background: var(--bg-secondary);
+      padding: 1rem 1.4rem;
+      margin: 1.5rem 0;
+      color: var(--text-body);
+    }
+
+    blockquote p {
+      margin-bottom: 0;
+      font-style: italic;
+      color: var(--text-body);
+    }
+
+    /* ─── Highlight Box ─────────────────────────────────────────────────────── */
+    .highlight-box {
+      border: 1px solid var(--accent);
+      background: rgba(8, 145, 178, 0.05);
+      padding: 1.2rem 1.4rem;
+      margin: 1.5rem 0;
+    }
+
+    .highlight-box p {
+      margin-bottom: 0;
+    }
+
+    .highlight-box-title {
+      font-size: 0.7rem;
+      font-weight: 700;
+      letter-spacing: 0.15em;
+      text-transform: uppercase;
+      color: var(--accent);
+      margin-bottom: 0.6rem;
+      display: block;
+    }
+
+    /* ─── Comparison Table ──────────────────────────────────────────────────── */
+    .table-wrap {
+      overflow-x: auto;
+      margin: 1.5rem 0;
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 0.9rem;
+    }
+
+    table thead tr {
+      background: var(--bg-tertiary);
+    }
+
+    table thead th {
+      padding: 0.75rem 1rem;
+      text-align: left;
+      font-size: 0.72rem;
+      font-weight: 700;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+      color: var(--accent-light);
+      border-bottom: 1px solid var(--border);
+    }
+
+    table tbody tr {
+      border-bottom: 1px solid var(--border);
+    }
+
+    table tbody tr:last-child {
+      border-bottom: none;
+    }
+
+    table tbody td {
+      padding: 0.75rem 1rem;
+      color: var(--text-body);
+      vertical-align: top;
+    }
+
+    table tbody td:first-child {
+      color: var(--text-strong);
+      font-weight: 500;
+    }
+
+    .check {
+      color: var(--accent-light);
+      font-weight: 700;
+    }
+
+    .cross {
+      color: var(--text-muted);
+    }
+
+    /* ─── Roadmap Timeline ──────────────────────────────────────────────────── */
+    .timeline {
+      position: relative;
+      padding-left: 2rem;
+      margin: 1.5rem 0;
+    }
+
+    .timeline::before {
+      content: '';
+      position: absolute;
+      left: 0;
+      top: 6px;
+      bottom: 6px;
+      width: 2px;
+      background: var(--border);
+    }
+
+    .timeline-item {
+      position: relative;
+      margin-bottom: 2rem;
+      padding-left: 0.5rem;
+    }
+
+    .timeline-item:last-child {
+      margin-bottom: 0;
+    }
+
+    .timeline-marker {
+      position: absolute;
+      left: -2rem;
+      top: 6px;
+      width: 8px;
+      height: 8px;
+      background: var(--bg-tertiary);
+      border: 2px solid var(--border);
+      transform: translateX(-3px);
+    }
+
+    .timeline-item.completed .timeline-marker {
+      background: var(--accent-light);
+      border-color: var(--accent-light);
+      box-shadow: 0 0 8px rgba(34, 211, 238, 0.5);
+    }
+
+    .timeline-phase {
+      font-size: 0.7rem;
+      font-weight: 700;
+      letter-spacing: 0.15em;
+      text-transform: uppercase;
+      color: var(--accent);
+      margin-bottom: 0.25rem;
+      display: block;
+    }
+
+    .timeline-item.completed .timeline-phase {
+      color: var(--accent-light);
+    }
+
+    .timeline-title {
+      font-size: 1rem;
+      font-weight: 600;
+      color: var(--text-strong);
+      margin-bottom: 0.4rem;
+    }
+
+    .timeline-desc {
+      font-size: 0.9rem;
+      color: var(--text-body);
+      line-height: 1.7;
+    }
+
+    /* ─── Two-column grid ───────────────────────────────────────────────────── */
+    .two-col {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 1.2rem;
+      margin: 1.5rem 0;
+    }
+
+    .two-col-item {
+      border: 1px solid var(--border);
+      background: var(--bg-secondary);
+      padding: 1.2rem;
+    }
+
+    /* ─── Stat row ──────────────────────────────────────────────────────────── */
+    .stat-row {
+      display: flex;
+      gap: 0;
+      margin: 1.5rem 0;
+      flex-wrap: wrap;
+    }
+
+    .stat-item {
+      flex: 1;
+      min-width: 120px;
+      padding: 1.1rem 1.2rem;
+      border: 1px solid var(--border);
+      background: var(--bg-secondary);
+    }
+
+    .stat-item + .stat-item {
+      border-left: none;
+    }
+
+    .stat-value {
+      display: block;
+      font-size: 1.6rem;
+      font-weight: 700;
+      color: var(--accent-light);
+      line-height: 1;
+      margin-bottom: 0.3rem;
+    }
+
+    .stat-label {
+      display: block;
+      font-size: 0.75rem;
+      color: var(--text-muted);
+      letter-spacing: 0.05em;
+    }
+
+    /* ─── Footer ────────────────────────────────────────────────────────────── */
+    .doc-footer {
+      border-top: 1px solid var(--border);
+      padding: 2.5rem 0 3rem;
+      margin-top: 2rem;
+    }
+
+    .footer-inner {
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      gap: 2rem;
+      flex-wrap: wrap;
+      margin-bottom: 1.5rem;
+    }
+
+    .footer-logo {
+      width: 120px;
+      opacity: 0.7;
+    }
+
+    .footer-links {
+      display: flex;
+      gap: 1.5rem;
+      flex-wrap: wrap;
+    }
+
+    .footer-links a {
+      font-size: 0.85rem;
+      color: var(--text-muted);
+      text-decoration: none;
+    }
+
+    .footer-links a:hover {
+      color: var(--accent);
+    }
+
+    .footer-disclaimer {
+      font-size: 0.78rem;
+      color: var(--text-muted);
+      line-height: 1.7;
+      border-top: 1px solid var(--border);
+      padding-top: 1.2rem;
+    }
+
+    /* ─── Print Styles ──────────────────────────────────────────────────────── */
+    @media print {
+      @page {
+        size: A4;
+        margin: 1.5cm;
+      }
+
+      * {
+        print-color-adjust: exact;
+        -webkit-print-color-adjust: exact;
+      }
+
+      body {
+        background-color: var(--bg-primary) !important;
+        color: var(--text-body) !important;
+      }
+
+      .cover {
+        page-break-after: always;
+        min-height: 100vh;
+      }
+
+      .toc {
+        page-break-after: always;
+      }
+
+      .doc-section {
+        page-break-inside: avoid;
+      }
+
+      a {
+        text-decoration: none;
+        color: inherit;
+      }
+
+      .cover::before {
+        display: none;
+      }
+    }
+
+    /* ─── Responsive ────────────────────────────────────────────────────────── */
+    @media (max-width: 640px) {
+      h1 { font-size: 1.6rem; }
+      h2 { font-size: 1.25rem; }
+      .two-col { grid-template-columns: 1fr; }
+      .cover-meta { flex-direction: column; }
+      .cover-meta-item + .cover-meta-item { border-left: 1px solid var(--border); border-top: none; }
+      .stat-row { flex-direction: column; }
+      .stat-item + .stat-item { border-left: 1px solid var(--border); border-top: none; }
+    }
+  </style>
+</head>
+<body>
+
+  <!-- ═══════════════════════════════════════════════════════ COVER ══ -->
+  <div class="cover">
+    <div class="cover-border-top"></div>
+    <div class="cover-inner">
+      <svg class="cover-logo" width="1596" height="471" viewBox="0 0 1596 471" fill="none" xmlns="http://www.w3.org/2000/svg" aria-label="QFLink">
+        <path d="M327.832 111.361H142.286C125.207 111.361 111.362 125.207 111.362 142.286V327.832C111.362 344.911 125.207 358.756 142.286 358.756H327.832C344.911 358.756 358.757 344.911 358.757 327.832V142.286C358.757 125.207 344.911 111.361 327.832 111.361Z" stroke="#0991B2" stroke-width="48"/>
+        <path d="M358.757 111.467L446.224 24" stroke="#0991B2" stroke-width="48" stroke-linecap="round"/>
+        <path d="M24.0005 446.224L111.468 358.756" stroke="#0991B2" stroke-width="48" stroke-linecap="round"/>
+        <path d="M643.818 306.218H675.018V364.538H643.818V306.218ZM659.418 319.658C638.778 319.658 621.098 316.458 606.378 310.058C591.818 303.498 580.618 294.218 572.778 282.218C565.098 270.218 561.258 255.818 561.258 239.018C561.258 222.058 565.098 207.578 572.778 195.578C580.618 183.578 591.818 174.378 606.378 167.978C621.098 161.418 638.778 158.138 659.418 158.138C680.218 158.138 697.898 161.418 712.458 167.978C727.018 174.378 738.138 183.578 745.818 195.578C753.658 207.578 757.578 222.058 757.578 239.018C757.578 255.818 753.658 270.218 745.818 282.218C738.138 294.218 727.018 303.498 712.458 310.058C697.898 316.458 680.218 319.658 659.418 319.658ZM659.418 292.058C672.218 292.058 683.418 290.138 693.018 286.298C702.778 282.458 710.378 276.618 715.818 268.778C721.418 260.938 724.218 251.018 724.218 239.018C724.218 227.018 721.418 217.098 715.818 209.258C710.378 201.418 702.778 195.578 693.018 191.738C683.418 187.738 672.218 185.738 659.418 185.738C646.778 185.738 635.498 187.738 625.578 191.738C615.658 195.578 607.898 201.418 602.298 209.258C596.698 217.098 593.898 227.018 593.898 239.018C593.898 251.018 596.698 260.938 602.298 268.778C607.898 276.618 615.658 282.458 625.578 286.298C635.498 290.138 646.778 292.058 659.418 292.058ZM959.377 161.258V187.898H839.857V229.658H937.777V254.618H839.857V316.538H807.937V161.258H959.377Z" fill="#0991B2"/>
+        <path d="M1036.95 161.258V289.898H1140.15V316.538H1005.03V161.258H1036.95ZM1220.67 144.938V172.298H1184.43V144.938H1220.67ZM1186.83 197.258H1218.03V316.538H1186.83V197.258ZM1268.33 197.258H1299.53V316.538H1268.33V197.258ZM1354.97 194.618C1362.33 194.618 1369.13 195.578 1375.37 197.498C1381.61 199.418 1387.05 202.378 1391.69 206.378C1396.33 210.378 1399.93 215.498 1402.49 221.738C1405.05 227.818 1406.33 235.098 1406.33 243.578V316.538H1375.13V249.098C1375.13 239.018 1372.65 231.658 1367.69 227.018C1362.89 222.218 1354.97 219.818 1343.93 219.818C1335.61 219.818 1328.09 221.418 1321.37 224.618C1314.65 227.818 1309.21 231.898 1305.05 236.858C1300.89 241.658 1298.49 246.698 1297.85 251.978L1297.61 239.738C1298.41 234.138 1300.25 228.698 1303.13 223.418C1306.01 218.138 1309.85 213.338 1314.65 209.018C1319.61 204.538 1325.45 201.018 1332.17 198.458C1338.89 195.898 1346.49 194.618 1354.97 194.618ZM1456.1 149.258H1487.3V316.538H1456.1V149.258ZM1587.86 197.258L1516.82 259.898L1517.54 240.698L1593.38 316.538H1553.78L1488.02 249.578L1545.38 197.258H1587.86Z" fill="white"/>
+      </svg>
+      <div class="cover-tag">Whitepaper</div>
+      <p class="cover-subtitle">The On-Chain Community Layer for QuantumFusion</p>
+      <div class="cover-meta">
+        <div class="cover-meta-item">
+          <span class="cover-meta-label">Version</span>
+          <span class="cover-meta-value">1.0</span>
+        </div>
+        <div class="cover-meta-item">
+          <span class="cover-meta-label">Date</span>
+          <span class="cover-meta-value">March 2026</span>
+        </div>
+        <div class="cover-meta-item">
+          <span class="cover-meta-label">Network</span>
+          <span class="cover-meta-value">QuantumFusion</span>
+        </div>
+        <div class="cover-meta-item">
+          <span class="cover-meta-label">Status</span>
+          <span class="cover-meta-value">Live</span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ═══════════════════════════════════════════════════════════ TOC ══ -->
+  <div class="toc">
+    <div class="page-wrap">
+      <div class="toc-header">
+        <span class="toc-section-num">Contents</span>
+        <h1>Table of Contents</h1>
+      </div>
+      <ol class="toc-list">
+        <li>
+          <a href="#section-01">
+            <span class="toc-num">01</span>
+            <span class="toc-title">Abstract</span>
+            <span class="toc-dots"></span>
+            <span class="toc-page">3</span>
+          </a>
+        </li>
+        <li>
+          <a href="#section-02">
+            <span class="toc-num">02</span>
+            <span class="toc-title">Introduction &amp; Problem Statement</span>
+            <span class="toc-dots"></span>
+            <span class="toc-page">4</span>
+          </a>
+        </li>
+        <li>
+          <a href="#section-03">
+            <span class="toc-num">03</span>
+            <span class="toc-title">The QFLink Vision</span>
+            <span class="toc-dots"></span>
+            <span class="toc-page">5</span>
+          </a>
+        </li>
+        <li>
+          <a href="#section-04">
+            <span class="toc-num">04</span>
+            <span class="toc-title">Architecture &amp; Smart Contracts</span>
+            <span class="toc-dots"></span>
+            <span class="toc-page">6</span>
+          </a>
+        </li>
+        <li>
+          <a href="#section-05">
+            <span class="toc-num">05</span>
+            <span class="toc-title">Pods: Token-Gated Community Spaces</span>
+            <span class="toc-dots"></span>
+            <span class="toc-page">8</span>
+          </a>
+        </li>
+        <li>
+          <a href="#section-06">
+            <span class="toc-num">06</span>
+            <span class="toc-title">Direct Messaging &amp; Encryption</span>
+            <span class="toc-dots"></span>
+            <span class="toc-page">10</span>
+          </a>
+        </li>
+        <li>
+          <a href="#section-07">
+            <span class="toc-num">07</span>
+            <span class="toc-title">Competitive Landscape</span>
+            <span class="toc-dots"></span>
+            <span class="toc-page">11</span>
+          </a>
+        </li>
+        <li>
+          <a href="#integrations">
+            <span class="toc-num">08</span>
+            <span class="toc-title">Ecosystem Integrations</span>
+            <span class="toc-dots"></span>
+            <span class="toc-page">12</span>
+          </a>
+        </li>
+        <li>
+          <a href="#section-09">
+            <span class="toc-num">09</span>
+            <span class="toc-title">Tokenomics &amp; Fee Model</span>
+            <span class="toc-dots"></span>
+            <span class="toc-page">14</span>
+          </a>
+        </li>
+        <li>
+          <a href="#section-10">
+            <span class="toc-num">10</span>
+            <span class="toc-title">Roadmap</span>
+            <span class="toc-dots"></span>
+            <span class="toc-page">16</span>
+          </a>
+        </li>
+        <li>
+          <a href="#section-11">
+            <span class="toc-num">11</span>
+            <span class="toc-title">Security &amp; Audits</span>
+            <span class="toc-dots"></span>
+            <span class="toc-page">18</span>
+          </a>
+        </li>
+        <li>
+          <a href="#section-12">
+            <span class="toc-num">12</span>
+            <span class="toc-title">Team &amp; Contributors</span>
+            <span class="toc-dots"></span>
+            <span class="toc-page">19</span>
+          </a>
+        </li>
+        <li>
+          <a href="#section-13">
+            <span class="toc-num">13</span>
+            <span class="toc-title">Conclusion</span>
+            <span class="toc-dots"></span>
+            <span class="toc-page">20</span>
+          </a>
+        </li>
+      </ol>
+    </div>
+  </div>
+
+  <!-- ═══════════════════════════════════════════════════ SECTIONS ══ -->
+  <main class="page-wrap">
+
+    <!-- 01 Abstract -->
+    <hr class="section-divider" />
+    <section class="doc-section" id="section-01">
+      <span class="section-num">01 — Abstract</span>
+      <h2>Abstract</h2>
+      <p>
+        QFLink is a fully on-chain messaging and community platform built on the QuantumFusion (QF) Network. Unlike existing social and messaging applications that rely on centralised servers, proprietary databases, or off-chain storage layers, QFLink stores every message, every community configuration, and every membership record as a smart-contract transaction on-chain. The result is a communication layer that is <em>censorship-resistant</em>, <em>transparent</em>, and <em>permanently verifiable</em> — without sacrificing the user experience expected of modern applications.
+      </p>
+      <p>
+        This document describes the motivation, architecture, economic model, and roadmap of QFLink. It is intended for developers, token holders, and community participants who want to understand how QFLink works, why it is built the way it is, and where it is going.
+      </p>
+      <blockquote>
+        <p>"The goal is not to rebuild Discord on the blockchain. The goal is to make blockchain-native communication so seamless that users never need to think about the underlying infrastructure."</p>
+      </blockquote>
+    </section>
+
+    <!-- 02 Introduction -->
+    <hr class="section-divider" />
+    <section class="doc-section" id="section-02">
+      <span class="section-num">02 — Introduction</span>
+      <h2>Introduction &amp; Problem Statement</h2>
+      <p>
+        Modern communication platforms — Discord, Telegram, Slack — are powerful tools, but they share a fundamental structural weakness: <strong>centralisation</strong>. Every message you send is stored on servers owned by a private company. That company can be hacked, go bankrupt, be acquired, receive government orders to delete data, or simply choose to ban users and communities without recourse.
+      </p>
+      <p>
+        The Web3 community, paradoxically, organises itself almost entirely on these centralised platforms. DAOs hold governance discussions on Discord. NFT projects announce mints on Twitter. DeFi protocols distribute alpha in Telegram groups. The communities that exist to decentralise financial infrastructure have no decentralised infrastructure for their own communication.
+      </p>
+
+      <h3>The Core Problems</h3>
+      <ul>
+        <li><strong>No ownership.</strong> You do not own your message history, your community members list, or your identity on these platforms.</li>
+        <li><strong>No persistence guarantees.</strong> Platforms shut down. Servers go offline. Discord has already sunset features and entire API versions, breaking integrations overnight.</li>
+        <li><strong>No programmability.</strong> You cannot write a smart contract that reacts to a message being sent, or prove in zero-knowledge that you are a member of a community.</li>
+        <li><strong>No composability.</strong> Your community on Discord cannot natively interact with your DAO treasury on-chain. These worlds are separated by custodial bridges that introduce centralised failure points.</li>
+      </ul>
+
+      <div class="highlight-box">
+        <span class="highlight-box-title">Key Insight</span>
+        <p>The problem is not that Web3 communities use Discord. The problem is that there has been no viable alternative. QFLink is that alternative — one that inherits the permanence and programmability of the chain while matching the usability of consumer messaging apps.</p>
+      </div>
+    </section>
+
+    <!-- 03 Vision -->
+    <hr class="section-divider" />
+    <section class="doc-section" id="section-03">
+      <span class="section-num">03 — Vision</span>
+      <h2>The QFLink Vision</h2>
+      <p>
+        QFLink's vision is simple: <em>every community interaction should be on-chain, composable, and owned by its participants.</em>
+      </p>
+      <p>
+        We are building the community layer for QuantumFusion — a substrate of social infrastructure that other protocols, DAOs, NFT projects, and dApps can build on top of. A world where:
+      </p>
+      <ul>
+        <li>A DAO can tie governance participation directly to activity in its QFLink Pod.</li>
+        <li>An NFT collection can automatically create a members-only Pod for holders at mint time.</li>
+        <li>A DeFi protocol can send on-chain alerts directly to subscribed wallets.</li>
+        <li>Developers can query message history, membership records, and Pod configurations from any on-chain indexer without needing an API key.</li>
+      </ul>
+
+      <div class="two-col">
+        <div class="two-col-item">
+          <h3>What QFLink Is</h3>
+          <ul>
+            <li>A fully on-chain messaging protocol</li>
+            <li>A token-gated community platform</li>
+            <li>A composable social primitive for QF Network dApps</li>
+            <li>A permanent, verifiable communication record</li>
+          </ul>
+        </div>
+        <div class="two-col-item">
+          <h3>What QFLink Is Not</h3>
+          <ul>
+            <li>A centralised chat application with a blockchain badge</li>
+            <li>A social media feed or content discovery platform</li>
+            <li>A layer-2 or sidechain solution</li>
+            <li>An off-chain system with on-chain settlement</li>
+          </ul>
+        </div>
+      </div>
+    </section>
+
+    <!-- 04 Architecture -->
+    <hr class="section-divider" />
+    <section class="doc-section" id="section-04">
+      <span class="section-num">04 — Architecture</span>
+      <h2>Architecture &amp; Smart Contracts</h2>
+      <p>
+        QFLink is composed of two primary smart contracts deployed on QuantumFusion using the <code>ink!</code> smart contract language, compiled to PolkaVM bytecode. Both contracts are immutable once deployed per version, with upgrade paths managed through a master controller contract.
+      </p>
+
+      <h3>qflink-pods</h3>
+      <p>
+        The Pods contract manages community spaces. It handles Pod creation, configuration, member management, and message storage for Pod channels. Key storage structures include:
+      </p>
+      <ul>
+        <li><code>pods: Mapping&lt;PodId, Pod&gt;</code> — core Pod metadata including name, description, creator, token gate config, and creation timestamp.</li>
+        <li><code>pod_members: Mapping&lt;(PodId, AccountId), MemberInfo&gt;</code> — per-pod membership records with join timestamps and roles.</li>
+        <li><code>pod_messages: Mapping&lt;(PodId, u64), Message&gt;</code> — indexed message storage keyed by Pod ID and sequential message index.</li>
+        <li><code>pod_message_count: Mapping&lt;PodId, u64&gt;</code> — monotonic counter per Pod for deterministic message ordering.</li>
+      </ul>
+
+      <h3>qflink-messages</h3>
+      <p>
+        The Messages contract handles direct wallet-to-wallet messaging. It maintains separate conversation threads keyed by a canonically-ordered pair of account IDs, ensuring that the conversation between addresses A and B is always stored under the same key regardless of who initiates.
+      </p>
+      <ul>
+        <li><code>conversations: Mapping&lt;ConversationId, Vec&lt;Message&gt;&gt;</code> — ordered message history per conversation pair.</li>
+        <li><code>conversation_index: Mapping&lt;AccountId, Vec&lt;ConversationId&gt;&gt;</code> — index of all conversation IDs an account participates in.</li>
+      </ul>
+
+      <div class="highlight-box">
+        <span class="highlight-box-title">On Storage Costs</span>
+        <p>On-chain storage is finite and metered. Every message written to contract storage consumes storage deposit on QF Network. QFLink is designed to make this cost transparent and predictable, surfacing estimated fees to users before every message send. Future versions will support configurable message retention windows with partial on-chain storage and content-addressed IPFS fallback for archived messages.</p>
+      </div>
+
+      <h3>Contract Interactions</h3>
+      <p>
+        The frontend communicates with both contracts via <code>@polkadot/api-contract</code>. All reads are performed as RPC dry-run calls (no fee, no signature). All writes — creating a Pod, sending a message, joining a Pod — are submitted as signed extrinsics and confirmed on-chain before the UI updates.
+      </p>
+      <p>
+        This means the QFLink UI has <strong>no optimistic updates</strong> for write operations. The UI waits for on-chain confirmation before reflecting a new message or membership state. While this introduces a 2–6 second latency per write on current QF Network block times, it guarantees that the UI state is always a faithful representation of the on-chain state.
+      </p>
+    </section>
+
+    <!-- 05 Pods -->
+    <hr class="section-divider" />
+    <section class="doc-section" id="section-05">
+      <span class="section-num">05 — Pods</span>
+      <h2>Pods: Token-Gated Community Spaces</h2>
+      <p>
+        A <strong>Pod</strong> is QFLink's primary community primitive. Think of a Pod as a Discord server, but one that exists entirely as a smart-contract state object. Anyone with a QF Network wallet can create a Pod. The Pod creator becomes its first admin.
+      </p>
+
+      <h3>Pod Configuration</h3>
+      <p>Each Pod has the following configurable properties at creation time:</p>
+      <ul>
+        <li><strong>Name</strong> — display name, stored on-chain (max 64 bytes).</li>
+        <li><strong>Description</strong> — short description, stored on-chain (max 256 bytes).</li>
+        <li><strong>Token Gate</strong> — optional. If set, only wallets holding a specified asset (NFT contract or fungible token above a threshold) can join.</li>
+        <li><strong>Visibility</strong> — public (listed in the Pod discovery index) or private (known only to those with the Pod ID).</li>
+        <li><strong>Creation Fee</strong> — Pod creation requires a protocol fee paid in QF native tokens, anti-spam mechanism discussed in Section 08.</li>
+      </ul>
+
+      <h3>Joining a Pod</h3>
+      <p>
+        Joining a Pod is a signed on-chain transaction. When a user calls <code>join_pod(pod_id)</code>, the contract verifies the token gate condition (if any) by querying the relevant token contract. If the condition is satisfied, the caller's account is added to the Pod's member mapping with the current block timestamp.
+      </p>
+      <p>
+        Token gate verification happens <em>at join time only</em>. A member who sells their qualifying token after joining retains their membership. This is an intentional design choice — it reflects the snapshot-based membership model used by most token-gated communities today. Future versions will support <em>continuous eligibility checking</em> as an opt-in Pod configuration.
+      </p>
+
+      <h3>Sending Messages in a Pod</h3>
+      <p>
+        Once a member, a wallet can call <code>send_pod_message(pod_id, content)</code>. The contract verifies membership, increments the Pod's message counter, and stores the message with sender, content, and block timestamp. Each message is permanently and immutably stored in contract state.
+      </p>
+
+      <blockquote>
+        <p>There is no delete. There is no edit. Once a message is on-chain, it is part of the permanent record of that Pod. QFLink surfaces a UI warning to users before their first message to ensure this is understood.</p>
+      </blockquote>
+
+      <h3>Pod Moderation</h3>
+      <p>
+        Pod admins can <em>ban</em> a member — preventing them from sending future messages — but cannot delete messages already sent. This is enforced at the contract level. The immutability of past messages is a core guarantee of QFLink and cannot be overridden by admin action. See <code>docs/pod-moderation-spec.md</code> for the full moderation specification.
+      </p>
+    </section>
+
+    <!-- 06 DMs -->
+    <hr class="section-divider" />
+    <section class="doc-section" id="section-06">
+      <span class="section-num">06 — Direct Messaging</span>
+      <h2>Direct Messaging &amp; Encryption</h2>
+      <p>
+        QFLink supports wallet-to-wallet direct messages. Like Pod messages, DMs are stored on-chain as contract state. Unlike Pod messages, DMs between two parties are visible only to those two parties — not because they are hidden from the chain (all chain state is public), but because their content is <strong>end-to-end encrypted</strong> before being written on-chain.
+      </p>
+
+      <h3>Encryption Model</h3>
+      <p>
+        QFLink uses an X25519 Diffie-Hellman key exchange scheme to derive a shared secret between two parties. Each user generates (or derives from their wallet keypair) a <code>curve25519</code> key pair. When Alice sends a DM to Bob:
+      </p>
+      <ol>
+        <li>Alice's frontend performs ECDH between Alice's private key and Bob's public key to derive a shared secret.</li>
+        <li>The message content is encrypted with AES-256-GCM using the derived shared secret.</li>
+        <li>The ciphertext is submitted on-chain as the message content.</li>
+        <li>When Bob reads the message, his frontend performs the same ECDH derivation and decrypts the ciphertext locally.</li>
+      </ol>
+      <p>
+        No server ever sees the plaintext. The chain stores only ciphertext. This gives QFLink DMs a strong end-to-end encryption guarantee, with the additional property that the <em>existence</em> of a conversation is publicly verifiable on-chain, even if the <em>content</em> is not.
+      </p>
+
+      <div class="highlight-box">
+        <span class="highlight-box-title">Limitations &amp; Future Work</span>
+        <p>The current encryption implementation derives the encryption key deterministically from the wallet keypair. This is a pragmatic choice for a first version — it means users don't need to manage a separate keypair — but it ties message security to wallet key security. Future versions will support session keys and forward secrecy via a ratchet protocol.</p>
+      </div>
+    </section>
+
+    <!-- 07 Competitive Landscape -->
+    <hr class="section-divider" />
+    <section class="doc-section" id="section-07">
+      <span class="section-num">07 — Competitive Landscape</span>
+      <h2>Competitive Landscape</h2>
+      <p>
+        Several projects have attempted to build decentralised messaging and community infrastructure. QFLink occupies a distinct position: <em>fully on-chain, no off-chain storage layer, no token-gated access to basic functionality</em>.
+      </p>
+
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>Platform</th>
+              <th>On-Chain Messages</th>
+              <th>Token Gating</th>
+              <th>E2E Encryption</th>
+              <th>No Off-Chain DB</th>
+              <th>Composable</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>QFLink</td>
+              <td><span class="check">✓</span></td>
+              <td><span class="check">✓</span></td>
+              <td><span class="check">✓</span></td>
+              <td><span class="check">✓</span></td>
+              <td><span class="check">✓</span></td>
+            </tr>
+            <tr>
+              <td>Discord</td>
+              <td><span class="cross">✗</span></td>
+              <td>Via bots only</td>
+              <td><span class="cross">✗</span></td>
+              <td><span class="cross">✗</span></td>
+              <td><span class="cross">✗</span></td>
+            </tr>
+            <tr>
+              <td>Telegram</td>
+              <td><span class="cross">✗</span></td>
+              <td><span class="cross">✗</span></td>
+              <td>Optional</td>
+              <td><span class="cross">✗</span></td>
+              <td><span class="cross">✗</span></td>
+            </tr>
+            <tr>
+              <td>Lens Protocol</td>
+              <td>Partial</td>
+              <td>Via modules</td>
+              <td><span class="cross">✗</span></td>
+              <td><span class="cross">✗</span></td>
+              <td><span class="check">✓</span></td>
+            </tr>
+            <tr>
+              <td>XMTP</td>
+              <td><span class="cross">✗</span></td>
+              <td><span class="cross">✗</span></td>
+              <td><span class="check">✓</span></td>
+              <td><span class="cross">✗</span></td>
+              <td>Partial</td>
+            </tr>
+            <tr>
+              <td>Push Protocol</td>
+              <td><span class="cross">✗</span></td>
+              <td>Via channels</td>
+              <td>Partial</td>
+              <td><span class="cross">✗</span></td>
+              <td>Partial</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <p>
+        The key differentiator is <em>full on-chain storage with no off-chain dependency</em>. Competitors like XMTP or Push Protocol provide a superior developer experience for applications that don't require full on-chain storage, and they are better suited for high-frequency notification use cases. QFLink is not trying to compete in those use cases — it is purpose-built for the use case where permanence, composability, and verifiability of every message matter.
+      </p>
+    </section>
+
+    <!-- 08 Ecosystem Integrations -->
+    <hr class="section-divider" />
+    <section class="doc-section" id="integrations">
+      <span class="section-num">08 — Ecosystem Integrations</span>
+      <h2>Ecosystem Integrations</h2>
+      <p>
+        QFLink is designed not as an isolated application but as the social infrastructure layer that every dApp on the QuantumFusion network plugs into. Each integration creates a bidirectional value flow: the partner dApp gains a native community channel, and QFLink gains automatic user acquisition and pod activity. The following integrations reflect the seven dApps currently in active development by Dapp Lab, all building on QuantumFusion.
+      </p>
+
+      <h3>QFPad — Launch a Token, Launch a Community</h3>
+      <p>
+        QFPad is a token launchpad that lets creators deploy tokens on QuantumFusion in minutes. The QFLink integration adds a "Create Token-Gated Pod" option to the launch flow. When a creator launches a token, they can simultaneously create a QFLink pod where access is automatically gated by ownership of that token. The token contract address is passed directly from QFPad to the pod creation call, configuring the access rule without any manual setup. The creator pays a single bundled fee covering both the token deployment and the pod creation, with QFPad receiving a service fee for the integration. This means every token launched on QFPad can have a verified, token-gated community from the moment it goes live — no Telegram group to set up, no Collab.Land bot to configure, no manual holder verification.
+      </p>
+
+      <h3>QFClash — Challenge from Chat</h3>
+      <p>
+        QFClash is a Gwent-style PvP card game with season passes and on-chain ELO ratings. The QFLink integration enables players to initiate game sessions directly from a DM or pod conversation. A user sends a challenge from within the chat interface, the opponent accepts, and the QFClash match launches — all without leaving the QFLink context. Match results can post back into the conversation or pod as activity messages ("Alice defeated Bob — ELO: 1247 → 1263"), turning pod chat into a live competitive feed. Season pass holders can have their own gated pod for strategy discussion and tournament coordination, with access verified by season pass ownership on-chain.
+      </p>
+
+      <h3>QFStream — Creator Communities with Dual Revenue</h3>
+      <p>
+        QFStream is a decentralized video platform where every like equals a QF micropayment to the creator. QFLink provides the community layer that QFStream creators need to engage their audience beyond passive viewership. Creators link their QFStream channel to a QFLink pod — free or paid — where subscribers discuss content, receive new video notifications posted automatically into the pod, and interact directly with the creator. Creators who set a paid pod entry fee earn from two complementary streams: micropayments from QFStream likes and membership fees from their QFLink pod. The two products reinforce each other: QFStream drives awareness, QFLink drives retention and recurring revenue.
+      </p>
+
+      <h3>52F — Holder Communities with Built-In Retention</h3>
+      <p>
+        52F is a math-based lottery token where buy tax equals Euler's number and sell tax equals pi, featuring Fibonacci prize slots. A 52F community pod on QFLink, gated by a minimum token balance, gives holders a dedicated space to discuss strategies, track draws, and coordinate around prize events. The token-gating mechanic creates a natural retention incentive: holders who sell below the required balance lose access to the community pod, adding a social cost to selling that complements the mathematical tax structure.
+      </p>
+
+      <h3>quantumNotary — Notarize from Chat</h3>
+      <p>
+        quantumNotary provides blockchain receipts for any file. Within QFLink pods, particularly those used for DAO operations, business coordination, or legal discussions, users can notarize shared documents directly from the chat interface. A file is shared in the conversation, the notarization action is triggered, the quantumNotary contract records the hash on-chain, and the receipt posts back into the chat. This transforms QFLink from a communication tool into a workspace where agreements are both discussed and recorded in the same on-chain context.
+      </p>
+
+      <h3>Dappstore — Discovery to Engagement</h3>
+      <p>
+        Dappstore is an on-chain dApp discovery and distribution layer for the QuantumFusion network. Every dApp listed on Dappstore — including all Dapp Lab products — can surface a "Join Community" button linking to its QFLink pod. New users browsing Dappstore discover a project, read its description, and join its community in one action. Dappstore serves as the top-of-funnel discovery engine for the entire ecosystem, and QFLink converts that discovery into sustained engagement. As more dApps launch on QuantumFusion and list on Dappstore, the QFLink Explore page grows automatically.
+      </p>
+
+      <h3>NucleuX — From Trading to Community</h3>
+      <p>
+        NucleuX is the decentralized exchange being built for QuantumFusion. The integration surfaces a "Join Community" button on each token's trading page when that token has an associated QFLink pod. Traders move from price chart to community discussion in one click, without leaving the QF ecosystem for Telegram or Discord. For tokens launched on QFPad with a QFLink pod already configured, the entire user journey — launch on QFPad, community on QFLink, trade on NucleuX — is seamless and fully on-chain.
+      </p>
+
+      <div class="highlight-box">
+        <span class="highlight-box-title">Common Architectural Pattern</span>
+        <p>
+          These integrations share a common architectural pattern: each partner dApp calls the QFLink pods contract to either create a pod (QFPad), read pod membership (QFClash, QFStream, 52F), post activity messages (QFClash, QFStream, quantumNotary), or link to a pod's join flow (Dappstore, NucleuX). Because QFLink's pods contract exposes public functions for all of these operations, any future dApp on QuantumFusion can integrate with the same pattern — no partnership agreement, API key, or permission required. The community layer is composable by design.
+        </p>
+      </div>
+    </section>
+    <hr class="divider-line" />
+
+    <!-- 09 Tokenomics -->
+    <hr class="section-divider" />
+    <section class="doc-section" id="section-09">
+      <span class="section-num">09 — Tokenomics</span>
+      <h2>Tokenomics &amp; Fee Model</h2>
+      <p>
+        QFLink does not have a native token. It runs entirely on QF Network's native token for gas and protocol fees. This is an intentional design choice: introducing a QFLink-specific token would add speculative complexity and create misaligned incentives between token price and protocol usage.
+      </p>
+
+      <h3>Protocol Fee Summary</h3>
+
+      <div class="stat-row">
+        <div class="stat-item">
+          <span class="stat-value">0.1 QF</span>
+          <span class="stat-label">Pod Creation Fee</span>
+        </div>
+        <div class="stat-item">
+          <span class="stat-value">~0.001 QF</span>
+          <span class="stat-label">Per Message (gas)</span>
+        </div>
+        <div class="stat-item">
+          <span class="stat-value">500 QF</span>
+          <span class="stat-label">Max Paid Pod Entry</span>
+        </div>
+        <div class="stat-item">
+          <span class="stat-value">0 QF</span>
+          <span class="stat-label">Read Operations</span>
+        </div>
+      </div>
+
+      <h3>Pod Creation Fee</h3>
+      <p>
+        Creating a Pod requires a one-time fee of <strong>0.1 QF</strong>. This fee serves as an anti-spam mechanism — it makes it economically unattractive to create thousands of junk Pods. The fee is sent to a protocol treasury address controlled by the QFLink development multisig. Future governance upgrades may route treasury funds to a community-controlled DAO.
+      </p>
+
+      <h3>Pod Access Types</h3>
+      <p>
+        QFLink supports four distinct Pod access configurations. Creators choose freely between them at Pod creation time — any combination of a token gate threshold and an entry fee is valid:
+      </p>
+
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>Access Type</th>
+              <th>Token Gate</th>
+              <th>Entry Fee</th>
+              <th>Example Use Case</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>Open</td>
+              <td><span class="cross">None</span></td>
+              <td><span class="cross">None</span></td>
+              <td>Public community Pod, no requirements</td>
+            </tr>
+            <tr>
+              <td>Token-Gated</td>
+              <td><span class="check">Threshold &gt; 0</span></td>
+              <td><span class="cross">None</span></td>
+              <td>Holders-only Pod (e.g. 10,000+ QF balance)</td>
+            </tr>
+            <tr>
+              <td>Paid</td>
+              <td><span class="cross">None</span></td>
+              <td><span class="check">Fee &gt; 0</span></td>
+              <td>Creator charges entry; any wallet can join</td>
+            </tr>
+            <tr>
+              <td>Token-Gated + Paid</td>
+              <td><span class="check">Threshold &gt; 0</span></td>
+              <td><span class="check">Fee &gt; 0</span></td>
+              <td>Whale holders pay additional alpha-access fee</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <h3>Paid Pod Entry Fees</h3>
+      <p>
+        Paid Pods are live on QFLink today. A Pod creator sets a one-time entry fee in QF tokens when creating the Pod. The fee is anchored to a fiat reference: the <strong>maximum recommended entry fee is 500 QF, anchored to approximately $15 USD</strong> at launch pricing. Creators may set any fee above the minimum of 1 QF — the $15 anchor applies to the 500 QF recommended ceiling, not a hard cap.
+      </p>
+      <p>
+        When a user joins a Paid Pod, the <code>join_pod(pod_id)</code> contract call is payable. The contract enforces the exact fee amount, then immediately and atomically splits the payment on-chain:
+      </p>
+
+      <div class="stat-row">
+        <div class="stat-item">
+          <span class="stat-value">95%</span>
+          <span class="stat-label">To Pod Creator's Payout Wallet</span>
+        </div>
+        <div class="stat-item">
+          <span class="stat-value">5%</span>
+          <span class="stat-label">To Platform Treasury</span>
+        </div>
+      </div>
+
+      <p>
+        The creator specifies a <em>payout wallet</em> at Pod creation time — it defaults to the creator's connected wallet but can be any valid QF address. The platform treasury address is set in the contract constructor and updateable only by the protocol admin via <code>set_treasury(new_address)</code>.
+      </p>
+
+      <div class="highlight-box">
+        <span class="highlight-box-title">Payment Rules</span>
+        <p>
+          All entry fees are in QF tokens only. Payment is one-time (lifetime access — no subscriptions in the current version). Payments are <strong>non-refundable</strong>, even if the member is later banned. Users pay before accessing Pod content — there is no preview. The revenue split is enforced at the smart-contract level and cannot be overridden by the Pod creator.
+        </p>
+      </div>
+
+      <h3>Message Gas Costs</h3>
+      <p>
+        Sending a message is a contract call on QF Network and incurs standard gas fees. The cost depends on the length of the message content (longer messages consume more storage and therefore more gas). The QFLink UI calculates and displays the estimated cost before submission. Current average cost per message is approximately <strong>0.001 QF</strong> at current network gas prices.
+      </p>
+
+      <h3>Storage Deposits</h3>
+      <p>
+        QF Network requires storage deposits for contract state. Every message written to contract storage locks a small amount of QF as a storage deposit. This deposit is permanently locked — it is not returned if the message could theoretically be deleted (which it cannot, by design). Users should be aware that sending many messages will lock small amounts of QF permanently.
+      </p>
+
+      <blockquote>
+        <p>The economic cost of storing data forever on-chain is by design a feature, not a bug. It aligns user incentives: you pay a small permanent cost to store a permanent record. Free ephemeral messages belong on centralised servers. Permanent on-chain messages have a cost that reflects their permanence.</p>
+      </blockquote>
+    </section>
+
+    <!-- 10 Roadmap -->
+    <hr class="section-divider" />
+    <section class="doc-section" id="section-10">
+      <span class="section-num">10 — Roadmap</span>
+      <h2>Roadmap</h2>
+      <p>
+        QFLink is developed iteratively. Each phase ships a working product increment before work on the next phase begins. The following roadmap reflects the current plan as of the date of this document.
+      </p>
+
+      <div class="timeline">
+
+        <div class="timeline-item completed">
+          <div class="timeline-marker"></div>
+          <span class="timeline-phase">Phase 1 — Completed</span>
+          <div class="timeline-title">Core Protocol &amp; MVP</div>
+          <div class="timeline-desc">
+            Deployment of <code>qflink-pods</code> and <code>qflink-messages</code> contracts on QF Network testnet. Basic UI for Pod creation, messaging, and DMs. Wallet connection via Polkadot.js extension.
+          </div>
+        </div>
+
+        <div class="timeline-item completed">
+          <div class="timeline-marker"></div>
+          <span class="timeline-phase">Phase 2 — Completed</span>
+          <div class="timeline-title">Token Gating &amp; Production Launch</div>
+          <div class="timeline-desc">
+            Token-gated Pod support. End-to-end encryption for DMs. Production deployment on QF Network mainnet. Landing page and public launch.
+          </div>
+        </div>
+
+        <div class="timeline-item">
+          <div class="timeline-marker"></div>
+          <span class="timeline-phase">Phase 3 — In Progress</span>
+          <div class="timeline-title">Moderation, Roles &amp; Pod Discovery</div>
+          <div class="timeline-desc">
+            Full Pod moderation system (ban, mute, admin roles). Pod discovery index contract. Search and browse Pods. Light/dark mode UI polish and mobile responsiveness.
+          </div>
+        </div>
+
+        <div class="timeline-item">
+          <div class="timeline-marker"></div>
+          <span class="timeline-phase">Phase 4 — Planned Q3 2026</span>
+          <div class="timeline-title">Paid Pods &amp; Creator Economy</div>
+          <div class="timeline-desc">
+            Paid membership Pods with on-chain revenue routing to creators. Tipping and reactions as on-chain micro-transactions. Pod analytics dashboard.
+          </div>
+        </div>
+
+        <div class="timeline-item">
+          <div class="timeline-marker"></div>
+          <span class="timeline-phase">Phase 5 — Planned Q4 2026</span>
+          <div class="timeline-title">Protocol SDK &amp; Composability</div>
+          <div class="timeline-desc">
+            Public TypeScript SDK for QFLink contract interactions. Developer documentation and integration guides. First third-party integrations (DAO tooling, NFT launchpads).
+          </div>
+        </div>
+
+        <div class="timeline-item">
+          <div class="timeline-marker"></div>
+          <span class="timeline-phase">Phase 6 — Planned 2027</span>
+          <div class="timeline-title">Governance &amp; Community Ownership</div>
+          <div class="timeline-desc">
+            On-chain governance for protocol parameters. Community treasury DAO. Potential QFLink-native token if ecosystem growth warrants it (community vote required).
+          </div>
+        </div>
+
+      </div>
+    </section>
+
+    <!-- 11 Security -->
+    <hr class="section-divider" />
+    <section class="doc-section" id="section-11">
+      <span class="section-num">11 — Security</span>
+      <h2>Security &amp; Audits</h2>
+      <p>
+        QFLink's security model is built on the security of QF Network itself and the correctness of the two smart contracts. The following security properties are in scope:
+      </p>
+
+      <h3>Contract Security</h3>
+      <ul>
+        <li><strong>Access control.</strong> All privileged operations (creating a Pod, banning a member, updating Pod config) enforce on-chain ownership checks. There is no admin backdoor that bypasses contract logic.</li>
+        <li><strong>Reentrancy.</strong> The contracts do not make external calls during state-modifying operations. Token gate checks are read-only calls and are performed before state changes, following the checks-effects-interactions pattern.</li>
+        <li><strong>Integer overflow.</strong> Message counters use Rust's checked arithmetic. Overflow panics rather than wrapping silently.</li>
+        <li><strong>Storage exhaustion.</strong> Storage deposits enforced by QF Network prevent unbounded storage growth from malicious actors.</li>
+      </ul>
+
+      <h3>Encryption Security</h3>
+      <ul>
+        <li>X25519 ECDH is a well-studied, widely deployed key exchange scheme.</li>
+        <li>AES-256-GCM provides authenticated encryption — ciphertext tampering is detectable by the recipient.</li>
+        <li>The current scheme does not provide forward secrecy. A compromised wallet key exposes all past DMs. This is a known limitation documented in Section 06.</li>
+      </ul>
+
+      <h3>Audit Status</h3>
+      <p>
+        The v1.0 contracts have undergone an internal security review. An independent third-party audit is scheduled for Q2 2026 ahead of the Phase 3 deployment. Audit reports will be published publicly in the QFLink repository.
+      </p>
+
+      <div class="highlight-box">
+        <span class="highlight-box-title">Responsible Disclosure</span>
+        <p>Security vulnerabilities should be reported privately to the QFLink team before public disclosure. A responsible disclosure policy and contact details are available in the project repository. There is currently no bug bounty programme, but one is planned for launch alongside the Phase 3 release.</p>
+      </div>
+    </section>
+
+    <!-- 12 Team -->
+    <hr class="section-divider" />
+    <section class="doc-section" id="section-12">
+      <span class="section-num">12 — Team</span>
+      <h2>Team &amp; Contributors</h2>
+      <p>
+        QFLink is built by a small, focused team of engineers with backgrounds in distributed systems, smart contract development, and product design. The project is open-source, and contributions from the broader QuantumFusion ecosystem are actively welcomed.
+      </p>
+      <p>
+        The core team operates pseudonymously consistent with the ethos of the broader Web3 community. Public contributions are tracked on-chain and in the open-source repository.
+      </p>
+
+      <h3>Contribution</h3>
+      <p>
+        QFLink's contracts and frontend are open-source. Developers who want to contribute should start with the issues labelled <strong>good-first-issue</strong> in the repository. The project follows a standard fork-and-PR workflow. All significant changes require discussion in the public QFLink Pod on QFLink itself — naturally.
+      </p>
+    </section>
+
+    <!-- 13 Conclusion -->
+    <hr class="section-divider" />
+    <section class="doc-section" id="section-13">
+      <span class="section-num">13 — Conclusion</span>
+      <h2>Conclusion</h2>
+      <p>
+        QFLink represents a first-principles approach to the question: <em>what would messaging and community infrastructure look like if it were designed natively for a blockchain world?</em>
+      </p>
+      <p>
+        The answer is not to bolt a blockchain onto an existing messaging app. It is to start from the chain and build upward — using smart contracts as the primitive, on-chain storage as the persistence layer, and wallet addresses as the identity system. The result is a platform that is architecturally incapable of censoring messages, losing data, or being taken away from its users.
+      </p>
+      <p>
+        The tradeoffs are real: higher latency per write, cost per message, no free ephemeral communication. But for the communities that need permanence, verifiability, and composability — DAO communities, NFT projects, DeFi protocols, on-chain organisations of every kind — these tradeoffs are not just acceptable. They are desirable.
+      </p>
+      <p>
+        QFLink is live on QuantumFusion today. Every message sent through it is a small act of infrastructure sovereignty. We believe that over time, the communities that choose to communicate on-chain will be the ones that outlast the servers of their centralised counterparts.
+      </p>
+
+      <blockquote>
+        <p>Every message. On-chain. Forever.</p>
+      </blockquote>
+    </section>
+
+    <!-- Footer -->
+    <footer class="doc-footer">
+      <div class="footer-inner">
+        <svg class="footer-logo" width="1596" height="471" viewBox="0 0 1596 471" fill="none" xmlns="http://www.w3.org/2000/svg" aria-label="QFLink">
+          <path d="M327.832 111.361H142.286C125.207 111.361 111.362 125.207 111.362 142.286V327.832C111.362 344.911 125.207 358.756 142.286 358.756H327.832C344.911 358.756 358.757 344.911 358.757 327.832V142.286C358.757 125.207 344.911 111.361 327.832 111.361Z" stroke="#0991B2" stroke-width="48"/>
+          <path d="M358.757 111.467L446.224 24" stroke="#0991B2" stroke-width="48" stroke-linecap="round"/>
+          <path d="M24.0005 446.224L111.468 358.756" stroke="#0991B2" stroke-width="48" stroke-linecap="round"/>
+          <path d="M643.818 306.218H675.018V364.538H643.818V306.218ZM659.418 319.658C638.778 319.658 621.098 316.458 606.378 310.058C591.818 303.498 580.618 294.218 572.778 282.218C565.098 270.218 561.258 255.818 561.258 239.018C561.258 222.058 565.098 207.578 572.778 195.578C580.618 183.578 591.818 174.378 606.378 167.978C621.098 161.418 638.778 158.138 659.418 158.138C680.218 158.138 697.898 161.418 712.458 167.978C727.018 174.378 738.138 183.578 745.818 195.578C753.658 207.578 757.578 222.058 757.578 239.018C757.578 255.818 753.658 270.218 745.818 282.218C738.138 294.218 727.018 303.498 712.458 310.058C697.898 316.458 680.218 319.658 659.418 319.658ZM659.418 292.058C672.218 292.058 683.418 290.138 693.018 286.298C702.778 282.458 710.378 276.618 715.818 268.778C721.418 260.938 724.218 251.018 724.218 239.018C724.218 227.018 721.418 217.098 715.818 209.258C710.378 201.418 702.778 195.578 693.018 191.738C683.418 187.738 672.218 185.738 659.418 185.738C646.778 185.738 635.498 187.738 625.578 191.738C615.658 195.578 607.898 201.418 602.298 209.258C596.698 217.098 593.898 227.018 593.898 239.018C593.898 251.018 596.698 260.938 602.298 268.778C607.898 276.618 615.658 282.458 625.578 286.298C635.498 290.138 646.778 292.058 659.418 292.058ZM959.377 161.258V187.898H839.857V229.658H807.937V161.258H959.377Z" fill="#0991B2"/>
+          <path d="M1036.95 161.258V289.898H1140.15V316.538H1005.03V161.258H1036.95ZM1220.67 144.938V172.298H1184.43V144.938H1220.67ZM1186.83 197.258H1218.03V316.538H1186.83V197.258ZM1268.33 197.258H1299.53V316.538H1268.33V197.258ZM1354.97 194.618C1362.33 194.618 1369.13 195.578 1375.37 197.498C1381.61 199.418 1387.05 202.378 1391.69 206.378C1396.33 210.378 1399.93 215.498 1402.49 221.738C1405.05 227.818 1406.33 235.098 1406.33 243.578V316.538H1375.13V249.098C1375.13 239.018 1372.65 231.658 1367.69 227.018C1362.89 222.218 1354.97 219.818 1343.93 219.818C1335.61 219.818 1328.09 221.418 1321.37 224.618C1314.65 227.818 1309.21 231.898 1305.05 236.858C1300.89 241.658 1298.49 246.698 1297.85 251.978L1297.61 239.738C1298.41 234.138 1300.25 228.698 1303.13 223.418C1306.01 218.138 1309.85 213.338 1314.65 209.018C1319.61 204.538 1325.45 201.018 1332.17 198.458C1338.89 195.898 1346.49 194.618 1354.97 194.618ZM1456.1 149.258H1487.3V316.538H1456.1V149.258ZM1587.86 197.258L1516.82 259.898L1517.54 240.698L1593.38 316.538H1553.78L1488.02 249.578L1545.38 197.258H1587.86Z" fill="white"/>
+        </svg>
+        <div class="footer-links">
+          <a href="https://qflink.app">qflink.app</a>
+          <a href="https://github.com/qflink">GitHub</a>
+          <a href="https://quantumfusion.network">QuantumFusion Network</a>
+        </div>
+      </div>
+      <p class="footer-disclaimer">
+        This document is provided for informational purposes only. It does not constitute financial advice, investment advice, or a solicitation to purchase any asset. QFLink is experimental software deployed on a live blockchain network. Users should exercise caution and understand the risks of interacting with smart contracts and on-chain storage before using QFLink. The QFLink team makes no warranties, express or implied, regarding the software or this document. Protocol parameters, fee structures, and roadmap items are subject to change. &copy; 2026 QFLink. All rights reserved.
+      </p>
+    </footer>
+
+  </main>
+
+</body>
+</html>

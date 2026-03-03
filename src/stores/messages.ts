@@ -61,7 +61,6 @@ export const useMessagesStore = create<MessagesState>((set, get) => ({
   fetchConversations: async () => {
     const { evmAddress } = useWalletStore.getState()
     if (!evmAddress) {
-      console.warn('No EVM address available')
       return
     }
 
@@ -107,7 +106,6 @@ export const useMessagesStore = create<MessagesState>((set, get) => ({
   fetchMessages: async (otherAddress: string) => {
     const { evmAddress } = useWalletStore.getState()
     if (!evmAddress) {
-      console.warn('No EVM address available')
       return
     }
 

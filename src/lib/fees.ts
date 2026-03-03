@@ -1,8 +1,9 @@
 import type { PodTier } from '@/types'
 import { POD_TIER_INFO } from '@/types'
 
-export const TREASURY_PCT = 25
-export const BURN_PCT = 75
+// Updated fee split: 95% treasury, 5% burn for Pro tier
+export const TREASURY_PCT = 95
+export const BURN_PCT = 5
 
 export interface FeeSplit {
   total: bigint
@@ -14,7 +15,7 @@ export interface FeeSplit {
  * Calculate the fee split for a given pod tier.
  */
 export function calculateFeeSplit(tier: PodTier): FeeSplit {
-  const total = POD_TIER_INFO[tier].fee
+  const total = POD_TIER_INFO[tier].creationFee
   const treasury = total * BigInt(TREASURY_PCT) / BigInt(100)
   const burned = total * BigInt(BURN_PCT) / BigInt(100)
   return { total, treasury, burned }
@@ -24,7 +25,7 @@ export function calculateFeeSplit(tier: PodTier): FeeSplit {
  * Check if a user can afford to create a pod of a given tier.
  */
 export function canAffordTier(balance: bigint, tier: PodTier): boolean {
-  return balance >= POD_TIER_INFO[tier].fee
+  return balance >= POD_TIER_INFO[tier].creationFee
 }
 
 /**

@@ -11,10 +11,10 @@ interface PodGridProps {
   onPodClick: (podId: number) => void
 }
 
-const TIER_ORDER: Record<string, number> = { elite: 3, premium: 2, standard: 1 }
+const TIER_ORDER: Record<string, number> = { pro: 2, free: 1 }
 
 function getTierRank(pod: Pod): number {
-  if (pod.isDefault) return 4 // default pods first
+  if (pod.isDefault) return 3 // default pods first
   return TIER_ORDER[(pod as CustomPod).tier] || 0
 }
 
@@ -26,8 +26,8 @@ function sortByTierThenMembers(a: Pod, b: Pod): number {
 
 export const PodGrid: React.FC<PodGridProps> = ({ pods, myPodIds, isLoading, onJoin, onPodClick }) => {
   const sorted = useMemo(() => [...pods].sort(sortByTierThenMembers), [pods])
-  const featuredPods = useMemo(() => sorted.filter((p) => p.isDefault || (!p.isDefault && (p as CustomPod).tier === 'elite')), [sorted])
-  const otherPods = useMemo(() => sorted.filter((p) => !p.isDefault && (p as CustomPod).tier !== 'elite'), [sorted])
+  const featuredPods = useMemo(() => sorted.filter((p) => p.isDefault || (!p.isDefault && (p as CustomPod).tier === 'pro')), [sorted])
+  const otherPods = useMemo(() => sorted.filter((p) => !p.isDefault && (p as CustomPod).tier !== 'pro'), [sorted])
 
   if (isLoading) {
     return (

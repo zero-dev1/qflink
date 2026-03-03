@@ -49,7 +49,7 @@ export const SelectAccountModal: React.FC<SelectAccountModalProps> = ({
         <button
           onClick={handleConnect}
           disabled={!selected || isConnecting}
-          className="flex items-center gap-2 rounded-md bg-cyan-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-cyan-700 disabled:opacity-50 disabled:cursor-not-allowed"
+          className="flex items-center gap-2 bg-cyan-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-cyan-700 disabled:opacity-50 disabled:cursor-not-allowed"
         >
           {isConnecting && <Spinner size="sm" />}
           Connect
@@ -72,7 +72,7 @@ export const SelectAccountModal: React.FC<SelectAccountModalProps> = ({
               <button
                 key={account.address}
                 onClick={() => setSelected(account.address)}
-                className={`flex w-full items-center gap-3 rounded-lg border p-3 text-left transition-all ${
+                className={`flex w-full items-center gap-3 border p-3 text-left transition-all ${
                   isSelected
                     ? 'border-cyan-600 bg-cyan-600/10'
                     : 'border-qx-border-subtle hover:border-qx-border-prominent hover:bg-qx-elevated'

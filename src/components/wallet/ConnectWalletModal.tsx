@@ -124,7 +124,7 @@ export const ConnectWalletModal: React.FC = () => {
             <button
               onClick={handleMetaMaskConnect}
               disabled={loadingWallet !== null}
-              className="flex w-full items-center gap-3 rounded-lg border border-qx-border-subtle p-4 text-left transition-colors hover:bg-qx-elevated hover:border-qx-border-prominent disabled:opacity-50"
+              className="flex w-full items-center gap-3 border border-qx-border-subtle p-4 text-left transition-colors hover:bg-qx-elevated hover:border-qx-border-prominent disabled:opacity-50"
             >
               <span className="text-2xl">🦊</span>
               <span className="flex-1 text-sm font-medium text-qx-text-primary">MetaMask</span>
@@ -157,7 +157,7 @@ export const ConnectWalletModal: React.FC = () => {
                   key={wallet.id}
                   onClick={() => handleExtensionConnect(wallet)}
                   disabled={loadingWallet !== null}
-                  className="flex w-full items-center gap-3 rounded-lg border border-qx-border-subtle p-4 text-left transition-colors hover:bg-qx-elevated hover:border-qx-border-prominent disabled:opacity-50"
+                  className="flex w-full items-center gap-3 border border-qx-border-subtle p-4 text-left transition-colors hover:bg-qx-elevated hover:border-qx-border-prominent disabled:opacity-50"
                 >
                   <span className="text-2xl">{wallet.icon}</span>
                   <span className="flex-1 text-sm font-medium text-qx-text-primary">{wallet.name}</span>

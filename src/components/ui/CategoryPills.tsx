@@ -14,7 +14,7 @@ export const CategoryPills: React.FC<CategoryPillsProps> = ({ categories, select
       <button
         onClick={() => onSelect(null)}
         className={cn(
-          'rounded-full px-4 py-1.5 text-sm font-medium transition-colors border',
+          'px-4 py-1.5 text-sm font-medium transition-colors border',
           selected === null
             ? 'bg-cyan-600 text-white border-cyan-600'
             : 'bg-transparent text-gray-600 dark:text-gray-400 border border-gray-200 dark:border-gray-700 hover:border-gray-400 dark:hover:border-gray-500'
@@ -27,7 +27,7 @@ export const CategoryPills: React.FC<CategoryPillsProps> = ({ categories, select
           key={cat}
           onClick={() => onSelect(cat)}
           className={cn(
-            'rounded-full px-4 py-1.5 text-sm font-medium transition-colors border capitalize',
+            'px-4 py-1.5 text-sm font-medium transition-colors border capitalize',
             selected === cat
               ? 'bg-cyan-600 text-white border-cyan-600'
               : 'bg-transparent text-gray-600 dark:text-gray-400 border border-gray-200 dark:border-gray-700 hover:border-gray-400 dark:hover:border-gray-500'

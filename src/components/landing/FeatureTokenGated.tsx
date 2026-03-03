@@ -6,20 +6,21 @@ interface PodMockupProps {
   threshold: string
   subtitle: string
   isQualified: boolean
+  isComingSoon?: boolean
 }
 
-const PodMockup: React.FC<PodMockupProps> = ({ name, threshold, subtitle, isQualified }) => {
+const PodMockup: React.FC<PodMockupProps> = ({ name, threshold, subtitle, isQualified, isComingSoon }) => {
   return (
-    <div className="bg-white dark:bg-[#0D0D0D] border border-gray-200 dark:border-gray-700 p-4 rounded-none">
+    <div className={`bg-white dark:bg-[#0D0D0D] border border-gray-200 dark:border-gray-700 p-4 rounded-none ${isComingSoon ? 'opacity-70' : ''}`}>
       <div className="flex items-center justify-between mb-2">
         <span className="text-gray-900 dark:text-white font-semibold">{name}</span>
-        <span className="text-cyan-600 font-mono text-sm">{threshold}</span>
+        <span className={`font-mono text-sm ${isComingSoon ? 'text-gray-500' : 'text-cyan-600'}`}>{threshold}</span>
       </div>
       <p className="text-gray-500 dark:text-gray-500 text-sm mb-2">{subtitle}</p>
       <div className="flex items-center gap-2">
-        <div className={`w-2 h-2 ${isQualified ? 'bg-cyan-600' : 'bg-gray-400 dark:bg-gray-600'}`} />
-        <span className={`text-xs ${isQualified ? 'text-cyan-600' : 'text-gray-400 dark:text-gray-500'}`}>
-          {isQualified ? 'Qualified' : `${threshold.replace('+', '')} Required`}
+        <div className={`w-2 h-2 ${isQualified ? 'bg-cyan-600' : isComingSoon ? 'bg-gray-400 dark:bg-gray-600' : 'bg-gray-400 dark:bg-gray-600'}`} />
+        <span className={`text-xs ${isQualified ? 'text-cyan-600' : isComingSoon ? 'text-gray-500 uppercase tracking-wider' : 'text-gray-400 dark:text-gray-500'}`}>
+          {isQualified ? 'Qualified' : isComingSoon ? 'Coming Soon' : `${threshold.replace('+', '')} Required`}
         </span>
       </div>
     </div>
@@ -30,9 +31,9 @@ export const FeatureTokenGated: React.FC = () => {
   const [ref, inView] = useInView<HTMLDivElement>(0.1)
 
   const pods = [
-    { name: "Chefs' Kitchen", threshold: '10+ QF', subtitle: 'For token holders', isQualified: true },
-    { name: 'Whale Lounge', threshold: '250K+ QF', subtitle: 'High-value holders', isQualified: false },
-    { name: "Kraken's Depth", threshold: '500K+ QF', subtitle: 'Elite access', isQualified: false }
+    { name: "Chefs' Kitchen", threshold: '10,000+ QF', subtitle: 'For token holders', isQualified: true },
+    { name: 'Whale Lounge', threshold: '1,000,000+ QF', subtitle: 'For serious holders', isQualified: false },
+    { name: 'Builders', threshold: 'Contract Deployer', subtitle: 'For developers building on QF Network', isQualified: false, isComingSoon: true }
   ]
 
   return (
@@ -51,7 +52,7 @@ export const FeatureTokenGated: React.FC = () => {
               Your balance is your badge.
             </h2>
             <p className="text-gray-600 dark:text-gray-400 text-lg mt-6 leading-relaxed">
-              Pods are group chats gated by QF token holdings. Hold 10+ QF and you're in the Chefs' Kitchen. 250K+ opens the Whale Lounge. 500K+ unlocks the Kraken's Depth. No applications, no approvals — your wallet balance speaks for itself.
+              Pods are group chats gated by QF token holdings. Hold 10,000+ QF and you're in the Chefs' Kitchen. 1,000,000+ opens the Whale Lounge. Deploy a contract to join the Builders. No applications, no approvals — your wallet balance speaks for itself.
             </p>
           </div>
 
@@ -68,6 +69,7 @@ export const FeatureTokenGated: React.FC = () => {
                 threshold={pod.threshold}
                 subtitle={pod.subtitle}
                 isQualified={pod.isQualified}
+                isComingSoon={pod.isComingSoon}
               />
             ))}
           </div>

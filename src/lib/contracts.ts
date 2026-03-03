@@ -9,10 +9,45 @@ export const CONTRACT_ADDRESSES = {
   messages: import.meta.env.VITE_MESSAGES_ADDRESS || '0x0000000000000000000000000000000000000000',
 }
 
-console.log('📋 Contract addresses:', CONTRACT_ADDRESSES)
-console.log('ENV registry:', import.meta.env.VITE_REGISTRY_ADDRESS)
-console.log('ENV pods:', import.meta.env.VITE_PODS_ADDRESS)
-console.log('ENV messages:', import.meta.env.VITE_MESSAGES_ADDRESS)
+// ============ QUERY CACHE ============
+const queryCache = new Map<string, { data: any; timestamp: number }>()
+const CACHE_TTL = 10000 // 10 seconds
+
+function getCached(key: string): any | null {
+  const entry = queryCache.get(key)
+  if (entry && Date.now() - entry.timestamp < CACHE_TTL) return entry.data
+  return null
+}
+
+function setCache(key: string, data: any): void {
+  queryCache.set(key, { data, timestamp: Date.now() })
+}
+
+export function invalidateCache(keyPrefix?: string): void {
+  if (!keyPrefix) {
+    queryCache.clear()
+    return
+  }
+  for (const key of queryCache.keys()) {
+    if (key.startsWith(keyPrefix)) queryCache.delete(key)
+  }
+}
+
+// BUG 4: Detect pods contract address change (e.g. after chain reset) and clear stale join data
+;(() => {
+  try {
+    const PODS_CONTRACT_KEY = 'qflink_pods_contract'
+    const JOINED_PODS_KEY = 'qflink_joined_pods'
+    const storedAddress = localStorage.getItem(PODS_CONTRACT_KEY)
+    const currentAddress = CONTRACT_ADDRESSES.pods
+    if (storedAddress !== currentAddress) {
+      localStorage.removeItem(JOINED_PODS_KEY)
+      localStorage.setItem(PODS_CONTRACT_KEY, currentAddress)
+    }
+  } catch (err) {
+    // Silently handle localStorage errors
+  }
+})()
 
 const DECIMALS_18 = BigInt(10) ** BigInt(18)
 const DEFAULT_GAS_LIMIT = { refTime: BigInt(10000000000), proofSize: BigInt(10000000000) }
@@ -105,14 +140,36 @@ export async function callContract(
         u8aToHex(callData)
       )
       .signAndSend(signer.address, { signer: signer.signer }, (result) => {
-        if (result.status.isInBlock || result.status.isFinalized) {
-          resolve(result)
-        }
         if (result.isError) {
           reject(new Error('Transaction failed'))
+          return
+        }
+        if (result.status.isInBlock || result.status.isFinalized) {
+          // Check for dispatch errors (e.g. 1010 Inability to pay)
+          const dispatchError = (result as any).dispatchError
+          if (dispatchError) {
+            let errMsg = 'Transaction failed'
+            try {
+              if (dispatchError.isModule) {
+                const decoded = api.registry.findMetaError(dispatchError.asModule)
+                errMsg = `${decoded.section}.${decoded.name}: ${decoded.docs.join(' ')}`
+              } else {
+                errMsg = dispatchError.toString()
+              }
+            } catch {
+              errMsg = dispatchError.toString()
+            }
+            reject(new Error(errMsg))
+            return
+          }
+          resolve(result)
         }
       })
-      .catch(reject)
+      .catch((err: any) => {
+        // Surface the raw error string (e.g. "1010: Invalid Transaction: Inability to pay...")
+        const msg = err?.message || String(err) || 'Transaction failed'
+        reject(new Error(msg))
+      })
   })
 }
 
@@ -166,12 +223,10 @@ async function sendContractTxEvm(
         const estimatedGas = BigInt(estimateData.result)
         const bufferedGas = (estimatedGas * BigInt(120)) / BigInt(100)
         gasLimit = '0x' + bufferedGas.toString(16)
-        console.log('⛽ [sendContractTxEvm] Gas estimated:', estimatedGas.toString(), 'buffered:', bufferedGas.toString())
       } else {
         throw new Error('Gas estimation failed: ' + (estimateData.error?.message || 'Unknown error'))
       }
     } catch (err) {
-      console.warn('⚠️ [sendContractTxEvm] Gas estimation failed, using default:', err)
       gasLimit = '0x5B8D80' // 6M gas fallback
     }
   } else {
@@ -190,8 +245,6 @@ async function sendContractTxEvm(
       gas: gasLimit,
     }],
   })
-
-  console.log('📤 [sendContractTxEvm] Transaction sent:', txHash)
 
   // Wait for transaction receipt by polling (reuse ethRpcUrl from gas estimation)
   if (!ethRpcUrl) {
@@ -216,7 +269,6 @@ async function sendContractTxEvm(
       })
       const data = await response.json()
       if (data.result) {
-        console.log('✅ [sendContractTxEvm] Transaction confirmed:', data.result)
         return { 
           txHash, 
           receipt: data.result,
@@ -224,12 +276,11 @@ async function sendContractTxEvm(
         }
       }
     } catch (err) {
-      console.warn('⚠️ [sendContractTxEvm] Error polling receipt:', err)
+      // Continue polling
     }
   }
 
   // Timeout - return anyway
-  console.warn('⚠️ [sendContractTxEvm] Transaction receipt timeout')
   return { txHash, status: { isFinalized: false } }
 }
 
@@ -291,13 +342,8 @@ export async function queryContract(
   callData: Uint8Array,
   caller: string = '5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY' // Alice's address - always mapped on dev node
 ): Promise<Uint8Array> {
-  console.log('🔍 [queryContract] Using api.call.reviveApi.call()')
-  console.log('   Contract:', contractAddress)
-  console.log('   Call data:', u8aToHex(callData))
-  
   // Verify reviveApi is available before proceeding
   if (!api.call || !(api.call as any).reviveApi || typeof (api.call as any).reviveApi.call !== 'function') {
-    console.warn('⚠️ [queryContract] reviveApi not available, re-awaiting API...')
     api = await getApi()
   }
   
@@ -310,30 +356,12 @@ export async function queryContract(
     const walletAddress = useWalletStore.getState().address
     if (walletAddress) {
       origin = walletAddress
-      console.log('   Using wallet Substrate address as origin:', origin)
-    } else {
-      console.log('   No wallet connected, using Alice address as origin:', origin)
     }
   } catch {
-    console.log('   Using default origin (Alice address):', origin)
+    // Use default origin
   }
   
   try {
-    // Log all parameters before making the call
-    console.log('🔍 [queryContract] Parameters:')
-    console.log('   origin:', origin?.toString())
-    console.log('   dest:', contractAddress)
-    console.log('   value:', '0')
-    console.log('   gasLimit:', null)
-    console.log('   storageDepositLimit:', null)
-    console.log('   inputData:', u8aToHex(callData))
-    try {
-      const { useWalletStore } = await import('@/stores/wallet')
-      console.log('   wallet connected:', useWalletStore?.getState()?.address)
-    } catch {
-      console.log('   wallet connected: N/A')
-    }
-    
     // Use the correct runtime API: api.call.reviveApi.call()
     // Parameters: (origin: AccountId32, dest: H160, value, gasLimit, storageDepositLimit, inputData)
     const response = await (api.call as any).reviveApi.call(
@@ -345,26 +373,14 @@ export async function queryContract(
       u8aToHex(callData)
     )
     
-    console.log('   Raw response:', response)
-    const responseJson = response.toJSON ? response.toJSON() : response
-    console.log('   Response JSON:', JSON.stringify(responseJson, null, 2))
-    
     // Extract the result from the response
     const result = (response as any).result
-    console.log('   result:', result)
-    console.log('   result keys:', Object.keys(result || {}))
-    console.log('   result.result:', (result as any)?.result)
     
     // Try Rust-style enum access (isOk/asOk)
     if (result && typeof result.isOk === 'boolean') {
-      console.log('   result.isOk:', result.isOk)
       if (result.isOk) {
         const execResult = result.asOk
-        console.log('   execResult:', execResult)
         const data = execResult.data
-        console.log('   data type:', typeof data)
-        console.log('   data instanceof Uint8Array:', data instanceof Uint8Array)
-        console.log('✅ [queryContract] Success - return data:', data)
         
         // Handle different data types
         if (data instanceof Uint8Array) {
@@ -372,10 +388,6 @@ export async function queryContract(
           if (data.length === 16) {
             const text = new TextDecoder().decode(data)
             if (text === 'Unknown function') {
-              const selector = u8aToHex(callData.slice(0, 4))
-              console.error('❌ Contract did not recognize selector:', selector)
-              console.error('   Call data:', u8aToHex(callData))
-              console.error('   This means the function signature is wrong or the contract is not deployed correctly')
               return new Uint8Array(0)
             }
           }
@@ -387,30 +399,15 @@ export async function queryContract(
         }
         return new Uint8Array(0)
       } else {
-        const err = result.asErr
-        console.error('❌ Contract call failed:', err)
-        console.error('❌ Error type:', err.type)
-        if (err.isModule) {
-          const mod = err.asModule
-          console.error('❌ Module error - index:', mod.index.toString(), 'error:', mod.error.toHex())
-          try {
-            const decoded = api.registry.findMetaError(mod)
-            console.error('❌ Decoded error:', decoded.section, decoded.name, decoded.docs.join(' '))
-          } catch (e) {
-            console.error('❌ Could not decode module error')
-          }
-        }
         return new Uint8Array(0)
       }
     }
     
     // Try JSON structure access
     const resultJson = result?.toJSON ? result.toJSON() : result
-    console.log('   result JSON:', JSON.stringify(resultJson, null, 2))
     
     if (resultJson?.Ok?.data) {
       const data = resultJson.Ok.data
-      console.log('✅ [queryContract] Success - data:', data)
       if (data instanceof Uint8Array) {
         return data
       } else if (typeof data === 'string') {
@@ -419,7 +416,6 @@ export async function queryContract(
     }
     if (resultJson?.data) {
       const data = resultJson.data
-      console.log('✅ [queryContract] Success - data:', data)
       if (data instanceof Uint8Array) {
         return data
       } else if (typeof data === 'string') {
@@ -427,11 +423,10 @@ export async function queryContract(
       }
     }
     
-    console.error('❌ Unexpected result format')
     return new Uint8Array(0)
     
   } catch (err) {
-    console.error('❌ [queryContract] Runtime API call failed:', err)
+    console.error('[queryContract] Runtime API call failed:', err)
     return new Uint8Array(0)
   }
 }
@@ -439,7 +434,17 @@ export async function queryContract(
 function decodeU64(data: Uint8Array, offset: number = 0): bigint {
   let result = BigInt(0)
   for (let i = 0; i < 8; i++) {
-    result |= BigInt(data[offset + i]) << BigInt(i * 8)
+    const byte = data[offset + i]
+    if (byte === undefined) break
+    result |= BigInt(byte) << BigInt(i * 8)
+  }
+  return result
+}
+
+function decodeU32(data: Uint8Array, offset: number = 0): number {
+  let result = 0
+  for (let i = 0; i < 4; i++) {
+    result |= data[offset + i] << (i * 8)
   }
   return result
 }
@@ -447,7 +452,9 @@ function decodeU64(data: Uint8Array, offset: number = 0): bigint {
 function decodeU256(data: Uint8Array, offset: number = 0): bigint {
   let result = BigInt(0)
   for (let i = 0; i < 32; i++) {
-    result |= BigInt(data[offset + i]) << BigInt(i * 8)
+    const byte = data[offset + i]
+    if (byte === undefined) break
+    result |= BigInt(byte) << BigInt(i * 8)
   }
   return result
 }
@@ -495,6 +502,10 @@ export interface Pod {
   createdAt: bigint
   isDefault: boolean
   podType: number
+  tier?: number  // 0=Free, 1=Pro
+  entryFee?: bigint
+  payoutWallet?: string
+  memberCount?: number
 }
 
 export interface PodMessage {
@@ -526,39 +537,34 @@ export async function registryRegister(
 }
 
 export async function registryGetProfile(api: ApiPromise, address: string): Promise<UserProfile | null> {
-  console.log('🔍 [registryGetProfile] Querying address:', address)
-  console.log('   Registry contract:', CONTRACT_ADDRESSES.registry)
-  
+  const cacheKey = `get_profile:${address.toLowerCase()}`
+  const cached = getCached(cacheKey)
+  if (cached !== null) return cached
+
   try {
     const sel = selector('get_profile(address)')
     const callData = concat(sel, encodeAddress(address))
-    console.log('   Call data:', u8aToHex(callData))
-    
     const result = await queryContract(api, CONTRACT_ADDRESSES.registry, callData)
-    console.log('   Raw result length:', result.length)
-    console.log('   Raw result hex:', u8aToHex(result))
     
     if (result.length === 0) {
-      console.log('⚠️ [registryGetProfile] Empty result - profile not found')
+      setCache(cacheKey, null)
       return null
     }
     
     let offset = 0
-    const { str: displayName, bytesRead: nameBytes } = decodeString(result, offset)
-    offset += nameBytes
+    const { str: displayName, bytesRead } = decodeString(result, offset)
+    offset += bytesRead
     const encryptionPubkey = result.slice(offset, offset + 32)
     offset += 32
     const registeredAt = decodeU64(result, offset)
     
-    console.log('✅ [registryGetProfile] Decoded profile:')
-    console.log('   displayName:', displayName)
-    console.log('   encryptionPubkey length:', encryptionPubkey.length)
-    console.log('   registeredAt:', registeredAt)
-    
-    return { displayName, encryptionPubkey, registeredAt }
+    const profile = { displayName, encryptionPubkey, registeredAt }
+    setCache(cacheKey, profile)
+    return profile
   } catch (err) {
     console.error('❌ [registryGetProfile] Error:', err)
-    return null
+    // Re-throw network/rate-limit errors so callers can distinguish from "no profile"
+    throw err
   }
 }
 
@@ -645,10 +651,19 @@ export async function podsCreatePod(
   signer: InjectedAccountWithMeta,
   name: string,
   description: string,
-  minBalance: bigint
+  minBalance: bigint,
+  entryFee: bigint = BigInt(0),
+  payoutWallet: string = '0x0000000000000000000000000000000000000000'
 ): Promise<any> {
-  const sel = selector('create_pod(bytes,bytes,uint256)')
-  const callData = concat(sel, encodeString(name), encodeString(description), encodeU256(minBalance))
+  const sel = selector('create_pod(bytes,bytes,uint256,uint256,address)')
+  const callData = concat(
+    sel, 
+    encodeString(name), 
+    encodeString(description), 
+    encodeU256(minBalance),
+    encodeU256(entryFee),
+    encodeAddress(payoutWallet)
+  )
   return sendContractTx(api, CONTRACT_ADDRESSES.pods, callData)
 }
 
@@ -658,40 +673,113 @@ export async function podsSendMessage(
   podId: number,
   contentHash: Uint8Array
 ): Promise<any> {
-  console.log(`📤 [podsSendMessage] Sending message to pod ${podId}`)
   const sel = selector('send_pod_message(uint64,bytes32)')
   const callData = concat(sel, encodeU64(podId), contentHash)
   const result = await sendContractTx(api, CONTRACT_ADDRESSES.pods, callData)
-  console.log('✅ [podsSendMessage] Transaction finalized')
   return result
 }
 
 export async function podsGetPod(api: ApiPromise, podId: number): Promise<Pod | null> {
+  const cacheKey = `get_pod:${podId}`
+  const cached = getCached(cacheKey)
+  if (cached !== null) return cached
+
   try {
     const sel = selector('get_pod(uint64)')
     const callData = concat(sel, encodeU64(podId))
     const result = await queryContract(api, CONTRACT_ADDRESSES.pods, callData)
     
+    if (!result || result.length === 0) {
+      return null
+    }
+
     let offset = 0
+    
+    if (result.length < 8) {
+      return null
+    }
+    
     const id = decodeU64(result, offset)
     offset += 8
+    
     const { str: name, bytesRead: nameBytes } = decodeString(result, offset)
+    if (nameBytes === 0) {
+      return null
+    }
     offset += nameBytes
+    
     const { str: description, bytesRead: descBytes } = decodeString(result, offset)
+    if (descBytes === 0) {
+      return null
+    }
     offset += descBytes
+    
+    if (offset + 32 > result.length) {
+      return null
+    }
     const minBalance = decodeU256(result, offset)
     offset += 32
+    
+    if (offset + 20 > result.length) {
+      console.error(`[podsGetPod] Result too short for creator at offset ${offset}`)
+      return null
+    }
     const creator = decodeAddress(result, offset)
     offset += 20
+    
+    if (offset + 8 > result.length) {
+      console.error(`[podsGetPod] Result too short for createdAt at offset ${offset}`)
+      return null
+    }
     const createdAt = decodeU64(result, offset)
     offset += 8
+    
+    if (offset + 2 > result.length) {
+      console.error(`[podsGetPod] Result too short for isDefault/podType at offset ${offset}`)
+      return null
+    }
     const isDefault = result[offset] === 1
     offset += 1
     const podType = result[offset]
     
-    return { id, name, description, minBalance, creator, createdAt, isDefault, podType }
-  } catch {
+    // Fetch additional data from separate storage
+    const [tier, entryFee, payoutWallet, memberCount] = await Promise.all([
+      podsGetPodTier(podId),
+      podsGetPodFee(podId),
+      podsGetPodPayoutWallet(api, podId),
+      podsGetPodMemberCount(podId)
+    ])
+    
+    const pod = { 
+      id, 
+      name, 
+      description, 
+      minBalance, 
+      creator, 
+      createdAt, 
+      isDefault, 
+      podType,
+      tier,
+      entryFee,
+      payoutWallet,
+      memberCount
+    }
+    setCache(cacheKey, pod)
+    return pod
+  } catch (err) {
+    console.error(`[podsGetPod] Error fetching pod ${podId}:`, err)
     return null
+  }
+}
+
+// Helper to get payout wallet for a pod
+async function podsGetPodPayoutWallet(api: ApiPromise, podId: number): Promise<string> {
+  try {
+    // We need to query storage directly since there's no getter function
+    // For now, return empty - can be added if contract exposes a getter
+    return ''
+  } catch {
+    return ''
   }
 }
 
@@ -702,29 +790,20 @@ export async function podsGetPodMessages(
   limit: number = 50
 ): Promise<PodMessage[]> {
   try {
-    console.log(`📨 [podsGetPodMessages] Fetching messages for pod ${podId}, start: ${start}, limit: ${limit}`)
     const sel = selector('get_pod_messages(uint64,uint64,uint64)')
     const callData = concat(sel, encodeU64(podId), encodeU64(start), encodeU64(limit))
-    console.log('   Call data:', u8aToHex(callData))
-    console.log('   Selector:', u8aToHex(sel))
-    console.log('   Pod ID bytes (u64):', u8aToHex(encodeU64(podId)))
-    console.log('   Start bytes (u64):', u8aToHex(encodeU64(start)))
-    console.log('   Limit bytes (u64):', u8aToHex(encodeU64(limit)))
     
     // Use connected wallet address if available, otherwise queryContract will use Alice's address
     const { useWalletStore } = await import('@/stores/wallet')
     const walletAddress = useWalletStore.getState().address
     
     const result = await queryContract(api, CONTRACT_ADDRESSES.pods, callData, walletAddress || undefined)
-    console.log('   Query result length:', result.length)
     
     if (result.length === 0) {
-      console.log('   Empty result - no messages')
       return []
     }
     
     const { length, bytesRead } = decodeCompactLength(result, 0)
-    console.log(`   Decoded ${length} messages`)
     const rawMessages: { sender: string; contentHash: Uint8Array; timestamp: number; originalIndex: number }[] = []
     let offset = bytesRead
     
@@ -741,25 +820,6 @@ export async function podsGetPodMessages(
     // Reassemble chunked messages for pod messages
     const reassembled = reassemblePodMessages(rawMessages, podId)
     
-    // DEBUG: Log raw data before returning
-    console.log('[podsGetPodMessages] raw message count:', rawMessages.length)
-    console.log('[podsGetPodMessages] raw messages:', rawMessages.map((m, i) => ({ 
-      index: i, 
-      sender: m.sender?.substring(0,10), 
-      contentLength: m.contentHash?.length, 
-      timestamp: m.timestamp,
-      contentHashHex: Array.from(m.contentHash).map(b => b.toString(16).padStart(2, '0')).slice(0, 8).join('') + '...'
-    })))
-    console.log('[podsGetPodMessages] reassembled count:', reassembled.length)
-    console.log('[podsGetPodMessages] reassembled:', reassembled.map((m, i) => ({
-      index: i,
-      id: m.id,
-      sender: m.sender?.substring(0, 10),
-      contentPreview: m.content?.substring(0, 30),
-      timestamp: m.timestamp
-    })))
-    
-    console.log(`✅ [podsGetPodMessages] Fetched ${reassembled.length} messages for pod ${podId}`)
     return reassembled
   } catch (err) {
     console.error(`❌ [podsGetPodMessages] Error fetching messages for pod ${podId}:`, err)
@@ -782,8 +842,6 @@ function reassemblePodMessages(
   rawMessages: PodRawMessage[],
   podId: number
 ): PodMessage[] {
-  console.log('[reassemblePod] raw messages count:', rawMessages.length)
-  
   const result: { msg: PodMessage; originalIndex: number }[] = []
   const chunkGroups = new Map<string, PodRawMessage[]>()
   
@@ -823,8 +881,6 @@ function reassemblePodMessages(
     group[chunkIndex] = msg
   }
   
-  console.log('[reassemblePod] chunk groups:', chunkGroups.size)
-  
   // Second pass: reassemble complete chunk groups
   for (const [groupKey, chunks] of chunkGroups) {
     const firstChunk = chunks.find(c => c !== undefined)
@@ -832,8 +888,6 @@ function reassemblePodMessages(
     
     const expectedChunks = firstChunk.contentHash[2] // byte 2: total chunks
     const receivedChunks = chunks.filter(Boolean).length
-    
-    console.log(`[reassemblePod] group ${groupKey}: ${receivedChunks}/${expectedChunks} chunks`)
     
     // Check if we have all chunks (indices 0 through totalChunks-1)
     const hasAllChunks = chunks.length === expectedChunks && chunks.every(c => c !== undefined)
@@ -862,8 +916,6 @@ function reassemblePodMessages(
       // Decode reassembled content as UTF-8
       const content = new TextDecoder().decode(trimmed).trim()
       
-      console.log(`[reassemblePod] successfully reassembled ${expectedChunks} chunks, content length: ${content.length}`)
-      
       result.push({
         msg: {
           id: `${podId}-${firstChunk.sender.slice(0, 8)}-${firstChunk.timestamp}-${result.length}`,
@@ -878,54 +930,296 @@ function reassemblePodMessages(
     } else {
       // Incomplete group - hide the chunks (don't display)
       // The next poll will pick up remaining chunks
-      console.log(`[reassemblePod] incomplete group ${groupKey} - hiding ${receivedChunks} chunks until complete`)
     }
   }
   
   // Sort by original index to maintain on-chain order
   result.sort((a, b) => a.originalIndex - b.originalIndex)
   
-  console.log('[reassemblePod] final result count:', result.length)
   return result.map(r => r.msg)
 }
 
 export async function podsGetPodCount(api: ApiPromise): Promise<number> {
+  const cacheKey = 'get_pod_count'
+  const cached = getCached(cacheKey)
+  if (cached !== null) return cached
+
   try {
-    console.log('📊 [podsGetPodCount] Preparing call...')
     const sel = selector('get_pod_count()')
-    const selHex = u8aToHex(sel)
-    console.log('   Selector bytes:', sel)
-    console.log('   Selector hex:', selHex)
-    console.log('   Call data (just selector, no params):', selHex)
-    console.log('   Contract address:', CONTRACT_ADDRESSES.pods)
     
     const result = await queryContract(api, CONTRACT_ADDRESSES.pods, sel)
-    console.log('   Query result:', result)
-    console.log('   Result length:', result.length)
-    console.log('   Result hex:', u8aToHex(result))
     
     if (result.length === 0) {
-      console.log('⚠️ [podsGetPodCount] Empty result - pod_count not set')
       return 0
     }
     
     const decoded = decodeU64(result, 0)
-    console.log('   Decoded count:', decoded)
-    return Number(decoded)
+    const count = Number(decoded)
+    setCache(cacheKey, count)
+    return count
   } catch (err) {
     console.error('❌ [podsGetPodCount] Error:', err)
     return 0
   }
 }
 
-export async function podsCheckAccess(api: ApiPromise, podId: number, address: string): Promise<boolean> {
+// Access check return codes:
+// 0 = granted
+// 1 = pod-banned
+// 2 = globally banned
+// 3 = insufficient balance
+// 4 = payment required
+// 5 = locked (threshold=0 and fee=0)
+// 6 = free pod full (50 members)
+export async function podsCheckAccess(api: ApiPromise, podId: number, address: string): Promise<{ granted: boolean; code: number }> {
+  const cacheKey = `check_pod_access:${podId}:${address.toLowerCase()}`
+  const cached = getCached(cacheKey)
+  if (cached !== null) return cached
+
   try {
     const sel = selector('check_pod_access(uint64,address)')
     const callData = concat(sel, encodeU64(podId), encodeAddress(address))
     const result = await queryContract(api, CONTRACT_ADDRESSES.pods, callData)
-    return result[0] === 1
+    const code = result[0] || 0
+    const value = { granted: code === 0, code }
+    setCache(cacheKey, value)
+    return value
+  } catch {
+    return { granted: false, code: 255 }
+  }
+}
+
+// ============ MODERATION FUNCTIONS ============
+
+export async function podsBanMember(podId: number, targetAddress: string): Promise<any> {
+  const api = await getApi()
+  const sel = selector('ban_member(uint64,address)')
+  const callData = concat(sel, encodeU64(podId), encodeAddress(targetAddress))
+  return sendContractTx(api, CONTRACT_ADDRESSES.pods, callData)
+}
+
+export async function podsUnbanMember(podId: number, targetAddress: string): Promise<any> {
+  const api = await getApi()
+  const sel = selector('unban_member(uint64,address)')
+  const callData = concat(sel, encodeU64(podId), encodeAddress(targetAddress))
+  return sendContractTx(api, CONTRACT_ADDRESSES.pods, callData)
+}
+
+export async function podsAddMod(podId: number, moderatorAddress: string): Promise<any> {
+  const api = await getApi()
+  const sel = selector('add_mod(uint64,address)')
+  const callData = concat(sel, encodeU64(podId), encodeAddress(moderatorAddress))
+  return sendContractTx(api, CONTRACT_ADDRESSES.pods, callData)
+}
+
+export async function podsRemoveMod(podId: number, moderatorAddress: string): Promise<any> {
+  const api = await getApi()
+  const sel = selector('remove_mod(uint64,address)')
+  const callData = concat(sel, encodeU64(podId), encodeAddress(moderatorAddress))
+  return sendContractTx(api, CONTRACT_ADDRESSES.pods, callData)
+}
+
+export async function podsGlobalBan(targetAddress: string): Promise<any> {
+  const api = await getApi()
+  const sel = selector('global_ban(address)')
+  const callData = concat(sel, encodeAddress(targetAddress))
+  return sendContractTx(api, CONTRACT_ADDRESSES.pods, callData)
+}
+
+export async function podsGlobalUnban(targetAddress: string): Promise<any> {
+  const api = await getApi()
+  const sel = selector('global_unban(address)')
+  const callData = concat(sel, encodeAddress(targetAddress))
+  return sendContractTx(api, CONTRACT_ADDRESSES.pods, callData)
+}
+
+export async function podsIsBanned(podId: number, address: string): Promise<boolean> {
+  const cacheKey = `is_banned:${podId}:${address.toLowerCase()}`
+  const cached = getCached(cacheKey)
+  if (cached !== null) return cached
+
+  try {
+    const api = await getApi()
+    const sel = selector('is_banned(uint64,address)')
+    const callData = concat(sel, encodeU64(podId), encodeAddress(address))
+    const result = await queryContract(api, CONTRACT_ADDRESSES.pods, callData)
+    const value = result[0] === 1
+    setCache(cacheKey, value)
+    return value
   } catch {
     return false
+  }
+}
+
+export async function podsIsGloballyBanned(address: string): Promise<boolean> {
+  const cacheKey = `is_globally_banned:${address.toLowerCase()}`
+  const cached = getCached(cacheKey)
+  if (cached !== null) return cached
+
+  try {
+    const api = await getApi()
+    const sel = selector('is_globally_banned(address)')
+    const callData = concat(sel, encodeAddress(address))
+    const result = await queryContract(api, CONTRACT_ADDRESSES.pods, callData)
+    const value = result[0] === 1
+    setCache(cacheKey, value)
+    return value
+  } catch {
+    return false
+  }
+}
+
+export async function podsGetMods(podId: number): Promise<string[]> {
+  const cacheKey = `get_mods:${podId}`
+  const cached = getCached(cacheKey)
+  if (cached !== null) return cached
+
+  try {
+    const api = await getApi()
+    const sel = selector('get_mods(uint64)')
+    const callData = concat(sel, encodeU64(podId))
+    const result = await queryContract(api, CONTRACT_ADDRESSES.pods, callData)
+    
+    const { length, bytesRead } = decodeCompactLength(result, 0)
+    const mods: string[] = []
+    let offset = bytesRead
+    for (let i = 0; i < length; i++) {
+      mods.push(decodeAddress(result, offset))
+      offset += 20
+    }
+    setCache(cacheKey, mods)
+    return mods
+  } catch {
+    return []
+  }
+}
+
+// ============ TIER FUNCTIONS ============
+
+export async function podsSetProFee(amount: bigint): Promise<any> {
+  const api = await getApi()
+  const sel = selector('set_pro_fee(uint256)')
+  const callData = concat(sel, encodeU256(amount))
+  return sendContractTx(api, CONTRACT_ADDRESSES.pods, callData)
+}
+
+export async function podsSetTreasury(address: string): Promise<any> {
+  const api = await getApi()
+  const sel = selector('set_treasury(address)')
+  const callData = concat(sel, encodeAddress(address))
+  return sendContractTx(api, CONTRACT_ADDRESSES.pods, callData)
+}
+
+export async function podsGetProFee(): Promise<bigint> {
+  try {
+    const api = await getApi()
+    const sel = selector('get_pro_fee()')
+    const result = await queryContract(api, CONTRACT_ADDRESSES.pods, sel)
+    return decodeU256(result, 0)
+  } catch {
+    return BigInt(0)
+  }
+}
+
+export async function podsGetTreasury(): Promise<string | null> {
+  try {
+    const api = await getApi()
+    const sel = selector('get_treasury()')
+    const result = await queryContract(api, CONTRACT_ADDRESSES.pods, sel)
+    if (result.length >= 20) {
+      return decodeAddress(result, 0)
+    }
+    return null
+  } catch {
+    return null
+  }
+}
+
+export async function podsGetPodTier(podId: number): Promise<number> {
+  const cacheKey = `get_pod_tier:${podId}`
+  const cached = getCached(cacheKey)
+  if (cached !== null) return cached
+
+  try {
+    const api = await getApi()
+    const sel = selector('get_pod_tier(uint64)')
+    const callData = concat(sel, encodeU64(podId))
+    const result = await queryContract(api, CONTRACT_ADDRESSES.pods, callData)
+    const value = result[0] || 0
+    setCache(cacheKey, value)
+    return value
+  } catch {
+    return 0
+  }
+}
+
+export async function podsUpgradePod(podId: number, fee: bigint): Promise<any> {
+  const api = await getApi()
+  const sel = selector('upgrade_pod(uint64)')
+  const callData = concat(sel, encodeU64(podId))
+  return sendContractTx(api, CONTRACT_ADDRESSES.pods, callData, fee)
+}
+
+// ============ PAID PODS FUNCTIONS ============
+
+export async function podsJoinPod(podId: number, fee: bigint = BigInt(0)): Promise<any> {
+  const api = await getApi()
+  const sel = selector('join_pod(uint64)')
+  const callData = concat(sel, encodeU64(podId))
+  return sendContractTx(api, CONTRACT_ADDRESSES.pods, callData, fee)
+}
+
+export async function podsHasPaid(podId: number, address: string): Promise<boolean> {
+  const cacheKey = `has_paid:${podId}:${address.toLowerCase()}`
+  const cached = getCached(cacheKey)
+  if (cached !== null) return cached
+
+  try {
+    const api = await getApi()
+    const sel = selector('has_paid(uint64,address)')
+    const callData = concat(sel, encodeU64(podId), encodeAddress(address))
+    const result = await queryContract(api, CONTRACT_ADDRESSES.pods, callData)
+    const value = result[0] === 1
+    setCache(cacheKey, value)
+    return value
+  } catch {
+    return false
+  }
+}
+
+export async function podsGetPodFee(podId: number): Promise<bigint> {
+  const cacheKey = `get_pod_fee:${podId}`
+  const cached = getCached(cacheKey)
+  if (cached !== null) return cached
+
+  try {
+    const api = await getApi()
+    const sel = selector('get_pod_fee(uint64)')
+    const callData = concat(sel, encodeU64(podId))
+    const result = await queryContract(api, CONTRACT_ADDRESSES.pods, callData)
+    const value = decodeU256(result, 0)
+    setCache(cacheKey, value)
+    return value
+  } catch {
+    return BigInt(0)
+  }
+}
+
+export async function podsGetPodMemberCount(podId: number): Promise<number> {
+  const cacheKey = `get_pod_member_count:${podId}`
+  const cached = getCached(cacheKey)
+  if (cached !== null) return cached
+
+  try {
+    const api = await getApi()
+    const sel = selector('get_pod_member_count(uint64)')
+    const callData = concat(sel, encodeU64(podId))
+    const result = await queryContract(api, CONTRACT_ADDRESSES.pods, callData)
+    const value = Number(decodeU64(result, 0))
+    setCache(cacheKey, value)
+    return value
+  } catch {
+    return 0
   }
 }
 
@@ -936,11 +1230,9 @@ export async function messagesSendMessage(
   contentHash: Uint8Array,
   nonce: Uint8Array
 ): Promise<any> {
-  console.log(`📤 [messagesSendMessage] Sending DM to ${recipient}`)
   const sel = selector('send_message(address,bytes32,bytes24)')
   const callData = concat(sel, encodeAddress(recipient), contentHash, nonce)
   const result = await sendContractTx(api, CONTRACT_ADDRESSES.messages, callData)
-  console.log('✅ [messagesSendMessage] Transaction finalized')
   return result
 }
 
@@ -999,27 +1291,20 @@ export async function messagesGetMessages(
 }
 
 export async function messagesGetConversations(api: ApiPromise, address: string): Promise<string[]> {
-  console.log('[messagesGetConversations] Querying for address:', address)
   try {
     const sel = selector('get_conversations(address)')
     const callData = concat(sel, encodeAddress(address))
     const result = await queryContract(api, CONTRACT_ADDRESSES.messages, callData)
     
-    console.log('[messagesGetConversations] Raw result length:', result.length)
-    console.log('[messagesGetConversations] Raw result hex:', u8aToHex(result))
-    
     const { length, bytesRead } = decodeCompactLength(result, 0)
-    console.log('[messagesGetConversations] Decoded count:', length)
     
     const conversations: string[] = []
     let offset = bytesRead
     for (let i = 0; i < length; i++) {
       const addr = decodeAddress(result, offset)
-      console.log(`[messagesGetConversations] Conversation ${i}:`, addr)
       conversations.push(addr.toLowerCase())
       offset += 20
     }
-    console.log('[messagesGetConversations] Returning:', conversations)
     return conversations
   } catch (err) {
     console.error('[messagesGetConversations] Error:', err)
@@ -1119,10 +1404,10 @@ export async function createPodOnChain(
   description: string,
   minBalance: bigint,
   isPublic: boolean,
-  tier: string
+  tier: 'free' | 'pro',
+  entryFee: bigint = BigInt(0),
+  payoutWallet: string = ''
 ): Promise<any> {
-  console.log(`📤 [createPodOnChain] Creating pod "${name}"`)
-
   // Get wallet info
   const { useWalletStore } = await import('@/stores/wallet')
   const { walletType, evmAddress } = useWalletStore.getState()
@@ -1141,14 +1426,34 @@ export async function createPodOnChain(
     throw new Error('Pod description too long (max 256 bytes)')
   }
 
+  // Free pods cannot charge entry fees
+  if (tier === 'free' && entryFee > 0) {
+    throw new Error('Free pods cannot charge entry fees')
+  }
+
   const api = await getApi()
-  const sel = selector('create_pod(bytes,bytes,uint256)')
-  const callData = concat(sel, encodeString(name), encodeString(description), encodeU256(minBalance))
+  
+  // Get pro fee if creating a Pro pod
+  let creationFee = BigInt(0)
+  if (tier === 'pro') {
+    creationFee = await podsGetProFee()
+  }
+  
+  // Use payout wallet or default to creator
+  const finalPayoutWallet = payoutWallet || evmAddress
+
+  const sel = selector('create_pod(bytes,bytes,uint256,uint256,address)')
+  const callData = concat(
+    sel, 
+    encodeString(name), 
+    encodeString(description), 
+    encodeU256(minBalance),
+    encodeU256(entryFee),
+    encodeAddress(finalPayoutWallet)
+  )
 
   // Use unified sendContractTx which handles both wallet types
-  const result = await sendContractTx(api, CONTRACT_ADDRESSES.pods, callData)
-
-  console.log('✅ [createPodOnChain] Pod created successfully')
+  const result = await sendContractTx(api, CONTRACT_ADDRESSES.pods, callData, creationFee)
 
   // Return pod object for immediate display
   return {
@@ -1158,39 +1463,55 @@ export async function createPodOnChain(
     minBalance,
     creator: evmAddress,
     createdAt: Date.now(),
-    tier,
+    tier: tier === 'pro' ? 1 : 0,
+    entryFee,
+    payoutWallet: finalPayoutWallet,
     isDefault: false,
   }
 }
 
-export async function joinPodOnChain(podId: number, address: string): Promise<boolean> {
-  console.log(`📤 [joinPodOnChain] Checking access for pod ${podId}`)
-
+export async function joinPodOnChain(podId: number, address: string, fee: bigint = BigInt(0)): Promise<boolean> {
   // Get wallet info
   const { useWalletStore } = await import('@/stores/wallet')
-  const { evmAddress } = useWalletStore.getState()
-
+  const { evmAddress, walletType, isConnected } = useWalletStore.getState()
+  
   if (!address || !evmAddress) {
     throw new Error('Wallet not connected or not mapped')
   }
 
-  // Check if user has access to this pod (balance meets threshold)
+  // Check access first
   const api = await getApi()
-  const hasAccess = await podsCheckAccess(api, podId, evmAddress)
-
-  if (!hasAccess) {
-    const pod = await podsGetPod(api, podId)
-    const minBalance = pod?.minBalance || BigInt(0)
-    throw new Error(`Insufficient balance. Required: ${minBalance.toString()} wei`)
+  const access = await podsCheckAccess(api, podId, evmAddress)
+  
+  if (!access.granted) {
+    // Handle different error codes
+    switch (access.code) {
+      case 1:
+        throw new Error('You are banned from this pod')
+      case 2:
+        throw new Error('You are globally banned')
+      case 3:
+        const pod = await podsGetPod(api, podId)
+        throw new Error(`Insufficient balance. Required: ${pod?.minBalance.toString() || '0'} wei`)
+      case 4:
+        // Payment required - this is expected for paid pods, we'll pay now
+        break
+      case 5:
+        throw new Error('This pod is locked')
+      case 6:
+        throw new Error('This pod is full')
+      default:
+        throw new Error('Access denied')
+    }
   }
 
-  console.log('✅ [joinPodOnChain] Access granted for pod', podId)
+  // Call join_pod on contract (handles payment if needed)
+  await podsJoinPod(podId, fee)
+
   return true
 }
 
 export async function leavePodOnChain(podId: number, address: string): Promise<boolean> {
-  console.log(`📤 [leavePodOnChain] Leaving pod ${podId}`)
-
   // Get wallet info
   const { useWalletStore } = await import('@/stores/wallet')
   const { evmAddress } = useWalletStore.getState()
@@ -1199,15 +1520,97 @@ export async function leavePodOnChain(podId: number, address: string): Promise<b
     throw new Error('Wallet not connected or not mapped')
   }
 
-  // No contract call needed - membership is just local state
-  // Balance check will prevent access if they no longer qualify
-  console.log('✅ [leavePodOnChain] Left pod', podId)
+  const api = await getApi()
+  const sel = selector('leave_pod(uint64)')
+  const callData = concat(sel, encodeU64(podId))
+  await sendContractTx(api, CONTRACT_ADDRESSES.pods, callData)
+
   return true
 }
 
+export async function banMember(podId: number, targetAddress: string): Promise<boolean> {
+  const api = await getApi()
+  const sel = selector('ban_member(uint64,address)')
+  const callData = concat(sel, encodeU64(podId), encodeAddress(targetAddress))
+  await sendContractTx(api, CONTRACT_ADDRESSES.pods, callData)
+  return true
+}
+
+export async function unbanMember(podId: number, targetAddress: string): Promise<boolean> {
+  const api = await getApi()
+  const sel = selector('unban_member(uint64,address)')
+  const callData = concat(sel, encodeU64(podId), encodeAddress(targetAddress))
+  await sendContractTx(api, CONTRACT_ADDRESSES.pods, callData)
+  return true
+}
+
+export async function addMod(podId: number, targetAddress: string): Promise<boolean> {
+  const api = await getApi()
+  const sel = selector('add_mod(uint64,address)')
+  const callData = concat(sel, encodeU64(podId), encodeAddress(targetAddress))
+  await sendContractTx(api, CONTRACT_ADDRESSES.pods, callData)
+  return true
+}
+
+export async function removeMod(podId: number, targetAddress: string): Promise<boolean> {
+  const api = await getApi()
+  const sel = selector('remove_mod(uint64,address)')
+  const callData = concat(sel, encodeU64(podId), encodeAddress(targetAddress))
+  await sendContractTx(api, CONTRACT_ADDRESSES.pods, callData)
+  return true
+}
+
+export async function getMods(podId: number): Promise<string[]> {
+  try {
+    const api = await getApi()
+    const sel = selector('get_mods(uint64)')
+    const callData = concat(sel, encodeU64(podId))
+    const result = await queryContract(api, CONTRACT_ADDRESSES.pods, callData)
+    
+    // Decode array of addresses
+    // First 4 bytes = length (u32)
+    const length = decodeU32(result, 0)
+    const mods: string[] = []
+    
+    for (let i = 0; i < length; i++) {
+      const offset = 4 + (i * 20) // 4 bytes length + 20 bytes per address
+      const addrBytes = result.slice(offset, offset + 20)
+      const addr = '0x' + Array.from(addrBytes).map(b => b.toString(16).padStart(2, '0')).join('')
+      mods.push(addr)
+    }
+    
+    return mods
+  } catch (err) {
+    console.error('Failed to get mods:', err)
+    return []
+  }
+}
+
+export async function isBanned(podId: number, address: string): Promise<boolean> {
+  try {
+    const api = await getApi()
+    const sel = selector('is_banned(uint64,address)')
+    const callData = concat(sel, encodeU64(podId), encodeAddress(address))
+    const result = await queryContract(api, CONTRACT_ADDRESSES.pods, callData)
+    return result[0] === 1
+  } catch {
+    return false
+  }
+}
+
+export async function isMod(podId: number, address: string): Promise<boolean> {
+  try {
+    const api = await getApi()
+    const sel = selector('is_mod(uint64,address)')
+    const callData = concat(sel, encodeU64(podId), encodeAddress(address))
+    const result = await queryContract(api, CONTRACT_ADDRESSES.pods, callData)
+    return result[0] === 1
+  } catch {
+    return false
+  }
+}
+
 export async function sendPodMessageOnChain(podId: number, address: string, content: string): Promise<any> {
-  console.log(`📤 [sendPodMessageOnChain] Sending message to pod ${podId}, length: ${content.length} chars`)
-  
   // Get wallet info
   const { useWalletStore } = await import('@/stores/wallet')
   const { walletType, evmAddress } = useWalletStore.getState()
@@ -1223,8 +1626,6 @@ export async function sendPodMessageOnChain(podId: number, address: string, cont
   // Use chunking for messages longer than 30 bytes
   const chunks = createMessageChunks(contentBytes)
   const totalChunks = chunks.length
-  
-  console.log(`📤 [sendPodMessageOnChain] Split into ${totalChunks} chunk(s)`)
   
   const sel = selector('send_pod_message(uint64,bytes32)')
   
@@ -1263,12 +1664,10 @@ export async function sendPodMessageOnChain(podId: number, address: string, cont
     const injector = await web3FromSource(walletSource)
     
     const batchTx = api.tx.utility.batchAll(txArray)
-    console.log(`📤 [sendPodMessageOnChain] Sending batch of ${totalChunks} chunks with reduced gas limit`)
     await new Promise((resolve, reject) => {
       batchTx
         .signAndSend(address, { signer: injector.signer }, (result) => {
           if (result.status.isInBlock || result.status.isFinalized) {
-            console.log(`✅ [sendPodMessageOnChain] Batch tx in block/finalized, status: ${result.status.type}`)
             resolve(result)
           }
           if (result.isError) {
@@ -1279,10 +1678,6 @@ export async function sendPodMessageOnChain(podId: number, address: string, cont
     })
   } else {
     // Sequential sending for EVM wallets or when chunks exceed MAX_BATCH_CHUNKS
-    console.log('[sendPodMessage] using sequential path, chunks:', totalChunks)
-    if (totalChunks > MAX_BATCH_CHUNKS) {
-      console.log(`📤 [sendPodMessageOnChain] ${totalChunks} chunks exceed batch limit (${MAX_BATCH_CHUNKS}), using sequential sending`)
-    }
     
     for (let i = 0; i < chunks.length; i++) {
       const chunk = chunks[i]
@@ -1291,11 +1686,8 @@ export async function sendPodMessageOnChain(podId: number, address: string, cont
       
       const callData = concat(sel, encodeU64(podId), contentHash)
       
-      console.log(`[sequential] sending chunk ${i + 1}/${totalChunks}`)
-      
       if (walletType === 'evm') {
-        const result = await sendContractTxEvm(CONTRACT_ADDRESSES.pods, callData)
-        console.log(`[sequential] EVM result:`, result)
+        await sendContractTxEvm(CONTRACT_ADDRESSES.pods, callData)
       } else {
         // Substrate sequential send
         const { walletSource } = useWalletStore.getState()
@@ -1323,15 +1715,6 @@ export async function sendPodMessageOnChain(podId: number, address: string, cont
             const result = await new Promise((resolve, reject) => {
               tx
                 .signAndSend(address, { signer: injector.signer }, (result) => {
-                  console.log(`[sequential] tx status:`, result.status.type)
-                  if (result.events) {
-                    const events = result.events.map((e: any) => `${e.event.section}.${e.event.method}`)
-                    console.log(`[sequential] events:`, events)
-                    const hasFailed = events.some((e: string) => e.includes('ExtrinsicFailed') || e.includes('ContractReverted'))
-                    if (hasFailed) {
-                      console.error(`[sequential] FAILED EVENT DETECTED in chunk ${i + 1}`)
-                    }
-                  }
                   if (result.status.isInBlock || result.status.isFinalized) {
                     resolve(result)
                   }
@@ -1341,25 +1724,18 @@ export async function sendPodMessageOnChain(podId: number, address: string, cont
                 })
                 .catch(reject)
             })
-            console.log(`[sequential] chunk ${i + 1} result:`, result)
             // Success - break out of retry loop
             break
           } catch (err) {
             lastError = err instanceof Error ? err : new Error(String(err))
             retries++
             if (retries <= maxRetries) {
-              console.warn(`📤 [sendPodMessageOnChain] Chunk ${i + 1} failed, retrying in 3s...`, lastError.message)
               await new Promise(resolve => setTimeout(resolve, 3000))
             } else {
-              console.error(`📤 [sendPodMessageOnChain] Chunk ${i + 1} failed after ${maxRetries + 1} attempts`)
               throw lastError
             }
           }
         }
-      }
-      
-      if (totalChunks > 1) {
-        console.log(`📤 [sendPodMessageOnChain] Sent chunk ${i + 1}/${totalChunks}`)
       }
       
       // Add delay between chunks to avoid rate limiting (except after last chunk)
@@ -1368,8 +1744,6 @@ export async function sendPodMessageOnChain(podId: number, address: string, cont
       }
     }
   }
-  
-  console.log('✅ [sendPodMessageOnChain] Message sent successfully')
   
   // Return message object for immediate display (use full content)
   return {
@@ -1450,8 +1824,6 @@ interface RawMessageWithIndex extends RawMessage {
 }
 
 function reassembleChunkedMessages(rawMessages: RawMessageWithIndex[]): RawMessage[] {
-  console.log('[reassembleDM] raw messages count:', rawMessages.length)
-  
   const result: { msg: RawMessage; originalIndex: number }[] = []
   const chunkGroups = new Map<string, RawMessageWithIndex[]>()
   
@@ -1486,8 +1858,6 @@ function reassembleChunkedMessages(rawMessages: RawMessageWithIndex[]): RawMessa
     group[chunkIndex] = msg
   }
   
-  console.log('[reassembleDM] chunk groups:', chunkGroups.size)
-  
   // Second pass: reassemble complete chunk groups
   for (const [groupKey, chunks] of chunkGroups) {
     const firstChunk = chunks.find(c => c !== undefined)
@@ -1495,8 +1865,6 @@ function reassembleChunkedMessages(rawMessages: RawMessageWithIndex[]): RawMessa
     
     const expectedChunks = firstChunk.contentHash[2] // byte 2: total chunks
     const receivedChunks = chunks.filter(Boolean).length
-    
-    console.log(`[reassembleDM] group ${groupKey}: ${receivedChunks}/${expectedChunks} chunks`)
     
     // Check if we have all chunks (indices 0 through totalChunks-1)
     const hasAllChunks = chunks.length === expectedChunks && chunks.every(c => c !== undefined)
@@ -1522,8 +1890,6 @@ function reassembleChunkedMessages(rawMessages: RawMessageWithIndex[]): RawMessa
       }
       const trimmed = reassembled.slice(0, actualLength)
       
-      console.log(`[reassembleDM] successfully reassembled ${expectedChunks} chunks, content length: ${trimmed.length}`)
-      
       result.push({
         msg: {
           sender: firstChunk.sender,
@@ -1537,20 +1903,16 @@ function reassembleChunkedMessages(rawMessages: RawMessageWithIndex[]): RawMessa
     } else {
       // Incomplete group - hide the chunks (don't display)
       // The next poll will pick up remaining chunks
-      console.log(`[reassembleDM] incomplete group ${groupKey} - hiding ${receivedChunks} chunks until complete`)
     }
   }
   
   // Sort by original index to maintain on-chain order
   result.sort((a, b) => a.originalIndex - b.originalIndex)
   
-  console.log('[reassembleDM] final result count:', result.length)
   return result.map(r => r.msg)
 }
 
 export async function sendMessageOnChain(sender: string, recipient: string, content: Uint8Array): Promise<any> {
-  console.log(`📤 [sendMessageOnChain] Sending DM from ${sender} to ${recipient}, length: ${content.length} bytes`)
-  
   // Get wallet info
   const { useWalletStore } = await import('@/stores/wallet')
   const { walletType, evmAddress, encryptionKeyPair } = useWalletStore.getState()
@@ -1562,8 +1924,6 @@ export async function sendMessageOnChain(sender: string, recipient: string, cont
   const api = await getApi()
   const chunks = createMessageChunks(content)
   const totalChunks = chunks.length
-  
-  console.log(`📤 [sendMessageOnChain] Split into ${totalChunks} chunk(s)`)
   
   const sel = selector('send_message(address,bytes32,bytes24)')
   
@@ -1605,12 +1965,10 @@ export async function sendMessageOnChain(sender: string, recipient: string, cont
     const injector = await web3FromSource(walletSource)
     
     const batchTx = api.tx.utility.batchAll(txArray)
-    console.log(`📤 [sendMessageOnChain] Sending batch of ${totalChunks} chunks with full gas limit (max 2 chunks)`)
     await new Promise((resolve, reject) => {
       batchTx
         .signAndSend(sender, { signer: injector.signer }, (result) => {
           if (result.status.isInBlock || result.status.isFinalized) {
-            console.log(`✅ [sendMessageOnChain] Batch tx in block/finalized, status: ${result.status.type}`)
             resolve(result)
           }
           if (result.isError) {
@@ -1621,9 +1979,6 @@ export async function sendMessageOnChain(sender: string, recipient: string, cont
     })
   } else {
     // Sequential sending for EVM wallets or when chunks exceed MAX_BATCH_CHUNKS
-    if (totalChunks > MAX_BATCH_CHUNKS) {
-      console.log(`📤 [sendMessageOnChain] ${totalChunks} chunks exceed batch limit (${MAX_BATCH_CHUNKS}), using sequential sending`)
-    }
     
     for (let i = 0; i < chunks.length; i++) {
       const chunk = chunks[i]
@@ -1679,18 +2034,12 @@ export async function sendMessageOnChain(sender: string, recipient: string, cont
             lastError = err instanceof Error ? err : new Error(String(err))
             retries++
             if (retries <= maxRetries) {
-              console.warn(`📤 [sendMessageOnChain] Chunk ${i + 1} failed, retrying in 3s...`, lastError.message)
               await new Promise(resolve => setTimeout(resolve, 3000))
             } else {
-              console.error(`📤 [sendMessageOnChain] Chunk ${i + 1} failed after ${maxRetries + 1} attempts`)
               throw lastError
             }
           }
         }
-      }
-      
-      if (totalChunks > 1) {
-        console.log(`📤 [sendMessageOnChain] Sent chunk ${i + 1}/${totalChunks}`)
       }
       
       // Add delay between chunks to avoid rate limiting (except after last chunk)
@@ -1699,8 +2048,6 @@ export async function sendMessageOnChain(sender: string, recipient: string, cont
       }
     }
   }
-  
-  console.log('✅ [sendMessageOnChain] DM sent successfully')
   
   // Return message object for immediate display (use full content)
   return {

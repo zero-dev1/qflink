@@ -30,6 +30,16 @@ export const LandingNav: React.FC = () => {
             <QFLinkWordmark size={28} variant="auto" />
           </Link>
 
+          {/* Center nav links */}
+          <div className="hidden md:flex items-center gap-6">
+            <Link
+              to="/whitepaper"
+              className="text-sm text-gray-500 hover:text-gray-900 dark:hover:text-white transition-colors duration-200"
+            >
+              Whitepaper
+            </Link>
+          </div>
+
           {/* Right side: Toggle + Launch App */}
           <div className="flex items-center gap-4">
             <LandingThemeToggle />
