@@ -1,24 +1,11 @@
 import { create } from 'zustand'
+import { hexToBytes } from 'viem'
 import type { PodsState, Pod, PodMessage, DefaultPod } from '@/types'
-import { getApi, type InjectedAccountWithMeta } from '@/lib/chain'
-import { 
-  podsGetPodCount, 
-  podsGetPod, 
-  podsGetPodMessages, 
-  sendPodMessageOnChain, 
-  podsCheckAccess,
-  podsIsBanned,
-  podsIsGloballyBanned,
-  podsGetMods,
-  podsHasPaid,
-  podsGetUserPods,
-  invalidateCache,
-} from '@/lib/contracts'
+import * as cc from '@/lib/contractCalls'
 import { useWalletStore } from './wallet'
 
 // Helper to get EVM address from wallet store (for access checks)
-const getEvmAddress = async (): Promise<string | null> => {
-  const { useWalletStore } = await import('./wallet')
+const getEvmAddress = (): string | null => {
   return useWalletStore.getState().evmAddress
 }
 
@@ -85,13 +72,9 @@ export const usePodsStore = create<PodsState>((set, get) => ({
 
 
   fetchPods: async () => {
-    // Invalidate all cached contract query results so we get fresh chain data
-    invalidateCache()
-    
     set({ isLoading: true })
     try {
-      const api = await getApi()
-      const count = await podsGetPodCount(api)
+      const count = await cc.getPodCount()
       
       if (count === 0) {
         set({ pods: [], isLoading: false })
@@ -101,7 +84,7 @@ export const usePodsStore = create<PodsState>((set, get) => ({
       const pods: Pod[] = []
       
       for (let i = 0; i < count; i++) {
-        const pod = await podsGetPod(api, i)
+        const pod = await cc.getPod(i)
         if (pod) {
           pods.push({
             id: Number(pod.id),
@@ -128,18 +111,14 @@ export const usePodsStore = create<PodsState>((set, get) => ({
       )
       
       const defaultPods = uniquePods.filter(p => (p as any).isDefault) as DefaultPod[]
-      const customPods = uniquePods.filter(p => !(p as any).isDefault)
       
-      // Derive myPods from on-chain reverse index:
-      // This is the production-grade approach - contract maintains user_pods mapping
+      // Derive myPods from on-chain reverse index
       let myPods: Pod[] = []
-      const evmAddress = await getEvmAddress()
+      const evmAddress = getEvmAddress()
       
       if (evmAddress) {
-        // Get user's pods from on-chain reverse index (O(1) lookup, scalable)
-        const userPodIds = await podsGetUserPods(evmAddress)
+        const userPodIds = await cc.getUserPods(evmAddress as `0x${string}`)
         
-        // Build myPods from the pod IDs returned by the contract
         for (const podId of userPodIds) {
           const pod = uniquePods.find(p => p.id === podId)
           if (pod) {
@@ -147,7 +126,7 @@ export const usePodsStore = create<PodsState>((set, get) => ({
           }
         }
         
-        // Also include pods where user is creator (for creator tracking)
+        // Also include pods where user is creator
         for (const pod of uniquePods) {
           const isCreator = (pod as any).creator?.toLowerCase() === evmAddress.toLowerCase()
           if (isCreator && !myPods.some(p => p.id === pod.id)) {
@@ -155,13 +134,11 @@ export const usePodsStore = create<PodsState>((set, get) => ({
           }
         }
         
-        // Only auto-add Chefs (pod 0) to sidebar — per spec, Whale and Builders
-        // require explicit join via join_pod to appear in sidebar
+        // Only auto-add Chefs (pod 0) to sidebar
         const chefsPod = uniquePods.find(p => p.id === 0)
         if (chefsPod && !myPods.some(p => p.id === 0)) {
           try {
-            const api2 = await getApi()
-            const access = await podsCheckAccess(api2, 0, evmAddress)
+            const access = await cc.checkPodAccess(0, evmAddress as `0x${string}`)
             if (access.granted) {
               myPods.push(chefsPod)
             }
@@ -176,7 +153,7 @@ export const usePodsStore = create<PodsState>((set, get) => ({
       
       set({ pods: uniquePods, defaultPods, myPods: uniqueMyPods })
     } catch (err) {
-      console.error('❌ Failed to fetch pods:', err)
+      console.error('Failed to fetch pods:', err)
     } finally {
       set({ isLoading: false })
     }
@@ -184,48 +161,32 @@ export const usePodsStore = create<PodsState>((set, get) => ({
 
   fetchPodMessages: async (podId: number) => {
     try {
-      // Check if pod exists and has message count
       const pod = get().pods.find(p => p.id === podId)
       if (!pod) {
         console.warn(`Pod ${podId} not found, skipping message fetch`)
         return
       }
       
-      // Skip fetching if pod has 0 messages (if messageCount is available)
       if ((pod as any).messageCount === 0) {
-        console.log(`Pod ${podId} has 0 messages, skipping fetch`)
         set({ podMessages: { ...get().podMessages, [podId]: [] } })
         return
       }
       
-      console.log('[podStore] fetchPodMessages starting for pod:', podId)
-      const api = await getApi()
-      const messages = await podsGetPodMessages(api, podId, 0, 100)
+      const rawMessages = await cc.getPodMessages(podId, 0, 100)
       
-      console.log('[podStore] messages from contracts:', messages.length)
-      console.log('[podStore] messages before processing:', messages.map((m, i) => ({
-        index: i,
-        sender: m.sender?.substring(0, 10),
-        contentPreview: m.content?.substring(0, 30),
-        timestamp: m.timestamp
-      })))
-      
-      const formatted: PodMessage[] = messages.map((msg, index) => ({
-        id: msg.id || `${podId}-${msg.sender?.substring(0, 8)}-${msg.timestamp}-${index}`,
-        podId,
-        sender: msg.sender,
-        content: msg.content,  // Use decoded content directly, NOT contentHash hex
-        timestamp: Number(msg.timestamp),
-      }))
-      
-      console.log('[podStore] messages after processing:', formatted.length)
-      console.log('[podStore] formatted messages:', formatted.map((m, i) => ({
-        index: i,
-        id: m.id,
-        sender: m.sender?.substring(0, 10),
-        contentPreview: m.content?.substring(0, 30),
-        timestamp: m.timestamp
-      })))
+      // Decode contentHash bytes to text content
+      const formatted: PodMessage[] = rawMessages.map((msg, index) => {
+        // Convert hex contentHash to Uint8Array and decode as UTF-8
+        const bytes = hexToBytes(msg.contentHash)
+        const content = new TextDecoder().decode(bytes).replace(/\0/g, '').trim()
+        return {
+          id: `${podId}-${msg.sender.substring(0, 8)}-${msg.timestamp}-${index}`,
+          podId,
+          sender: msg.sender,
+          content,
+          timestamp: msg.timestamp,
+        }
+      })
       
       set({ podMessages: { ...get().podMessages, [podId]: formatted } })
     } catch (err) {
@@ -239,8 +200,7 @@ export const usePodsStore = create<PodsState>((set, get) => ({
       throw new Error('Wallet not connected')
     }
 
-    // Use sendPodMessageOnChain which handles chunking for long messages
-    const result = await sendPodMessageOnChain(podId, evmAddress, content)
+    const result = await cc.sendPodMessageChunked(podId, content)
     
     const message: PodMessage = {
       id: result.id,
@@ -255,8 +215,7 @@ export const usePodsStore = create<PodsState>((set, get) => ({
 
   checkAccess: async (podId: number, address: string) => {
     try {
-      const api = await getApi()
-      return await podsCheckAccess(api, podId, address)
+      return await cc.checkPodAccess(podId, address as `0x${string}`)
     } catch (err) {
       console.error('Failed to check pod access:', err)
       return { granted: false, code: 255 }
@@ -265,7 +224,7 @@ export const usePodsStore = create<PodsState>((set, get) => ({
 
   fetchPodMods: async (podId: number) => {
     try {
-      const mods = await podsGetMods(podId)
+      const mods = await cc.getMods(podId)
       set({ podMods: { ...get().podMods, [podId]: mods } })
       return mods
     } catch (err) {
@@ -276,11 +235,11 @@ export const usePodsStore = create<PodsState>((set, get) => ({
 
   checkIsBanned: async (podId: number, address: string) => {
     try {
-      const [isBanned, isGloballyBanned] = await Promise.all([
-        podsIsBanned(podId, address),
-        podsIsGloballyBanned(address)
+      const [banned, globallyBanned] = await Promise.all([
+        cc.isBanned(podId, address as `0x${string}`),
+        cc.isGloballyBanned(address as `0x${string}`)
       ])
-      return { isBanned, isGloballyBanned }
+      return { isBanned: banned, isGloballyBanned: globallyBanned }
     } catch (err) {
       console.error('Failed to check ban status:', err)
       return { isBanned: false, isGloballyBanned: false }
@@ -289,7 +248,7 @@ export const usePodsStore = create<PodsState>((set, get) => ({
 
   checkHasPaid: async (podId: number, address: string) => {
     try {
-      return await podsHasPaid(podId, address)
+      return await cc.hasPaid(podId, address as `0x${string}`)
     } catch (err) {
       console.error('Failed to check payment status:', err)
       return false

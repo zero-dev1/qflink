@@ -70,14 +70,9 @@ const CreatePodPage: React.FC = () => {
     const balanceBigInt = BigInt(Math.floor(bal * 1e18))
     const entryFeeBal = parseFloat(entryFee || '0')
     const entryFeeBigInt = BigInt(Math.floor(entryFeeBal * 1e18))
-    const pod = await createPod(name.trim(), description.trim(), balanceBigInt, true, tier, entryFeeBigInt, payoutWallet.trim())
-    if (pod) {
-      // Wait for pods store to refresh before navigating to ensure pod data is available
-      await fetchPods()
-      navigate(`/pods/${pod.id}`)
-    } else {
-      navigate('/explore')
-    }
+    await createPod(name.trim(), description.trim(), balanceBigInt, true, tier, entryFeeBigInt, payoutWallet.trim())
+    // fetchPods is called inside createPod hook, navigate to explore
+    navigate('/explore')
   }
 
   // Fee breakdown for Pro tier: 95% treasury, 5% burn

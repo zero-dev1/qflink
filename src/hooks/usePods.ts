@@ -3,24 +3,7 @@ import { usePodsStore } from '@/stores/pods'
 import { useWalletStore } from '@/stores/wallet'
 import { useUIStore } from '@/stores/ui'
 import type { PodTier } from '@/types'
-import {
-  createPodOnChain,
-  sendPodMessageOnChain,
-  decryptPodMessage,
-  getUserPods,
-  getPodMessages,
-  getPodMembers,
-  podsBanMember,
-  podsUnbanMember,
-  podsAddMod,
-  podsRemoveMod,
-  podsIsBanned,
-  podsGetMods,
-  podsJoinPod,
-  podsGetPodFee,
-  podsGetProFee,
-  podsUpgradePod,
-} from '@/lib/contracts'
+import * as cc from '@/lib/contractCalls'
 
 
 export function usePods() {
@@ -60,18 +43,19 @@ export function usePods() {
   }, [fetchPods])
 
   const loadMyPods = useCallback(async () => {
-    const addr = walletAddressRef.current
-    if (!addr) return
+    const { evmAddress } = useWalletStore.getState()
+    if (!evmAddress) return
     setLoading(true)
     try {
-      const result = await getUserPods(addr)
-      setMyPods(result)
+      const podIds = await cc.getUserPods(evmAddress as `0x${string}`)
+      // getUserPods returns number[], store expects Pod[] — trigger full fetch instead
+      await fetchPods()
     } catch (err) {
       console.error('Failed to load my pods:', err)
     } finally {
       setLoading(false)
     }
-  }, [setLoading, setMyPods])
+  }, [setLoading, setMyPods, fetchPods])
 
   const createPod = useCallback(
     async (
@@ -83,36 +67,38 @@ export function usePods() {
       entryFee: bigint = BigInt(0),
       payoutWallet: string = ''
     ) => {
-      const addr = walletAddressRef.current
-      if (!addr) {
+      const { evmAddress } = useWalletStore.getState()
+      if (!evmAddress) {
         addToast('error', 'Please connect your wallet first')
         return
       }
       try {
-        const pod = await createPodOnChain(addr, name, description, minBalance, isPublic, tier, entryFee, payoutWallet)
-        addPod(pod)
+        const receipt = await cc.createPod(
+          name, description, minBalance, entryFee,
+          payoutWallet ? payoutWallet as `0x${string}` : undefined
+        )
         addToast('success', `Pod "${name}" created successfully`)
-        return pod
+        // Refresh pods list from chain to get the new pod
+        await fetchPods()
       } catch (err) {
         const msg = err instanceof Error ? err.message : 'Failed to create pod'
         addToast('error', msg)
       }
     },
-    [addToast, addPod]
+    [addToast, addPod, fetchPods]
   )
 
   // Join a pod (handles paid pods and free pods)
   const joinPod = useCallback(
     async (podId: number, fee: bigint = BigInt(0)) => {
-      const addr = walletAddressRef.current
-      if (!addr) {
+      const { evmAddress } = useWalletStore.getState()
+      if (!evmAddress) {
         addToast('error', 'Please connect your wallet first')
         return
       }
       try {
-        await podsJoinPod(podId, fee)
+        await cc.joinPod(podId, fee)
         addToast('success', 'Successfully joined pod')
-        // Refresh pods to update state from on-chain
         await fetchPods()
       } catch (err) {
         const msg = err instanceof Error ? err.message : 'Failed to join pod'
@@ -133,16 +119,14 @@ export function usePods() {
 
   const sendPodMessage = useCallback(
     async (podId: number, content: string) => {
-      const addr = walletAddressRef.current
-      if (!addr) {
+      const { evmAddress } = useWalletStore.getState()
+      if (!evmAddress) {
         addToast('error', 'Please connect your wallet first')
         return
       }
       try {
-        const message = await sendPodMessageOnChain(podId, addr, content)
-        // Immediately decrypt so the message shows plaintext without re-fetching
-        const decrypted = decryptPodMessage(podId, message.content)
-        addPodMessage({ ...message, content: decrypted })
+        const result = await cc.sendPodMessageChunked(podId, content)
+        addPodMessage({ ...result })
       } catch (err) {
         const msg = err instanceof Error ? err.message : 'Failed to send message'
         addToast('error', msg)
@@ -154,8 +138,20 @@ export function usePods() {
   const loadPodMessages = useCallback(
     async (podId: number) => {
       try {
-        const result = await getPodMessages(podId)
-        setPodMessages(podId, result)
+        const rawMessages = await cc.getPodMessages(podId, 0, 100)
+        const { hexToBytes } = await import('viem')
+        const formatted = rawMessages.map((msg, index) => {
+          const bytes = hexToBytes(msg.contentHash)
+          const content = new TextDecoder().decode(bytes).replace(/\0/g, '').trim()
+          return {
+            id: `${podId}-${msg.sender.substring(0, 8)}-${msg.timestamp}-${index}`,
+            podId,
+            sender: msg.sender,
+            content,
+            timestamp: msg.timestamp,
+          }
+        })
+        setPodMessages(podId, formatted)
       } catch (err) {
         console.error('Failed to load pod messages:', err)
       }
@@ -166,7 +162,7 @@ export function usePods() {
   const loadPodMembers = useCallback(
     async (podId: number) => {
       try {
-        const result = await getPodMembers(podId)
+        const result = await cc.getPodMembers(podId)
         setPodMembers(podId, result)
       } catch (err) {
         console.error('Failed to load pod members:', err)
@@ -179,7 +175,7 @@ export function usePods() {
   const banMember = useCallback(
     async (podId: number, memberAddress: string) => {
       try {
-        await podsBanMember(podId, memberAddress)
+        await cc.banMember(podId, memberAddress as `0x${string}`)
         addToast('success', 'Member banned')
       } catch (err) {
         const msg = err instanceof Error ? err.message : 'Failed to ban member'
@@ -192,7 +188,7 @@ export function usePods() {
   const unbanMember = useCallback(
     async (podId: number, memberAddress: string) => {
       try {
-        await podsUnbanMember(podId, memberAddress)
+        await cc.unbanMember(podId, memberAddress as `0x${string}`)
         addToast('success', 'Member unbanned')
       } catch (err) {
         const msg = err instanceof Error ? err.message : 'Failed to unban member'
@@ -205,7 +201,7 @@ export function usePods() {
   const addMod = useCallback(
     async (podId: number, moderatorAddress: string) => {
       try {
-        await podsAddMod(podId, moderatorAddress)
+        await cc.addMod(podId, moderatorAddress as `0x${string}`)
         addToast('success', 'Moderator added')
       } catch (err) {
         const msg = err instanceof Error ? err.message : 'Failed to add moderator'
@@ -218,7 +214,7 @@ export function usePods() {
   const removeMod = useCallback(
     async (podId: number, moderatorAddress: string) => {
       try {
-        await podsRemoveMod(podId, moderatorAddress)
+        await cc.removeMod(podId, moderatorAddress as `0x${string}`)
         addToast('success', 'Moderator removed')
       } catch (err) {
         const msg = err instanceof Error ? err.message : 'Failed to remove moderator'
