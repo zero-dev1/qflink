@@ -1,9 +1,9 @@
 import { useCallback, useRef } from 'react'
+import { hexToBytes } from 'viem'
 import { useMessagesStore } from '@/stores/messages'
 import { useWalletStore } from '@/stores/wallet'
 import { useUIStore } from '@/stores/ui'
-import { sendMessageOnChain, getMessages, getConversations } from '@/lib/contracts'
-import { encryptMessage } from '@/lib/encryption'
+import * as cc from '@/lib/contractCalls'
 import type { Conversation } from '@/types'
 
 export function useMessages() {
@@ -33,28 +33,26 @@ export function useMessages() {
 
   const loadConversations = useCallback(async () => {
     const addr = evmAddressRef.current
-    console.log('[useMessages.loadConversations] Starting - EVM address:', addr)
-    if (!addr) {
-      console.log('[useMessages.loadConversations] No EVM address, returning')
-      return
-    }
+    if (!addr) return
     setLoading(true)
     try {
-      const addresses = await getConversations(addr)
-      console.log('[useMessages.loadConversations] Got addresses:', addresses)
+      const addresses = await cc.getConversations(addr as `0x${string}`)
       
-      // Fetch latest message for each conversation
       const convos: Conversation[] = await Promise.all(
         addresses.map(async (a) => {
           const otherAddress = a.toLowerCase()
-          let lastMessage = 'Encrypted message'
+          let lastMessage = 'Message'
           let lastMessageTime = Date.now()
           
           try {
-            const messages = await getMessages(addr, otherAddress)
-            if (messages.length > 0) {
-              const latest = messages[messages.length - 1]
-              lastMessage = latest.decryptedContent || 'Encrypted message'
+            const rawMsgs = await cc.getMessages(
+              addr as `0x${string}`,
+              otherAddress as `0x${string}`
+            )
+            if (rawMsgs.length > 0) {
+              const latest = rawMsgs[rawMsgs.length - 1]
+              const bytes = hexToBytes(latest.contentHash)
+              lastMessage = new TextDecoder().decode(bytes).replace(/\0/g, '').trim() || 'Message'
               lastMessageTime = latest.timestamp || Date.now()
             }
           } catch (err) {
@@ -69,10 +67,9 @@ export function useMessages() {
           }
         })
       )
-      console.log('[useMessages.loadConversations] Setting conversations:', convos)
       setConversations(convos)
     } catch (err) {
-      console.error('[useMessages.loadConversations] Error:', err)
+      console.error('Failed to load conversations:', err)
     } finally {
       setLoading(false)
     }
@@ -84,8 +81,22 @@ export function useMessages() {
       if (!addr) return
       setLoading(true)
       try {
-        const msgs = await getMessages(addr, otherAddress)
-        // decryptedContent is populated by contracts.ts mock decryption
+        const rawMsgs = await cc.getMessages(
+          addr as `0x${string}`,
+          otherAddress as `0x${string}`
+        )
+        const msgs = rawMsgs.map((m) => {
+          const bytes = hexToBytes(m.contentHash)
+          const decrypted = new TextDecoder().decode(bytes).replace(/\0/g, '').trim()
+          return {
+            id: `${m.sender}-${m.timestamp}`,
+            sender: m.sender,
+            recipient: m.recipient,
+            encryptedContent: bytes,
+            decryptedContent: decrypted,
+            timestamp: m.timestamp,
+          }
+        })
         setMessages(otherAddress, msgs)
       } catch (err) {
         console.error('Failed to load messages:', err)
@@ -98,18 +109,22 @@ export function useMessages() {
 
   const sendMessage = useCallback(
     async (recipient: string, content: string) => {
-      const addr = walletAddressRef.current
-      if (!addr) {
+      const { evmAddress } = useWalletStore.getState()
+      if (!evmAddress) {
         addToast('error', 'Please connect your wallet first')
         return
       }
 
       try {
-        // Pass plaintext as bytes — contracts.ts handles encryption with mock key pairs
-        const plaintextBytes = new TextEncoder().encode(content)
-        const message = await sendMessageOnChain(addr, recipient, plaintextBytes)
-        // Attach decrypted content for immediate display without re-fetching
-        message.decryptedContent = content
+        const contentBytes = new TextEncoder().encode(content)
+        const result = await cc.sendDirectMessageChunked(
+          recipient.toLowerCase() as `0x${string}`,
+          contentBytes
+        )
+        const message = {
+          ...result,
+          decryptedContent: content,
+        }
         addMessage(message)
       } catch (err) {
         const msg = err instanceof Error ? err.message : 'Failed to send message'

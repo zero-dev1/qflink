@@ -1,10 +1,8 @@
 import { create } from 'zustand'
+import { hexToBytes } from 'viem'
 import type { MessagesState, Message, Conversation } from '@/types'
-import { getApi, type InjectedAccountWithMeta } from '@/lib/chain'
-import { getConversations, getMessages, sendMessageOnChain } from '@/lib/contracts'
+import * as cc from '@/lib/contractCalls'
 import { useWalletStore } from './wallet'
-import { keccak256AsU8a } from '@polkadot/util-crypto'
-import nacl from 'tweetnacl'
 
 export const useMessagesStore = create<MessagesState>((set, get) => ({
   conversations: [],
@@ -66,21 +64,25 @@ export const useMessagesStore = create<MessagesState>((set, get) => ({
 
     set({ isLoading: true })
     try {
-      const addresses = await getConversations(evmAddress)
+      const addresses = await cc.getConversations(evmAddress as `0x${string}`)
       
       // Fetch last message for each conversation
       const conversations: Conversation[] = await Promise.all(
         addresses.map(async (addr) => {
           const normalizedAddr = addr.toLowerCase()
           try {
-            // Get the most recent message
-            const messages = await getMessages(evmAddress, normalizedAddr)
-            if (messages.length > 0) {
-              const lastMsg = messages[messages.length - 1] // Most recent is last
+            const rawMsgs = await cc.getMessages(
+              evmAddress as `0x${string}`,
+              normalizedAddr as `0x${string}`
+            )
+            if (rawMsgs.length > 0) {
+              const lastRaw = rawMsgs[rawMsgs.length - 1]
+              const bytes = hexToBytes(lastRaw.contentHash)
+              const content = new TextDecoder().decode(bytes).replace(/\0/g, '').trim()
               return {
                 address: normalizedAddr,
-                lastMessage: lastMsg.decryptedContent || 'Encrypted message',
-                lastMessageTime: lastMsg.timestamp,
+                lastMessage: content || 'Message',
+                lastMessageTime: lastRaw.timestamp,
                 unreadCount: 0,
               }
             }
@@ -92,7 +94,6 @@ export const useMessagesStore = create<MessagesState>((set, get) => ({
         })
       )
       
-      // Sort by most recent message
       conversations.sort((a, b) => (b.lastMessageTime || 0) - (a.lastMessageTime || 0))
       
       set({ conversations })
@@ -110,24 +111,37 @@ export const useMessagesStore = create<MessagesState>((set, get) => ({
     }
 
     try {
-      const messages = await getMessages(evmAddress, otherAddress)
+      const rawMsgs = await cc.getMessages(
+        evmAddress as `0x${string}`,
+        otherAddress as `0x${string}`
+      )
       
-      // Always update state - let React handle re-rendering
-      // This ensures chunked messages appear correctly when reassembly completes
+      const messages: Message[] = rawMsgs.map((m) => {
+        const bytes = hexToBytes(m.contentHash)
+        const decrypted = new TextDecoder().decode(bytes).replace(/\0/g, '').trim()
+        return {
+          id: `${m.sender}-${m.timestamp}`,
+          sender: m.sender,
+          recipient: m.recipient,
+          encryptedContent: bytes,
+          decryptedContent: decrypted,
+          timestamp: m.timestamp,
+        }
+      })
+      
       const state = get()
       const sorted = messages.sort((a, b) => a.timestamp - b.timestamp)
       set({ messages: { ...state.messages, [otherAddress]: sorted } })
       
-      // Update conversation lastMessage with most recent message content (if available)
       if (messages.length > 0) {
-        const lastMsg = messages[messages.length - 1] // Most recent is last
+        const lastMsg = messages[messages.length - 1]
         const convos = [...state.conversations]
         const idx = convos.findIndex((c) => c.address.toLowerCase() === otherAddress.toLowerCase())
         
         if (idx >= 0) {
           convos[idx] = {
             ...convos[idx],
-            lastMessage: lastMsg.decryptedContent || 'Encrypted message',
+            lastMessage: lastMsg.decryptedContent || 'Message',
             lastMessageTime: lastMsg.timestamp,
           }
           convos.sort((a, b) => (b.lastMessageTime || 0) - (a.lastMessageTime || 0))
@@ -145,16 +159,16 @@ export const useMessagesStore = create<MessagesState>((set, get) => ({
       throw new Error('Wallet not connected')
     }
 
-    // Use sendMessageOnChain which handles chunking for long messages
-    const encoder = new TextEncoder()
-    const contentBytes = encoder.encode(content)
-    
-    const result = await sendMessageOnChain(evmAddress, recipient.toLowerCase(), contentBytes)
+    const contentBytes = new TextEncoder().encode(content)
+    const result = await cc.sendDirectMessageChunked(
+      recipient.toLowerCase() as `0x${string}`,
+      contentBytes
+    )
 
     const message: Message = {
       id: result.id,
-      sender: evmAddress.toLowerCase(),
-      recipient: recipient.toLowerCase(),
+      sender: result.sender,
+      recipient: result.recipient,
       encryptedContent: result.encryptedContent,
       decryptedContent: result.decryptedContent,
       timestamp: result.timestamp,
