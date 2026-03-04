@@ -1,15 +1,6 @@
 import { create } from 'zustand'
-import { getApi } from '@/lib/chain'
-import {
-  registryRegister,
-  registryGetProfile,
-  registryUpdateProfile,
-  registryLinkWallet,
-  registryConfirmLink,
-  registryUnlinkWallet,
-  registryGetLinkedWallets,
-  type UserProfile as ContractUserProfile,
-} from '@/lib/contracts'
+import { toHex } from 'viem'
+import * as cc from '@/lib/contractCalls'
 import { useWalletStore } from './wallet'
 
 export interface ProfileState {
@@ -46,8 +37,8 @@ export const useProfileStore = create<ProfileState>((set, get) => ({
       throw new Error('Wallet not connected')
     }
 
-    const api = await getApi()
-    await registryRegister(api, displayName, encryptionPubkey)
+    const pubkeyHex = toHex(encryptionPubkey, { size: 32 }) as `0x${string}`
+    await cc.registerProfile(displayName, pubkeyHex)
 
     set({
       displayName,
@@ -77,34 +68,29 @@ export const useProfileStore = create<ProfileState>((set, get) => ({
 
     set({ isLoading: true })
     try {
-      const api = await getApi()
-      const profile = await registryGetProfile(api, targetAddress)
+      const profile = await cc.getProfile(targetAddress as `0x${string}`)
       console.log('[AUTH_TRACE] profile.ts fetchProfile() raw contract response:', profile)
 
-      const hasValidProfile = profile
-        && profile.displayName
-        && profile.displayName.trim().length > 0
-        && profile.registeredAt
-        && profile.registeredAt > 0n
-      console.log('[AUTH_TRACE] profile validation:', { displayName: profile?.displayName, registeredAt: profile?.registeredAt, hasValidProfile })
-
-      if (hasValidProfile) {
+      if (profile && profile.displayName && profile.displayName.trim().length > 0 && profile.registeredAt > 0n) {
         console.log('[AUTH_TRACE] profile.ts fetchProfile() has valid profile, setting isRegistered=true, needsRegistration=false')
+        // Convert hex pubkey back to Uint8Array
+        const { hexToBytes } = await import('viem')
+        const pubkeyBytes = hexToBytes(profile.encryptionPubkey)
+
         set({
           displayName: profile.displayName,
-          encryptionPubkey: profile.encryptionPubkey,
+          encryptionPubkey: pubkeyBytes,
           registeredAt: Number(profile.registeredAt),
           isRegistered: true,
           needsRegistration: false,
         })
 
         useWalletStore.getState().setEncryptionKeyPair({
-          publicKey: profile.encryptionPubkey,
+          publicKey: pubkeyBytes,
           secretKey: new Uint8Array(32),
         })
       } else {
-        // Query succeeded but returned default/empty struct — confirmed no profile
-        console.log('[AUTH_TRACE] profile.ts fetchProfile() no valid profile found (empty/default struct), setting isRegistered=false, needsRegistration=true')
+        console.log('[AUTH_TRACE] profile.ts fetchProfile() no valid profile found, setting isRegistered=false, needsRegistration=true')
         set({
           needsRegistration: true,
           isRegistered: false,
@@ -116,7 +102,7 @@ export const useProfileStore = create<ProfileState>((set, get) => ({
     } catch (err) {
       // Network/rate-limit error — do NOT conclude the user has no profile.
       // Re-throw so the caller (AuthGuard) can retry instead of redirecting.
-      console.error('❌ [fetchProfile] Network error fetching profile:', err)
+      console.error('[fetchProfile] Network error fetching profile:', err)
       throw err
     } finally {
       const finalState = get()
@@ -131,8 +117,8 @@ export const useProfileStore = create<ProfileState>((set, get) => ({
       throw new Error('Wallet not connected')
     }
 
-    const api = await getApi()
-    await registryUpdateProfile(api, displayName, encryptionPubkey)
+    const pubkeyHex = toHex(encryptionPubkey, { size: 32 }) as `0x${string}`
+    await cc.updateProfile(displayName, pubkeyHex)
 
     set({
       displayName,
@@ -151,8 +137,7 @@ export const useProfileStore = create<ProfileState>((set, get) => ({
       throw new Error('Wallet not connected')
     }
 
-    const api = await getApi()
-    await registryLinkWallet(api, linkedAddress)
+    await cc.linkWallet(linkedAddress as `0x${string}`)
   },
 
   confirmLink: async (primaryAddress: string) => {
@@ -161,8 +146,7 @@ export const useProfileStore = create<ProfileState>((set, get) => ({
       throw new Error('Wallet not connected')
     }
 
-    const api = await getApi()
-    await registryConfirmLink(api, primaryAddress)
+    await cc.confirmLink(primaryAddress as `0x${string}`)
   },
 
   unlinkWallet: async (linkedAddress: string) => {
@@ -171,8 +155,7 @@ export const useProfileStore = create<ProfileState>((set, get) => ({
       throw new Error('Wallet not connected')
     }
 
-    const api = await getApi()
-    await registryUnlinkWallet(api, linkedAddress)
+    await cc.unlinkWallet(linkedAddress as `0x${string}`)
 
     const current = get().linkedWallets
     set({ linkedWallets: current.filter(addr => addr !== linkedAddress) })
@@ -187,8 +170,7 @@ export const useProfileStore = create<ProfileState>((set, get) => ({
     }
 
     try {
-      const api = await getApi()
-      const wallets = await registryGetLinkedWallets(api, targetAddress)
+      const wallets = await cc.getLinkedWallets(targetAddress as `0x${string}`)
       set({ linkedWallets: wallets })
     } catch (err) {
       console.error('Failed to fetch linked wallets:', err)
