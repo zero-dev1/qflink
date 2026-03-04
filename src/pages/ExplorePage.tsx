@@ -8,7 +8,7 @@ import { Button } from '@/components/ui/Button'
 import { POD_CATEGORIES } from '@/types'
 import type { Pod, DefaultPod, CustomPod } from '@/types'
 import { cn } from '@/lib/utils'
-import { joinPodOnChain, podsHasPaid, invalidateCache } from '@/lib/contracts'
+import * as cc from '@/lib/contractCalls'
 import { useWalletStore } from '@/stores/wallet'
 import { usePodsStore } from '@/stores/pods'
 
@@ -69,7 +69,7 @@ const ExplorePage: React.FC = () => {
 
     // If pod has entry fee, check if user has already paid
     if (entryFee > 0n && evmAddress) {
-      const hasPaid = await podsHasPaid(pod.id, evmAddress)
+      const hasPaid = await cc.hasPaid(pod.id, evmAddress as `0x${string}`)
       if (hasPaid) {
         // User already paid, navigate directly
         navigate(`/pods/${pod.id}`)
@@ -82,8 +82,7 @@ const ExplorePage: React.FC = () => {
       if (!myPodIds.includes(pod.id) && address) {
         setIsJoining(true)
         try {
-          await joinPodOnChain(pod.id, address, 0n)
-          invalidateCache()
+          await cc.joinPod(pod.id, 0n)
           await usePodsStore.getState().fetchPods()
           navigate(`/pods/${pod.id}`)
           return
@@ -110,8 +109,7 @@ const ExplorePage: React.FC = () => {
         throw new Error('Wallet not connected')
       }
       
-      await joinPodOnChain(paidPodModalPod.id, address, entryFee)
-      invalidateCache()
+      await cc.joinPod(paidPodModalPod.id, entryFee)
       // Refresh pods to update sidebar immediately (myPods now comes from on-chain check)
       await fetchPods()
       
@@ -252,7 +250,7 @@ const ExplorePodCard: React.FC<ExplorePodCardProps> = ({
     const checkPayment = async () => {
       isCheckingPayment.current = true
       try {
-        const paid = await podsHasPaid(pod.id, evmAddress)
+        const paid = await cc.hasPaid(pod.id, evmAddress as `0x${string}`)
         if (!cancelled) setHasPaid(paid)
       } catch {
         // ignore

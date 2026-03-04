@@ -6,7 +6,7 @@ import { useUIStore } from '@/stores/ui'
 import { truncateAddress } from '@/lib/utils'
 import { deriveEncryptionKeypair } from '@/lib/encryption'
 import { ensureAccountMapped, getApi } from '@/lib/chain'
-import { registryGetProfile } from '@/lib/contracts'
+import { getProfile } from '@/lib/contractCalls'
 import { Spinner } from '@/components/ui/Spinner'
 import { QFLinkWordmark } from '@/components/QFLinkWordmark'
 import type { InjectedAccountWithMeta } from '@/lib/chain'
@@ -61,10 +61,9 @@ const ConnectPage: React.FC = () => {
     const checkAndRoute = async () => {
       console.log('[AUTH_TRACE] ConnectPage.tsx checkAndRoute() ENTRY')
       try {
-        const api = await getApi()
-        console.log('[AUTH_TRACE] ConnectPage.tsx checkAndRoute() CALLING registryGetProfile')
-        const profileData = await registryGetProfile(api, evmAddress)
-        console.log('[AUTH_TRACE] ConnectPage.tsx checkAndRoute() registryGetProfile response:', profileData)
+        console.log('[AUTH_TRACE] ConnectPage.tsx checkAndRoute() CALLING getProfile')
+        const profileData = await getProfile(evmAddress as `0x${string}`)
+        console.log('[AUTH_TRACE] ConnectPage.tsx checkAndRoute() getProfile response:', profileData)
         if (cancelled) {
           console.log('[AUTH_TRACE] ConnectPage.tsx checkAndRoute() CANCELLED, returning')
           return

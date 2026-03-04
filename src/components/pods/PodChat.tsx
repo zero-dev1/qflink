@@ -4,8 +4,7 @@ import { PodInfo } from './PodInfo'
 import { MessageInput } from '@/components/messages/MessageInput'
 import { ProgressBar } from '@/components/ui/ProgressBar'
 import { truncateAddress, formatMessageTime, formatBalance } from '@/lib/utils'
-import { registryGetProfile } from '@/lib/contracts'
-import { getApi } from '@/lib/chain'
+import { getProfile } from '@/lib/contractCalls'
 import { usePodsStore } from '@/stores/pods'
 import { useWalletStore } from '@/stores/wallet'
 import type { Pod, PodMessage, DefaultPod, CustomPod } from '@/types'
@@ -80,13 +79,12 @@ export const PodChat: React.FC<PodChatProps> = ({
       
       if (uniqueSenders.size === 0) return
       
-      const api = await getApi()
       const newProfiles = new Map(senderProfiles)
       
       await Promise.all(Array.from(uniqueSenders).map(async (addr) => {
         profilesFetchedRef.current.add(addr.toLowerCase())
         try {
-          const profile = await registryGetProfile(api, addr)
+          const profile = await getProfile(addr as `0x${string}`)
           if (profile?.displayName) {
             newProfiles.set(addr.toLowerCase(), profile.displayName)
           }

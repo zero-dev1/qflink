@@ -8,8 +8,7 @@ import { useWalletStore } from '@/stores/wallet'
 import { Avatar } from '@/components/ui/Avatar'
 import { ProgressBar } from '@/components/ui/ProgressBar'
 import { truncateAddress, formatTimestamp } from '@/lib/utils'
-import { registryGetProfile } from '@/lib/contracts'
-import { getApi } from '@/lib/chain'
+import { getProfile } from '@/lib/contractCalls'
 import type { DefaultPod, Pod } from '@/types'
 
 const formatHolderLabel = (minBal: bigint): string => {
@@ -76,13 +75,12 @@ const HomePage: React.FC = () => {
       
       if (addressesToFetch.length === 0) return
       
-      const api = await getApi()
       const newProfiles = new Map(profileNames)
       
       await Promise.all(addressesToFetch.map(async (addr) => {
         profilesFetchedRef.current.add(addr)
         try {
-          const profile = await registryGetProfile(api, addr)
+          const profile = await getProfile(addr as `0x${string}`)
           if (profile?.displayName) {
             newProfiles.set(addr, profile.displayName)
           }

@@ -2,8 +2,7 @@ import React, { useEffect, useRef, useMemo, useState, useCallback } from 'react'
 import { Avatar } from '@/components/ui/Avatar'
 import { MessageInput } from './MessageInput'
 import { truncateAddress, formatMessageTime } from '@/lib/utils'
-import { registryGetProfile } from '@/lib/contracts'
-import { getApi } from '@/lib/chain'
+import { getProfile } from '@/lib/contractCalls'
 import { cn } from '@/lib/utils'
 import type { Message } from '@/types'
 
@@ -54,10 +53,9 @@ export const ChatView: React.FC<ChatViewProps> = ({
       if (!address || profileFetchedRef.current) return
       
       profileFetchedRef.current = true
-      const api = await getApi()
       
       try {
-        const profile = await registryGetProfile(api, address)
+        const profile = await getProfile(address as `0x${string}`)
         if (profile?.displayName) {
           setPeerProfileName(profile.displayName)
         }
@@ -81,13 +79,12 @@ export const ChatView: React.FC<ChatViewProps> = ({
       
       if (uniqueSenders.size === 0) return
       
-      const api = await getApi()
       const newProfiles = new Map(senderProfiles)
       
       await Promise.all(Array.from(uniqueSenders).map(async (senderAddr) => {
         senderProfilesFetchedRef.current.add(senderAddr.toLowerCase())
         try {
-          const profile = await registryGetProfile(api, senderAddr)
+          const profile = await getProfile(senderAddr as `0x${string}`)
           if (profile?.displayName) {
             newProfiles.set(senderAddr.toLowerCase(), profile.displayName)
           }

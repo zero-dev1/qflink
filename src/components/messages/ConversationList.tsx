@@ -1,6 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react'
-import { registryGetProfile } from '@/lib/contracts'
-import { getApi } from '@/lib/chain'
+import { getProfile } from '@/lib/contractCalls'
 import { ConversationItem } from './ConversationItem'
 import { Input } from '@/components/ui/Input'
 import type { Conversation } from '@/types'
@@ -30,13 +29,12 @@ export const ConversationList: React.FC<ConversationListProps> = ({
       
       if (addressesToFetch.length === 0) return
       
-      const api = await getApi()
       const newProfiles = new Map(profileNames)
       
       await Promise.all(addressesToFetch.map(async (addr) => {
         profilesFetchedRef.current.add(addr)
         try {
-          const profile = await registryGetProfile(api, addr)
+          const profile = await getProfile(addr as `0x${string}`)
           if (profile?.displayName) {
             newProfiles.set(addr, profile.displayName)
           }

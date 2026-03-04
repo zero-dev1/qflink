@@ -4,8 +4,7 @@ import { Modal } from '@/components/ui/Modal'
 import { Avatar } from '@/components/ui/Avatar'
 import { ProgressBar } from '@/components/ui/ProgressBar'
 import { truncateAddress, formatBalance } from '@/lib/utils'
-import { registryGetProfile, banMember, unbanMember, addMod, removeMod, getMods, isBanned, isMod } from '@/lib/contracts'
-import { getApi } from '@/lib/chain'
+import * as cc from '@/lib/contractCalls'
 import { useUIStore } from '@/stores/ui'
 import { useWalletStore } from '@/stores/wallet'
 import type { Pod, DefaultPod, CustomPod, PodMessage } from '@/types'
@@ -75,14 +74,13 @@ export const PodInfo: React.FC<PodInfoProps> = ({
       const toFetch = uniqueSenders.filter(addr => !profilesFetchedRef.current.has(addr))
       if (toFetch.length === 0) return
       
-      const api = await getApi()
       const profiles = new Map<string, string>(memberProfiles)
       
       await Promise.all(
         toFetch.map(async (addr) => {
           profilesFetchedRef.current.add(addr)
           try {
-            const profile = await registryGetProfile(api, addr)
+            const profile = await cc.getProfile(addr as `0x${string}`)
             if (profile && profile.displayName) {
               profiles.set(addr, profile.displayName)
             }
@@ -120,7 +118,7 @@ export const PodInfo: React.FC<PodInfoProps> = ({
     const fetchMods = async () => {
       isLoadingMods.current = true
       try {
-        const mods = await getMods(pod.id)
+        const mods = await cc.getMods(pod.id)
         if (!cancelled) setModerators(mods.map(m => m.toLowerCase()))
       } catch (err) {
         console.error('[PodInfo] Failed to fetch mods:', err)
@@ -149,8 +147,8 @@ export const PodInfo: React.FC<PodInfoProps> = ({
         await Promise.all(
           uniqueSenders.map(async (addr) => {
             const [isBannedStatus, isModStatus] = await Promise.all([
-              isBanned(pod.id, addr),
-              isMod(pod.id, addr)
+              cc.isBanned(pod.id, addr as `0x${string}`),
+              cc.isMod(pod.id, addr as `0x${string}`)
             ])
             banned.set(addr.toLowerCase(), isBannedStatus)
             mods.set(addr.toLowerCase(), isModStatus)
@@ -206,33 +204,33 @@ export const PodInfo: React.FC<PodInfoProps> = ({
     try {
       switch (pendingAction) {
         case 'ban':
-          await banMember(pod.id, selectedMember)
+          await cc.banMember(pod.id, selectedMember as `0x${string}`)
           addToast('success', 'Member banned')
           break
         case 'unban':
-          await unbanMember(pod.id, selectedMember)
+          await cc.unbanMember(pod.id, selectedMember as `0x${string}`)
           addToast('success', 'Member unbanned')
           break
         case 'addMod':
-          await addMod(pod.id, selectedMember)
+          await cc.addMod(pod.id, selectedMember as `0x${string}`)
           addToast('success', 'Moderator added')
           break
         case 'removeMod':
-          await removeMod(pod.id, selectedMember)
+          await cc.removeMod(pod.id, selectedMember as `0x${string}`)
           addToast('success', 'Moderator removed')
           break
       }
       
       // Refresh status
       const [isBannedStatus, isModStatus] = await Promise.all([
-        isBanned(pod.id, selectedMember),
-        isMod(pod.id, selectedMember)
+        cc.isBanned(pod.id, selectedMember as `0x${string}`),
+        cc.isMod(pod.id, selectedMember as `0x${string}`)
       ])
       setBannedStatus(prev => new Map(prev).set(selectedMember.toLowerCase(), isBannedStatus))
       setModStatus(prev => new Map(prev).set(selectedMember.toLowerCase(), isModStatus))
       
       if (pendingAction === 'addMod' || pendingAction === 'removeMod') {
-        const mods = await getMods(pod.id)
+        const mods = await cc.getMods(pod.id)
         setModerators(mods.map(m => m.toLowerCase()))
       }
       
@@ -357,9 +355,9 @@ export const PodInfo: React.FC<PodInfoProps> = ({
                           <button
                             onClick={async () => {
                               try {
-                                await unbanMember(pod.id, addr)
+                                await cc.unbanMember(pod.id, addr as `0x${string}`)
                                 addToast('success', 'Member unbanned')
-                                const isBannedStatus = await isBanned(pod.id, addr)
+                                const isBannedStatus = await cc.isBanned(pod.id, addr as `0x${string}`)
                                 setBannedStatus(prev => new Map(prev).set(addr.toLowerCase(), isBannedStatus))
                               } catch (err) {
                                 addToast('error', err instanceof Error ? err.message : 'Failed to unban')
