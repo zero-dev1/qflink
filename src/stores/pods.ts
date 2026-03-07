@@ -1,5 +1,4 @@
 import { create } from 'zustand'
-import { hexToBytes } from 'viem'
 import type { PodsState, Pod, PodMessage, DefaultPod } from '@/types'
 import * as cc from '@/lib/contractCalls'
 import { useWalletStore } from './wallet'
@@ -18,6 +17,7 @@ export const usePodsStore = create<PodsState>((set, get) => ({
   podMembers: {},
   podMods: {},
   bannedAddresses: {},
+  podMessageCounts: {},
   isLoading: false,
 
   setPods: (pods: Pod[]) => set({ pods }),
@@ -67,14 +67,18 @@ export const usePodsStore = create<PodsState>((set, get) => ({
     set({ bannedAddresses: { ...get().bannedAddresses, [podId]: addresses } })
   },
 
+  setPodMessageCount: (podId: number, count: number) => {
+    set({ podMessageCounts: { ...get().podMessageCounts, [podId]: count } })
+  },
+
   setLoading: (loading: boolean) => set({ isLoading: loading }),
 
 
 
-  fetchPods: async () => {
+  fetchPods: async (blockNumber?: bigint) => {
     set({ isLoading: true })
     try {
-      const count = await cc.getPodCount()
+      const count = await cc.getPodCount(blockNumber)
       
       if (count === 0) {
         set({ pods: [], isLoading: false })
@@ -83,8 +87,11 @@ export const usePodsStore = create<PodsState>((set, get) => ({
       
       const pods: Pod[] = []
       
-      for (let i = 0; i < count; i++) {
-        const pod = await cc.getPod(i)
+      for (let i = 1; i <= count; i++) {
+        const [pod, entryFee] = await Promise.all([
+          cc.getPod(i, blockNumber),
+          cc.getEntryFee(i, blockNumber),
+        ])
         if (pod) {
           pods.push({
             id: Number(pod.id),
@@ -92,13 +99,14 @@ export const usePodsStore = create<PodsState>((set, get) => ({
             description: pod.description,
             minBalance: pod.minBalance,
             memberCount: pod.memberCount || 0,
-            isDefault: pod.isDefault,
+            // FIX: All pods from contract are user-created (custom), none are "default"
+            isDefault: false,
             creator: pod.creator,
             createdAt: pod.createdAt,
             tier: pod.tier === 1 ? 'pro' : 'free',
-            entryFee: pod.entryFee || 0n,
+            entryFee,
             payoutWallet: pod.payoutWallet,
-            category: 'trading',
+            category: pod.category || 'trading',
             isActive: true,
             maxMembers: pod.tier === 1 ? Infinity : 50,
             joinMethod: 'balance',
@@ -106,18 +114,20 @@ export const usePodsStore = create<PodsState>((set, get) => ({
         }
       }
       
+
       const uniquePods = pods.filter((pod, index, self) => 
         self.findIndex(p => p.id === pod.id) === index
       )
       
-      const defaultPods = uniquePods.filter(p => (p as any).isDefault) as DefaultPod[]
+      // FIX: No default pods anymore - all pods from contract are user-created
+      const defaultPods: DefaultPod[] = []
       
       // Derive myPods from on-chain reverse index
       let myPods: Pod[] = []
       const evmAddress = getEvmAddress()
       
       if (evmAddress) {
-        const userPodIds = await cc.getUserPods(evmAddress as `0x${string}`)
+        const userPodIds = await cc.getUserPods(evmAddress as `0x${string}`, blockNumber)
         
         for (const podId of userPodIds) {
           const pod = uniquePods.find(p => p.id === podId)
@@ -133,24 +143,11 @@ export const usePodsStore = create<PodsState>((set, get) => ({
             myPods.push(pod)
           }
         }
-        
-        // Only auto-add Chefs (pod 0) to sidebar
-        const chefsPod = uniquePods.find(p => p.id === 0)
-        if (chefsPod && !myPods.some(p => p.id === 0)) {
-          try {
-            const access = await cc.checkPodAccess(0, evmAddress as `0x${string}`)
-            if (access.granted) {
-              myPods.push(chefsPod)
-            }
-          } catch (err) {
-            console.error('Failed to check Chefs pod access:', err)
-          }
-        }
       }
       
       // Deduplicate myPods by ID to prevent duplicates in sidebar
       const uniqueMyPods = [...new Map(myPods.map(p => [p.id, p])).values()]
-      
+
       set({ pods: uniquePods, defaultPods, myPods: uniqueMyPods })
     } catch (err) {
       console.error('Failed to fetch pods:', err)
@@ -167,30 +164,30 @@ export const usePodsStore = create<PodsState>((set, get) => ({
         return
       }
       
-      if ((pod as any).messageCount === 0) {
-        set({ podMessages: { ...get().podMessages, [podId]: [] } })
-        return
-      }
-      
       const rawMessages = await cc.getPodMessages(podId, 0, 100)
       
-      // Decode contentHash bytes to text content
-      const formatted: PodMessage[] = rawMessages.map((msg, index) => {
-        // Convert hex contentHash to Uint8Array and decode as UTF-8
-        const bytes = hexToBytes(msg.contentHash)
-        const content = new TextDecoder().decode(bytes).replace(/\0/g, '').trim()
-        return {
-          id: `${podId}-${msg.sender.substring(0, 8)}-${msg.timestamp}-${index}`,
-          podId,
-          sender: msg.sender,
-          content,
-          timestamp: msg.timestamp,
-        }
-      })
+      const formatted: PodMessage[] = rawMessages.map((msg) => ({
+        id: `${podId}-${msg.id}`,
+        podId,
+        sender: msg.sender,
+        content: msg.content,
+        timestamp: msg.timestamp,
+      }))
       
       set({ podMessages: { ...get().podMessages, [podId]: formatted } })
     } catch (err) {
       console.error('Failed to fetch pod messages:', err)
+    }
+  },
+
+  fetchPodMessageCount: async (podId: number) => {
+    try {
+      const count = await cc.getPodMessageCount(podId)
+      set({ podMessageCounts: { ...get().podMessageCounts, [podId]: count } })
+      return count
+    } catch (err) {
+      console.error(`Failed to fetch message count for pod ${podId}:`, err)
+      return 0
     }
   },
 

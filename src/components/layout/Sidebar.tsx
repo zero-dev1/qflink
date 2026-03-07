@@ -89,8 +89,8 @@ const SidebarContent: React.FC<{ onClose?: () => void }> = ({ onClose }) => (
                 cn(
                   'flex items-center gap-3 px-3 py-2.5 text-sm font-medium transition-colors duration-150',
                   isActive
-                    ? 'text-white bg-cyan-600 font-semibold'
-                    : 'text-gray-400 hover:bg-gray-800'
+                    ? 'text-cyan-600 bg-cyan-600/10 font-semibold'
+                    : 'text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800'
                 )
               }
             >
@@ -148,7 +148,7 @@ export const BottomNav: React.FC = () => {
           className={({ isActive }) =>
             cn(
               'flex flex-1 flex-col items-center gap-1 py-3 text-xs font-medium transition-colors',
-              isActive ? 'text-qx-active-text' : 'text-qx-text-muted'
+              isActive ? 'text-cyan-600' : 'text-qx-text-muted'
             )
           }
         >

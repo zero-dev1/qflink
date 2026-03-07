@@ -2,8 +2,9 @@ import { useCallback, useRef, useEffect } from 'react'
 import { usePodsStore } from '@/stores/pods'
 import { useWalletStore } from '@/stores/wallet'
 import { useUIStore } from '@/stores/ui'
-import type { PodTier } from '@/types'
+
 import * as cc from '@/lib/contractCalls'
+
 
 
 export function usePods() {
@@ -23,9 +24,11 @@ export function usePods() {
   const addPodMessage = usePodsStore((s) => s.addPodMessage)
   const setPodMessages = usePodsStore((s) => s.setPodMessages)
   const setPodMembers = usePodsStore((s) => s.setPodMembers)
+  const fetchPodMods = usePodsStore((s) => s.fetchPodMods)
 
   const walletAddress = useWalletStore((s) => s.address)
   const walletBalance = useWalletStore((s) => s.balance)
+  const refreshBalance = useWalletStore((s) => s.refreshBalance)
   const linkedWallets = useWalletStore((s) => s.linkedWallets)
   const addToast = useUIStore((s) => s.addToast)
 
@@ -59,13 +62,13 @@ export function usePods() {
 
   const createPod = useCallback(
     async (
-      name: string, 
-      description: string, 
-      minBalance: bigint, 
-      isPublic: boolean, 
-      tier: 'free' | 'pro' = 'free',
+      name: string,
+      description: string,
+      minBalance: bigint,
+      isPublic: boolean,
       entryFee: bigint = BigInt(0),
-      payoutWallet: string = ''
+      payoutWallet: string = '',
+      category: string = 'trading'
     ) => {
       const { evmAddress } = useWalletStore.getState()
       if (!evmAddress) {
@@ -73,19 +76,26 @@ export function usePods() {
         return
       }
       try {
+        // Single path: all pods cost 500 QF to create
         const receipt = await cc.createPod(
           name, description, minBalance, entryFee,
-          payoutWallet ? payoutWallet as `0x${string}` : undefined
+          payoutWallet ? payoutWallet as `0x${string}` : undefined,
+          category
         )
         addToast('success', `Pod "${name}" created successfully`)
-        // Refresh pods list from chain to get the new pod
+
+        await cc.waitForBlockSync(receipt.blockNumber)
+        // Small delay for automine environments to ensure state is committed
+        await new Promise(r => setTimeout(r, 200))
         await fetchPods()
+        await refreshBalance()
       } catch (err) {
         const msg = err instanceof Error ? err.message : 'Failed to create pod'
         addToast('error', msg)
+        throw err
       }
     },
-    [addToast, addPod, fetchPods]
+    [addToast, addPod, fetchPods, refreshBalance]
   )
 
   // Join a pod (handles paid pods and free pods)
@@ -94,27 +104,72 @@ export function usePods() {
       const { evmAddress } = useWalletStore.getState()
       if (!evmAddress) {
         addToast('error', 'Please connect your wallet first')
-        return
+        return false
       }
+      
+      // Check if user is banned before attempting to join
       try {
-        await cc.joinPod(podId, fee)
+        const isBanned = await cc.isBanned(podId, evmAddress as `0x${string}`)
+        if (isBanned) {
+          addToast('error', 'You are banned from this pod')
+          return false
+        }
+      } catch (err) {
+        console.error('Failed to check ban status:', err)
+      }
+      
+      try {
+        const receipt = await cc.joinPod(podId, fee)
         addToast('success', 'Successfully joined pod')
+        await cc.waitForBlockSync(receipt.blockNumber)
+        // Small delay for automine environments to ensure state is committed
+        await new Promise(r => setTimeout(r, 200))
         await fetchPods()
+        await refreshBalance()
+        return true
       } catch (err) {
         const msg = err instanceof Error ? err.message : 'Failed to join pod'
         addToast('error', msg)
+        return false
       }
     },
-    [addToast, fetchPods]
+    [addToast, fetchPods, refreshBalance]
   )
 
   const leavePod = useCallback(
     async (podId: number) => {
-      // Token-gated pods: access is based on balance, can't manually leave
-      // Refresh to get current state
-      await fetchPods()
+      const { evmAddress } = useWalletStore.getState()
+      if (!evmAddress) {
+        addToast('error', 'Please connect your wallet first')
+        return
+      }
+      
+      // Get pod name before leaving for the toast message
+      const state = usePodsStore.getState()
+      const pod = state.myPods.find(p => p.id === podId)
+      const podName = pod?.name || 'the pod'
+      
+      try {
+        const receipt = await cc.leavePod(podId)
+        addToast('success', `You have left ${podName}`)
+        await cc.waitForBlockSync(receipt.blockNumber)
+        
+        // Optimistic removal: remove pod from myPods immediately
+        const currentMyPods = usePodsStore.getState().myPods
+        const updatedMyPods = currentMyPods.filter(p => p.id !== podId)
+        usePodsStore.setState({ myPods: updatedMyPods })
+        
+        // Delay before fetching to ensure contract state is updated (same pattern as rejoin)
+        await new Promise(r => setTimeout(r, 1000))
+        await fetchPods()
+        await refreshBalance()
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : 'Failed to leave pod'
+        addToast('error', msg)
+        throw err
+      }
     },
-    [fetchPods]
+    [addToast, fetchPods, refreshBalance]
   )
 
   const sendPodMessage = useCallback(
@@ -124,33 +179,57 @@ export function usePods() {
         addToast('error', 'Please connect your wallet first')
         return
       }
+      
+      // Check pod access before sending (handles banned users)
+      try {
+        const hasAccess = await cc.checkPodAccess(podId, evmAddress as `0x${string}`)
+        if (!hasAccess.granted) {
+          // Check if banned specifically
+          const isBanned = await cc.isBanned(podId, evmAddress as `0x${string}`)
+          if (isBanned) {
+            addToast('error', 'You have been banned from this pod')
+          } else {
+            addToast('error', 'You no longer have access to this pod')
+          }
+          // Immediately remove from local state (don't fetchPods - it could re-add the pod)
+          usePodsStore.setState((state) => ({
+            myPods: state.myPods.filter((p) => p.id !== podId),
+          }))
+          // Navigation will be handled by PodsPage.tsx catching ACCESS_DENIED
+          throw new Error('ACCESS_DENIED')
+        }
+      } catch (err) {
+        // If it's our ACCESS_DENIED error, rethrow it
+        if (err instanceof Error && err.message === 'ACCESS_DENIED') {
+          throw err
+        }
+        // Otherwise log but continue (network errors shouldn't block sending)
+        console.error('Failed to check pod access:', err)
+      }
+      
       try {
         const result = await cc.sendPodMessageChunked(podId, content)
         addPodMessage({ ...result })
       } catch (err) {
         const msg = err instanceof Error ? err.message : 'Failed to send message'
         addToast('error', msg)
+        throw err
       }
     },
-    [addToast, addPodMessage]
+    [addToast, addPodMessage, fetchPods]
   )
 
   const loadPodMessages = useCallback(
     async (podId: number) => {
       try {
         const rawMessages = await cc.getPodMessages(podId, 0, 100)
-        const { hexToBytes } = await import('viem')
-        const formatted = rawMessages.map((msg, index) => {
-          const bytes = hexToBytes(msg.contentHash)
-          const content = new TextDecoder().decode(bytes).replace(/\0/g, '').trim()
-          return {
-            id: `${podId}-${msg.sender.substring(0, 8)}-${msg.timestamp}-${index}`,
-            podId,
-            sender: msg.sender,
-            content,
-            timestamp: msg.timestamp,
-          }
-        })
+        const formatted = rawMessages.map((msg) => ({
+          id: `${podId}-${msg.id}`,
+          podId,
+          sender: msg.sender,
+          content: msg.content,
+          timestamp: msg.timestamp,
+        }))
         setPodMessages(podId, formatted)
       } catch (err) {
         console.error('Failed to load pod messages:', err)
@@ -171,57 +250,81 @@ export function usePods() {
     [setPodMembers]
   )
 
-  // Moderation functions
+  // Moderation functions with proper refresh
   const banMember = useCallback(
     async (podId: number, memberAddress: string) => {
       try {
-        await cc.banMember(podId, memberAddress as `0x${string}`)
+        const receipt = await cc.banMember(podId, memberAddress as `0x${string}`)
         addToast('success', 'Member banned')
+        await cc.waitForBlockSync(receipt.blockNumber)
+        // Small delay for automine environments to ensure state is committed
+        await new Promise(r => setTimeout(r, 200))
+        await fetchPods()
+        await refreshBalance()
+        // Refresh members list if available
+        await loadPodMembers(podId)
       } catch (err) {
         const msg = err instanceof Error ? err.message : 'Failed to ban member'
         addToast('error', msg)
       }
     },
-    [addToast]
+    [addToast, fetchPods, loadPodMembers, refreshBalance]
   )
 
   const unbanMember = useCallback(
     async (podId: number, memberAddress: string) => {
       try {
-        await cc.unbanMember(podId, memberAddress as `0x${string}`)
+        const receipt = await cc.unbanMember(podId, memberAddress as `0x${string}`)
         addToast('success', 'Member unbanned')
+        await cc.waitForBlockSync(receipt.blockNumber)
+        // Small delay for automine environments to ensure state is committed
+        await new Promise(r => setTimeout(r, 200))
+        await fetchPods()
+        await refreshBalance()
       } catch (err) {
         const msg = err instanceof Error ? err.message : 'Failed to unban member'
         addToast('error', msg)
       }
     },
-    [addToast]
+    [addToast, fetchPods, refreshBalance]
   )
 
   const addMod = useCallback(
     async (podId: number, moderatorAddress: string) => {
       try {
-        await cc.addMod(podId, moderatorAddress as `0x${string}`)
+        const receipt = await cc.addMod(podId, moderatorAddress as `0x${string}`)
         addToast('success', 'Moderator added')
+        await cc.waitForBlockSync(receipt.blockNumber)
+        // Small delay for automine environments to ensure state is committed
+        await new Promise(r => setTimeout(r, 200))
+        await fetchPods()
+        await refreshBalance()
+        await fetchPodMods(podId)
       } catch (err) {
         const msg = err instanceof Error ? err.message : 'Failed to add moderator'
         addToast('error', msg)
       }
     },
-    [addToast]
+    [addToast, fetchPods, fetchPodMods, refreshBalance]
   )
 
   const removeMod = useCallback(
     async (podId: number, moderatorAddress: string) => {
       try {
-        await cc.removeMod(podId, moderatorAddress as `0x${string}`)
+        const receipt = await cc.removeMod(podId, moderatorAddress as `0x${string}`)
         addToast('success', 'Moderator removed')
+        await cc.waitForBlockSync(receipt.blockNumber)
+        // Small delay for automine environments to ensure state is committed
+        await new Promise(r => setTimeout(r, 200))
+        await fetchPods()
+        await refreshBalance()
+        await fetchPodMods(podId)
       } catch (err) {
         const msg = err instanceof Error ? err.message : 'Failed to remove moderator'
         addToast('error', msg)
       }
     },
-    [addToast]
+    [addToast, fetchPods, fetchPodMods, refreshBalance]
   )
 
   return {

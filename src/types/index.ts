@@ -38,9 +38,9 @@ export interface UserProfile {
 export type PodTier = 'free' | 'pro'
 export type PodTierNumeric = 0 | 1
 export type JoinMethod = 'balance' | 'invite' | 'payment'
-export type PodCategory = 'trading' | 'builders' | 'nfts' | 'macro' | 'meme'
+export type PodCategory = 'trading' | 'tokens' | 'nfts' | 'defi' | 'gaming' | 'builders' | 'social' | 'alpha'
 
-export const POD_CATEGORIES: PodCategory[] = ['trading', 'builders', 'nfts', 'macro', 'meme']
+export const POD_CATEGORIES: PodCategory[] = ['trading', 'tokens', 'nfts', 'defi', 'gaming', 'builders', 'social', 'alpha']
 
 export const POD_TIER_INFO: Record<PodTier, {
   name: string
@@ -196,6 +196,7 @@ export interface WalletState {
   disconnect: () => Promise<void>
   ensureMapping: () => Promise<string>
   setBalance: (balance: bigint) => void
+  refreshBalance: () => Promise<void>
   setEncryptionKeyPair: (keyPair: { publicKey: Uint8Array; secretKey: Uint8Array }) => void
   addLinkedWallet: (wallet: LinkedWallet) => void
   removeLinkedWallet: (address: string) => void
@@ -226,6 +227,7 @@ export interface PodsState {
   podMembers: Record<number, string[]>
   podMods: Record<number, string[]>
   bannedAddresses: Record<number, string[]>
+  podMessageCounts: Record<number, number> // Track message counts per pod for unread indicator
   isLoading: boolean
   setPods: (pods: Pod[]) => void
   setMyPods: (pods: Pod[]) => void
@@ -237,9 +239,11 @@ export interface PodsState {
   setPodMembers: (podId: number, members: string[]) => void
   setPodMods: (podId: number, mods: string[]) => void
   setBannedAddresses: (podId: number, addresses: string[]) => void
+  setPodMessageCount: (podId: number, count: number) => void
   setLoading: (loading: boolean) => void
-  fetchPods: () => Promise<void>
+  fetchPods: (blockNumber?: bigint) => Promise<void>
   fetchPodMessages: (podId: number) => Promise<void>
+  fetchPodMessageCount: (podId: number) => Promise<number>
   sendPodMessage: (podId: number, content: string) => Promise<void>
   checkAccess: (podId: number, address: string) => Promise<{ granted: boolean; code: number }>
   fetchPodMods: (podId: number) => Promise<string[]>

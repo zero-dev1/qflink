@@ -26,4 +26,13 @@ export default defineConfig({
       },
     },
   },
+  server: {
+    proxy: {
+      '/eth-rpc': {
+        target: 'http://localhost:8545',
+        changeOrigin: true,
+        rewrite: (path) => path.replace(/^\/eth-rpc/, ''),
+      },
+    },
+  },
 })

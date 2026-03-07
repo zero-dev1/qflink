@@ -6,17 +6,12 @@ import { useMessagesStore } from '@/stores/messages'
 import { useUIStore } from '@/stores/ui'
 import { useWalletStore } from '@/stores/wallet'
 import { Avatar } from '@/components/ui/Avatar'
-import { ProgressBar } from '@/components/ui/ProgressBar'
-import { truncateAddress, formatTimestamp } from '@/lib/utils'
+import { TokenGateBar } from '@/components/pods/TokenGateBar'
+import { truncateAddress, formatTimestamp, formatCompactBalance } from '@/lib/utils'
 import { getProfile } from '@/lib/contractCalls'
 import type { DefaultPod, Pod } from '@/types'
 
-const formatHolderLabel = (minBal: bigint): string => {
-  const whole = minBal / (10n ** 18n)
-  if (whole >= 1_000_000n) return `${(Number(whole) / 1_000_000).toFixed(0)}M+ QF`
-  if (whole >= 1_000n) return `${(Number(whole) / 1_000).toFixed(0)}K+ QF`
-  return `${whole.toLocaleString()}+ QF`
-}
+const formatHolderLabel = (minBal: bigint): string => `${formatCompactBalance(minBal)} QF`
 
 const relativeTimeHome = (timestamp: number): string => {
   const diff = Math.floor((Date.now() - timestamp) / 1000)
@@ -24,15 +19,6 @@ const relativeTimeHome = (timestamp: number): string => {
   if (diff < 3600) return `${Math.floor(diff / 60)}m`
   if (diff < 86400) return `${Math.floor(diff / 3600)}h`
   return `${Math.floor(diff / 86400)}d`
-}
-
-const fmtRemaining = (current: bigint, target: bigint): string => {
-  const remaining = target > current ? target - current : 0n
-  if (remaining === 0n) return 'Qualified ✓'
-  const whole = remaining / (10n ** 18n)
-  if (whole >= 1_000_000n) return `${(Number(whole) / 1_000_000).toFixed(1)}M to go`
-  if (whole >= 1_000n) return `${(Number(whole) / 1_000).toFixed(0)}k to go`
-  return `${whole} to go`
 }
 
 const HomePage: React.FC = () => {
@@ -221,80 +207,92 @@ const PodHomeCard: React.FC<PodHomeCardProps> = ({
 }) => {
   const isDefault = 'isDefault' in pod && pod.isDefault
   const minBal = isDefault ? (pod as DefaultPod).minBalance : ((pod as any).minBalance || 0n)
-  const isComingSoon = isDefault && minBal === 0n
   const holderLabel = isDefault ? formatHolderLabel(minBal) : 'Open'
+  const category = isDefault
+    ? 'featured'
+    : ((pod as any).category || 'custom')
+  const description = isDefault
+    ? (pod as DefaultPod).description
+    : ((pod as any).description || '')
 
   const podMessages = usePodsStore((s) => s.podMessages)
   const lastMsg = podMessages[pod.id]?.[podMessages[pod.id]?.length - 1]
 
   return (
     <button
-      onClick={isComingSoon ? undefined : onClick}
-      disabled={isComingSoon}
-      className={`
-        flex flex-col border border-gray-200 dark:border-gray-800 bg-transparent p-4 text-left
-        ${isComingSoon 
-          ? 'opacity-70 cursor-not-allowed' 
-          : 'transition-[border-color,transform] duration-150 hover:border-cyan-600 hover:-translate-y-0.5'}
-      `}
+      onClick={onClick}
+      className="flex flex-col bg-transparent border border-gray-200 dark:border-gray-800 p-5 text-left transition-[border-color,transform] duration-150 hover:border-cyan-600 hover:-translate-y-0.5"
     >
-      {/* Row 1: name + badge + arrow */}
+      {/* Badge label for Featured (top-left) */}
+      {isDefault && (
+        <p className="text-xs text-qx-text-secondary dark:text-gray-400 mb-2">Featured</p>
+      )}
+
+      {/* Pod name with unread badge */}
       <div className="flex items-center justify-between mb-1">
         <div className="flex items-center gap-2 min-w-0">
-          <h3 className={isComingSoon ? 'text-base font-semibold text-gray-500 truncate' : 'text-base font-semibold text-qx-text-primary truncate'}>
+          <h3 className="text-xl font-bold text-qx-text-primary truncate">
             {pod.name}
           </h3>
-          {unreadCount > 0 && !isComingSoon && (
+          {unreadCount > 0 && (
             <span className="flex-shrink-0 flex h-5 min-w-5 items-center justify-center rounded-full bg-cyan-600 px-1 text-xs font-bold text-white">
               {unreadCount > 99 ? '99+' : unreadCount}
             </span>
           )}
         </div>
-        {isComingSoon ? (
-          <span className="text-[10px] uppercase tracking-wider text-gray-500">Coming Soon</span>
-        ) : (
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-qx-text-muted flex-shrink-0">
-            <polyline points="9 18 15 12 9 6" />
-          </svg>
-        )}
       </div>
 
-      {/* Row 2: holder label */}
-      <p className={isComingSoon ? 'text-xs text-gray-500 mb-3' : 'text-xs text-qx-text-secondary mb-3'}>
-        {isComingSoon ? 'Deploy a contract on QF Network' : (isDefault ? holderLabel : 'Open')}
+      {/* Category badge */}
+      <p className="text-xs text-cyan-600 uppercase tracking-wider font-semibold mb-2">
+        {category}
       </p>
 
-      {/* Row 3: progress bar (default pods with threshold > 0) OR last message OR coming soon message */}
-      {isComingSoon ? (
-        <div className="mt-auto">
-          <p className="text-xs text-gray-500">Coming Soon</p>
+      {/* TokenGateBar for pods with threshold > 0 */}
+      {minBal > 0n && (
+        <div className="mb-3">
+          <TokenGateBar userBalance={userBalance} threshold={minBal} />
         </div>
-      ) : isDefault && minBal > 0n ? (
-        <>
-          <ProgressBar current={userBalance} target={minBal} showLabels={false} />
-          <div className="flex items-center justify-between mt-1.5">
-            <span className="text-xs text-qx-text-muted">{fmtRemaining(userBalance, minBal)}</span>
-            {lastMsg && (
+      )}
+
+      {/* Description */}
+      {description && (
+        <p className="text-sm text-qx-text-secondary mb-3 line-clamp-2 overflow-hidden text-ellipsis">
+          {description}
+        </p>
+      )}
+
+      {/* Divider */}
+      <hr className="border-gray-200 dark:border-gray-800 mb-4" />
+
+      {/* Requirement + Timestamp/Members row */}
+      <div className="flex items-start justify-between">
+        <div>
+          <p className="text-xs text-qx-text-muted dark:text-gray-400 mb-0.5">Requirement</p>
+          <p className="text-sm font-semibold text-qx-text-primary">
+            {minBal === 0n ? 'Open' : holderLabel}
+          </p>
+        </div>
+        <div className="text-right">
+          {lastMsg ? (
+            <>
+              <p className="text-xs text-qx-text-muted dark:text-gray-400 mb-0.5">Last message</p>
               <div className="flex items-center gap-1">
                 <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-qx-text-muted">
                   <circle cx="12" cy="12" r="10" /><polyline points="12 6 12 12 16 14" />
                 </svg>
                 <span className="text-xs text-qx-text-muted">{formatTimestamp(lastMsg.timestamp)}</span>
               </div>
-            )}
-          </div>
-        </>
-      ) : lastMsg ? (
-        <>
-          <p className="text-xs text-qx-text-secondary truncate">{lastMsg.content}</p>
-          <div className="flex items-center justify-end gap-1 mt-1.5">
-            <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-qx-text-muted">
-              <circle cx="12" cy="12" r="10" /><polyline points="12 6 12 12 16 14" />
-            </svg>
-            <span className="text-xs text-qx-text-muted">{formatTimestamp(lastMsg.timestamp)}</span>
-          </div>
-        </>
-      ) : null}
+            </>
+          ) : (
+            <>
+              <p className="text-xs text-qx-text-muted dark:text-gray-400 mb-0.5">Members</p>
+              <p className="text-sm font-semibold text-qx-text-primary dark:text-gray-400">
+                {pod.memberCount || 0}
+              </p>
+            </>
+          )}
+        </div>
+      </div>
     </button>
   )
 }

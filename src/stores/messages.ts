@@ -1,5 +1,4 @@
 import { create } from 'zustand'
-import { hexToBytes } from 'viem'
 import type { MessagesState, Message, Conversation } from '@/types'
 import * as cc from '@/lib/contractCalls'
 import { useWalletStore } from './wallet'
@@ -77,11 +76,9 @@ export const useMessagesStore = create<MessagesState>((set, get) => ({
             )
             if (rawMsgs.length > 0) {
               const lastRaw = rawMsgs[rawMsgs.length - 1]
-              const bytes = hexToBytes(lastRaw.contentHash)
-              const content = new TextDecoder().decode(bytes).replace(/\0/g, '').trim()
               return {
                 address: normalizedAddr,
-                lastMessage: content || 'Message',
+                lastMessage: lastRaw.content || 'Message',
                 lastMessageTime: lastRaw.timestamp,
                 unreadCount: 0,
               }
@@ -117,14 +114,13 @@ export const useMessagesStore = create<MessagesState>((set, get) => ({
       )
       
       const messages: Message[] = rawMsgs.map((m) => {
-        const bytes = hexToBytes(m.contentHash)
-        const decrypted = new TextDecoder().decode(bytes).replace(/\0/g, '').trim()
+        const contentBytes = new TextEncoder().encode(m.content)
         return {
           id: `${m.sender}-${m.timestamp}`,
           sender: m.sender,
           recipient: m.recipient,
-          encryptedContent: bytes,
-          decryptedContent: decrypted,
+          encryptedContent: contentBytes,
+          decryptedContent: m.content,
           timestamp: m.timestamp,
         }
       })

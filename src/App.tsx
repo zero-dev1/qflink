@@ -67,6 +67,7 @@ const App: React.FC = () => {
             <Route path="/direct" element={<DirectMessagesPage />} />
             <Route path="/direct/:address" element={<DMChatPage />} />
             <Route path="/profile" element={<ProfilePage />} />
+            <Route path="/profile/:address" element={<ProfilePage />} />
             <Route path="/settings" element={<SettingsPage />} />
             <Route path="/create-pod" element={<CreatePodPage />} />
           </Route>

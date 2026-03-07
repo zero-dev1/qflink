@@ -2,6 +2,7 @@ import { create } from 'zustand'
 import type { WalletState, LinkedWallet, WalletType } from '@/types'
 import { subscribeBalance, queryBalance, ensureAccountMapped, getEvmAddress, deriveEvmAddress, getApi, type InjectedAccountWithMeta } from '@/lib/chain'
 
+
 let balanceUnsub: (() => void) | null = null
 let metamaskListenersSetup = false
 
@@ -417,6 +418,41 @@ export const useWalletStore = create<WalletState>((set, get) => ({
   },
 
   setBalance: (balance: bigint) => set({ balance }),
+
+  refreshBalance: async () => {
+    const { evmAddress, walletType } = get()
+    if (!evmAddress) return
+
+    try {
+      if (walletType === 'evm') {
+        // MetaMask: fetch via eth_getBalance
+        const ethRpcUrl = import.meta.env.VITE_ETH_RPC_URL
+        if (ethRpcUrl) {
+          const response = await fetch(ethRpcUrl, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              jsonrpc: '2.0',
+              id: 1,
+              method: 'eth_getBalance',
+              params: [evmAddress, 'latest'],
+            }),
+          })
+          const data = await response.json()
+          if (data.result) {
+            set({ balance: BigInt(data.result) })
+          }
+        }
+      } else {
+        // Substrate: query balance
+        const { queryBalance } = await import('@/lib/chain')
+        const balance = await queryBalance(get().address!)
+        set({ balance })
+      }
+    } catch (err) {
+      console.error('[refreshBalance] Failed:', err)
+    }
+  },
 
   setEncryptionKeyPair: (keyPair) => set({ encryptionKeyPair: keyPair }),
 

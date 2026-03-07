@@ -1,0 +1,187 @@
+// SPDX-License-Identifier: MIT
+pragma solidity ^0.8.20;
+
+// QFLinkPodsStorage — Pure storage, no business logic
+// All write functions gated by authorized address (PodsLogic contract)
+
+// Custom errors
+error NotAuthorized();
+error NotOwner();
+
+contract QFLinkPodsStorage {
+    // ============ State ============
+    
+    struct Pod {
+        bytes32 name;
+        address creator;
+        bool isPublic;
+        uint8 tier;        // 0=Free, 1=Pro
+        uint64 memberCount;
+        uint64 modCount;
+        uint256 threshold; // Token gate threshold
+    }
+    
+    // Core pod storage
+    mapping(uint64 => Pod) internal pods;
+    uint64 internal nextPodId;
+    
+    // Membership mappings
+    mapping(uint64 => mapping(address => bool)) internal members;
+    mapping(uint64 => mapping(address => bool)) internal banned;
+    mapping(uint64 => mapping(address => bool)) internal mods;
+    
+    // Access control
+    address public owner;
+    mapping(address => bool) internal authorized;
+    
+    // ============ Modifiers ============
+    
+    modifier onlyAuthorized() {
+        if (!authorized[msg.sender]) revert NotAuthorized();
+        _;
+    }
+    
+    modifier onlyOwner() {
+        if (msg.sender != owner) revert NotOwner();
+        _;
+    }
+    
+    // ============ Constructor ============
+    
+    constructor(address _auth) {
+        owner = msg.sender;
+        authorized[_auth] = true;
+        nextPodId = 1; // Start from 1 (0 reserved)
+    }
+    
+    // ============ Admin Functions ============
+    
+    function setAuthorized(address _auth, bool _status) external onlyOwner {
+        authorized[_auth] = _status;
+    }
+    
+    // ============ Write Functions (Authorized Only) ============
+    
+    function createPod(
+        bytes32 name,
+        address creator,
+        bool isPublic,
+        uint256 threshold
+    ) external onlyAuthorized returns (uint64) {
+        uint64 podId = nextPodId;
+        nextPodId++;
+        
+        pods[podId] = Pod({
+            name: name,
+            creator: creator,
+            isPublic: isPublic,
+            tier: 0, // Default to Free
+            memberCount: 0,
+            modCount: 0,
+            threshold: threshold
+        });
+        
+        return podId;
+    }
+    
+    function setPodTier(uint64 podId, uint8 tier) external onlyAuthorized {
+        pods[podId].tier = tier;
+    }
+    
+    function addMember(uint64 podId, address user) external onlyAuthorized {
+        members[podId][user] = true;
+        pods[podId].memberCount++;
+    }
+    
+    function removeMember(uint64 podId, address user) external onlyAuthorized {
+        members[podId][user] = false;
+        if (pods[podId].memberCount > 0) {
+            pods[podId].memberCount--;
+        }
+    }
+    
+    function setBanned(uint64 podId, address user, bool status) external onlyAuthorized {
+        banned[podId][user] = status;
+    }
+    
+    function setMod(uint64 podId, address user, bool status) external onlyAuthorized {
+        mods[podId][user] = status;
+    }
+    
+    function incrementModCount(uint64 podId) external onlyAuthorized {
+        pods[podId].modCount++;
+    }
+    
+    function decrementModCount(uint64 podId) external onlyAuthorized {
+        if (pods[podId].modCount > 0) {
+            pods[podId].modCount--;
+        }
+    }
+    
+    // ============ View Functions ============
+    
+    function getPod(uint64 podId) external view returns (
+        bytes32 name,
+        address creator,
+        bool isPublic,
+        uint8 tier,
+        uint64 memberCount,
+        uint64 modCount,
+        uint256 threshold
+    ) {
+        Pod storage p = pods[podId];
+        return (
+            p.name,
+            p.creator,
+            p.isPublic,
+            p.tier,
+            p.memberCount,
+            p.modCount,
+            p.threshold
+        );
+    }
+    
+    function isMember(uint64 podId, address user) external view returns (bool) {
+        return members[podId][user];
+    }
+    
+    function isBanned(uint64 podId, address user) external view returns (bool) {
+        return banned[podId][user];
+    }
+    
+    function isMod(uint64 podId, address user) external view returns (bool) {
+        return mods[podId][user];
+    }
+    
+    function getPodCount() external view returns (uint64) {
+        return nextPodId - 1; // Subtract 1 since we start from 1
+    }
+    
+    function getCreator(uint64 podId) external view returns (address) {
+        return pods[podId].creator;
+    }
+    
+    function getPodTier(uint64 podId) external view returns (uint8) {
+        return pods[podId].tier;
+    }
+    
+    function getMemberCount(uint64 podId) external view returns (uint64) {
+        return pods[podId].memberCount;
+    }
+    
+    function getModCount(uint64 podId) external view returns (uint64) {
+        return pods[podId].modCount;
+    }
+    
+    function getThreshold(uint64 podId) external view returns (uint256) {
+        return pods[podId].threshold;
+    }
+    
+    function getPodName(uint64 podId) external view returns (bytes32) {
+        return pods[podId].name;
+    }
+    
+    function isPublic(uint64 podId) external view returns (bool) {
+        return pods[podId].isPublic;
+    }
+}

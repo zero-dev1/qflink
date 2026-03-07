@@ -1,4 +1,5 @@
 import React from 'react'
+import { useNavigate } from 'react-router-dom'
 import { Avatar } from '@/components/ui/Avatar'
 import { truncateAddress, cn } from '@/lib/utils'
 import type { Conversation } from '@/types'
@@ -22,6 +23,13 @@ export const ConversationItem: React.FC<ConversationItemProps> = ({
   isActive,
   onClick,
 }) => {
+  const navigate = useNavigate()
+
+  const handleAvatarClick = (e: React.MouseEvent) => {
+    e.stopPropagation()
+    navigate(`/profile/${conversation.address}`)
+  }
+
   return (
     <button
       onClick={onClick}
@@ -32,7 +40,9 @@ export const ConversationItem: React.FC<ConversationItemProps> = ({
           : 'border-l-transparent bg-transparent hover:bg-gray-50 dark:hover:bg-white/[0.03]'
       )}
     >
-      <Avatar address={conversation.address} size="md" />
+      <div onClick={handleAvatarClick} className="cursor-pointer hover:opacity-80 transition-opacity flex-shrink-0">
+        <Avatar address={conversation.address} size="md" />
+      </div>
       <div className="flex-1 min-w-0">
         <p className="text-sm font-semibold truncate text-qx-text-primary">
           {conversation.displayName || <span className="font-mono">{truncateAddress(conversation.address)}</span>}

@@ -4,6 +4,7 @@ import { PodInfo } from './PodInfo'
 import { MessageInput } from '@/components/messages/MessageInput'
 import { ProgressBar } from '@/components/ui/ProgressBar'
 import { truncateAddress, formatMessageTime, formatBalance } from '@/lib/utils'
+import { TokenGateBar } from './TokenGateBar'
 import { getProfile } from '@/lib/contractCalls'
 import { usePodsStore } from '@/stores/pods'
 import { useWalletStore } from '@/stores/wallet'
@@ -20,6 +21,7 @@ interface PodChatProps {
   onBack: () => void
   onInvite?: () => void
   onLeave?: () => void
+  onRefreshMembers?: () => void
 }
 
 const formatHolderReq = (minBal: bigint): string => {
@@ -39,6 +41,7 @@ export const PodChat: React.FC<PodChatProps> = ({
   onBack,
   onInvite,
   onLeave,
+  onRefreshMembers,
 }) => {
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const chatContainerRef = useRef<HTMLDivElement>(null)
@@ -280,6 +283,12 @@ export const PodChat: React.FC<PodChatProps> = ({
           <div className="flex-1 min-w-0">
             <h3 className="font-display text-base font-semibold text-qx-text-primary">{pod.name}</h3>
             {holderReq && <p className="text-xs text-qx-text-secondary">{holderReq}</p>}
+            {/* TokenGateBar for pods with threshold > 0 */}
+            {minBalance > 0n && (
+              <div className="mt-1.5 max-w-xs">
+                <TokenGateBar userBalance={userBalance} threshold={minBalance} />
+              </div>
+            )}
           </div>
           <div className="flex items-center gap-3 flex-shrink-0">
             <button 
@@ -375,7 +384,7 @@ export const PodChat: React.FC<PodChatProps> = ({
         </div>
 
         <div className="flex-shrink-0">
-          <MessageInput onSend={onSend} maxLength={85} />
+          <MessageInput onSend={onSend} maxLength={500} />
         </div>
       </div>
 
@@ -389,6 +398,7 @@ export const PodChat: React.FC<PodChatProps> = ({
           userBalance={userBalance}
           onInvite={onInvite}
           onLeave={onLeave}
+          onRefreshMembers={onRefreshMembers}
         />
       </div>
     </div>

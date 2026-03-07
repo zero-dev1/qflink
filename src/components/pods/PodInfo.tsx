@@ -17,6 +17,7 @@ interface PodInfoProps {
   userBalance: bigint
   onInvite?: () => void
   onLeave?: () => void
+  onRefreshMembers?: () => void
 }
 
 interface MemberInfo {
@@ -35,6 +36,7 @@ export const PodInfo: React.FC<PodInfoProps> = ({
   userBalance,
   onInvite,
   onLeave,
+  onRefreshMembers,
 }) => {
   const navigate = useNavigate()
   const addToast = useUIStore((s) => s.addToast)
@@ -50,6 +52,9 @@ export const PodInfo: React.FC<PodInfoProps> = ({
   const [moderators, setModerators] = useState<string[]>([])
   const [bannedStatus, setBannedStatus] = useState<Map<string, boolean>>(new Map())
   const [modStatus, setModStatus] = useState<Map<string, boolean>>(new Map())
+  const [isLoadingMembers, setIsLoadingMembers] = useState(false)
+  const [membersError, setMembersError] = useState<string | null>(null)
+  const [visibleCount, setVisibleCount] = useState(50)
   const isLoadingMods = React.useRef(false)
   const isLoadingStatus = React.useRef(false)
   const profilesFetchedRef = React.useRef<Set<string>>(new Set())
@@ -68,6 +73,7 @@ export const PodInfo: React.FC<PodInfoProps> = ({
   const activeMemberCount = uniqueSenders.length
 
   // Lookup profile names for unique senders
+  // Also refetch when modal opens to get fresh data
   useEffect(() => {
     let cancelled = false
     const lookupProfiles = async () => {
@@ -97,9 +103,37 @@ export const PodInfo: React.FC<PodInfoProps> = ({
     return () => { cancelled = true }
   }, [uniqueSenders.length])
 
-  const filteredMembers = uniqueSenders.filter((addr) =>
-    addr.toLowerCase().includes(memberSearch.toLowerCase())
-  )
+  // FIX: Also fetch profiles when members modal opens to ensure fresh display names
+  useEffect(() => {
+    if (!showMembersModal || uniqueSenders.length === 0) return
+    
+    let cancelled = false
+    const refreshProfiles = async () => {
+      const profiles = new Map<string, string>(memberProfiles)
+      
+      await Promise.all(
+        uniqueSenders.map(async (addr) => {
+          try {
+            const profile = await cc.getProfile(addr as `0x${string}`)
+            if (profile && profile.displayName) {
+              profiles.set(addr, profile.displayName)
+            }
+          } catch {
+            // Ignore lookup errors
+          }
+        })
+      )
+      
+      if (!cancelled) setMemberProfiles(profiles)
+    }
+    
+    refreshProfiles()
+    return () => { cancelled = true }
+  }, [showMembersModal])
+
+  const filteredMembers = uniqueSenders
+    .filter((addr) => addr.toLowerCase().includes(memberSearch.toLowerCase()))
+    .slice(0, visibleCount)
 
   const minBalance = (pod as DefaultPod).minBalance ?? BigInt(0)
   
@@ -109,66 +143,129 @@ export const PodInfo: React.FC<PodInfoProps> = ({
   const isCreator = isCustom && normalizedCreator === normalizedCurrentUserH160
   const isCurrentUserMod = modStatus.get(normalizedCurrentUserH160) || false
   
-  // Fetch moderators list
-  // ISSUE 2 FIX: Only run once when pod changes, not on every render
+  // Build moderators list from modStatus Map
+  // Since getMods is a stub (returns empty array), we derive mods from member isMod checks
   useEffect(() => {
     if (!isCustom || !customPod) return
-    if (isLoadingMods.current) return
-    let cancelled = false
-    const fetchMods = async () => {
-      isLoadingMods.current = true
-      try {
-        const mods = await cc.getMods(pod.id)
-        if (!cancelled) setModerators(mods.map(m => m.toLowerCase()))
-      } catch (err) {
-        console.error('[PodInfo] Failed to fetch mods:', err)
-        if (!cancelled) setModerators([])
-      } finally {
-        isLoadingMods.current = false
-      }
-    }
-    fetchMods()
-    return () => { cancelled = true }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [pod.id])
+    const modsFromStatus = Array.from(modStatus.entries())
+      .filter(([_, isMod]) => isMod)
+      .map(([addr, _]) => addr.toLowerCase())
+    setModerators(modsFromStatus)
+  }, [isCustom, customPod, modStatus])
 
   // Check ban and mod status for members
   // ISSUE 2 FIX: Use stable reference for uniqueSenders to prevent infinite loop
+  // FIX: Add loading state, timeout, batching, and per-call error handling
+  // BUG 3 FIX: Clear loading state when no members to check (prevents stuck spinner on refresh)
   useEffect(() => {
-    if (!isCustom || !customPod || uniqueSenders.length === 0 || !currentUserH160) return
-    if (isLoadingStatus.current) return
+    if (!isCustom || !customPod || !currentUserH160) {
+      // BUG 3 FIX: Clear loading state if we can't run
+      setIsLoadingMembers(false)
+      return
+    }
+    
+    // BUG 3 FIX: If no senders to check, clear loading state immediately
+    if (uniqueSenders.length === 0) {
+      setIsLoadingMembers(false)
+      setMembersError(null)
+      return
+    }
+    
+    if (isLoadingStatus.current) {
+      // BUG 3 FIX PART 2: Make sure loading state is consistent with the ref
+      setIsLoadingMembers(true)
+      return
+    }
+    
     let cancelled = false
+    let timeoutId: ReturnType<typeof setTimeout>
+    
     const checkStatus = async () => {
       isLoadingStatus.current = true
+      setIsLoadingMembers(true)
+      setMembersError(null)
+      
       const banned = new Map<string, boolean>()
       const mods = new Map<string, boolean>()
       
+      // Set a 10-second timeout
+      const timeoutPromise = new Promise((_, reject) => {
+        timeoutId = setTimeout(() => reject(new Error('TIMEOUT')), 10000)
+      })
+      
       try {
-        await Promise.all(
-          uniqueSenders.map(async (addr) => {
-            const [isBannedStatus, isModStatus] = await Promise.all([
-              cc.isBanned(pod.id, addr as `0x${string}`),
-              cc.isMod(pod.id, addr as `0x${string}`)
-            ])
-            banned.set(addr.toLowerCase(), isBannedStatus)
-            mods.set(addr.toLowerCase(), isModStatus)
-          })
-        )
+        // Process members in batches of 10 to avoid overwhelming the RPC
+        const batchSize = 10
+        const sendersToCheck = uniqueSenders.slice(0, 100) // Cap at 100 members
+        
+        for (let i = 0; i < sendersToCheck.length; i += batchSize) {
+          if (cancelled) break
+          
+          const batch = sendersToCheck.slice(i, i + batchSize)
+          
+          const batchPromise = Promise.all(
+            batch.map(async (addr) => {
+              try {
+                const [isBannedStatus, isModStatus] = await Promise.all([
+                  cc.isBanned(pod.id, addr as `0x${string}`),
+                  cc.isMod(pod.id, addr as `0x${string}`)
+                ])
+                banned.set(addr.toLowerCase(), isBannedStatus)
+                mods.set(addr.toLowerCase(), isModStatus)
+              } catch (err) {
+                // Per-call error handling - don't let one failed call break everything
+                banned.set(addr.toLowerCase(), false)
+                mods.set(addr.toLowerCase(), false)
+              }
+            })
+          )
+          
+          // Race against timeout
+          await Promise.race([batchPromise, timeoutPromise])
+          
+          // Small delay between batches to prevent RPC overload
+          if (i + batchSize < sendersToCheck.length) {
+            await new Promise(r => setTimeout(r, 50))
+          }
+        }
+        
+        clearTimeout(timeoutId)
         
         if (!cancelled) {
           setBannedStatus(banned)
           setModStatus(mods)
         }
       } catch (err) {
-        console.error('[PodInfo] Failed to check member status:', err)
+        clearTimeout(timeoutId)
+        if ((err as Error).message === 'TIMEOUT') {
+          if (!cancelled) setMembersError('Failed to load members - request timed out')
+        } else {
+          if (!cancelled) setMembersError('Failed to load members')
+        }
       } finally {
         isLoadingStatus.current = false
+        if (!cancelled) {
+          setIsLoadingMembers(false)
+        }
       }
     }
+    
     checkStatus()
-    return () => { cancelled = true }
+    return () => { 
+      cancelled = true 
+      clearTimeout(timeoutId)
+      // BUG 3 FIX PART 3: Reset the loading ref so next render can proceed
+      isLoadingStatus.current = false
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [pod.id, uniqueSenders.length, currentUserH160])
+
+  // FIX: Refetch members when modal opens to avoid stale data after idle
+  useEffect(() => {
+    if (showMembersModal && onRefreshMembers) {
+      onRefreshMembers()
+    }
+  }, [showMembersModal, onRefreshMembers])
 
   const handleMemberClick = (addr: string) => {
     // ISSUE 1 FIX: Compare H160 addresses
@@ -190,7 +287,10 @@ export const PodInfo: React.FC<PodInfoProps> = ({
       setShowMembersModal(false)
       handleBackToList()
     } else if (action === 'profile') {
-      addToast('info', 'Profile view coming soon')
+      // Navigate to member's profile
+      navigate(`/profile/${selectedMember}`)
+      setShowMembersModal(false)
+      handleBackToList()
     } else {
       setPendingAction(action)
       setModalView('confirm')
@@ -199,6 +299,20 @@ export const PodInfo: React.FC<PodInfoProps> = ({
 
   const handleConfirmAction = async () => {
     if (!selectedMember || !pendingAction) return
+    
+    // FIX: Check if pod is free before adding moderator
+    if (pendingAction === 'addMod') {
+      const isFreePod = isDefault 
+        ? ((pod as DefaultPod).tier === 0 || (pod as DefaultPod).tier === undefined)
+        : (customPod?.tier === 'free' || (pod as CustomPod).entryFee === 0n)
+      
+      if (isFreePod) {
+        addToast('error', "Free pods don't support additional moderators. Create a Pro pod for up to 3 mods.")
+        setIsActionLoading(false)
+        handleBackToList()
+        return
+      }
+    }
     
     setIsActionLoading(true)
     try {
@@ -229,10 +343,7 @@ export const PodInfo: React.FC<PodInfoProps> = ({
       setBannedStatus(prev => new Map(prev).set(selectedMember.toLowerCase(), isBannedStatus))
       setModStatus(prev => new Map(prev).set(selectedMember.toLowerCase(), isModStatus))
       
-      if (pendingAction === 'addMod' || pendingAction === 'removeMod') {
-        const mods = await cc.getMods(pod.id)
-        setModerators(mods.map(m => m.toLowerCase()))
-      }
+      // Note: moderators list is automatically updated via useEffect that watches modStatus
       
       handleBackToList()
     } catch (err) {
@@ -314,22 +425,34 @@ export const PodInfo: React.FC<PodInfoProps> = ({
             </p>
           </div>
 
-          {/* Moderators */}
+          {/* Creator */}
+          {isCustom && customPod?.creator && (
+            <div>
+              <h4 className="text-sm font-semibold text-qx-text-primary mb-1">Creator</h4>
+              <p className="text-xs text-qx-text-secondary">
+                {memberProfiles.get(customPod.creator.toLowerCase()) || truncateAddress(customPod.creator, 'evm', 6)}
+              </p>
+            </div>
+          )}
+
+          {/* Moderators (excluding creator) */}
           {isCustom && (
             <div>
               <h4 className="text-sm font-semibold text-qx-text-primary mb-1">Moderators</h4>
-              {moderators.length === 0 ? (
+              {moderators.filter(m => m.toLowerCase() !== customPod?.creator?.toLowerCase()).length === 0 ? (
                 <p className="text-xs text-qx-text-muted">No moderators</p>
               ) : (
                 <div className="space-y-1">
-                  {moderators.map((modAddr) => {
-                    const profileName = memberProfiles.get(modAddr)
-                    return (
-                      <p key={modAddr} className="text-xs text-qx-text-secondary">
-                        {profileName || truncateAddress(modAddr, 'evm', 6)}
-                      </p>
-                    )
-                  })}
+                  {moderators
+                    .filter(m => m.toLowerCase() !== customPod?.creator?.toLowerCase())
+                    .map((modAddr) => {
+                      const profileName = memberProfiles.get(modAddr)
+                      return (
+                        <p key={modAddr} className="text-xs text-qx-text-secondary">
+                          {profileName || truncateAddress(modAddr, 'evm', 6)}
+                        </p>
+                      )
+                    })}
                 </div>
               )}
             </div>
@@ -447,54 +570,80 @@ export const PodInfo: React.FC<PodInfoProps> = ({
               />
             </div>
 
-            <div className="max-h-72 overflow-y-auto divide-y divide-gray-200 dark:divide-gray-800 border border-gray-200 dark:border-gray-800">
-              {filteredMembers.length === 0 ? (
-                <div className="flex items-center justify-center py-8">
-                  <p className="text-sm text-qx-text-muted">No active members yet.</p>
-                </div>
-              ) : (
-                filteredMembers.map((addr) => {
-                  const profileName = memberProfiles.get(addr)
-                  // ISSUE 1 FIX: Compare H160 addresses for "You" indicator
-                  const isCurrentUser = addr.toLowerCase() === currentUserH160?.toLowerCase()
-                  return (
-                    <div key={addr} className="flex items-center gap-3 px-3 py-2.5 hover:bg-qx-elevated">
-                      <Avatar address={addr} size="sm" />
-                      <div className="flex-1 min-w-0">
-                        {profileName ? (
-                          <p className="text-sm font-medium text-qx-text-primary truncate">
-                            {profileName}
-                          </p>
-                        ) : (
-                          <p className="text-sm font-medium text-qx-text-primary font-mono">
-                            {truncateAddress(addr, 'evm', 8)}
-                          </p>
-                        )}
-                        {isCurrentUser && (
-                          <p className="text-xs text-cyan-600">You</p>
+            {/* Loading state */}
+            {isLoadingMembers && (
+              <div className="flex items-center justify-center py-8">
+                <div className="animate-spin h-6 w-6 border-2 border-cyan-600 border-t-transparent rounded-full mr-2"></div>
+                <p className="text-sm text-qx-text-muted">Loading members...</p>
+              </div>
+            )}
+            
+            {/* Error state */}
+            {membersError && !isLoadingMembers && (
+              <div className="flex items-center justify-center py-8">
+                <p className="text-sm text-red-400">{membersError}</p>
+              </div>
+            )}
+            
+            {/* Members list */}
+            {!isLoadingMembers && !membersError && (
+              <div className="max-h-72 overflow-y-auto divide-y divide-gray-200 dark:divide-gray-800 border border-gray-200 dark:border-gray-800">
+                {filteredMembers.length === 0 ? (
+                  <div className="flex items-center justify-center py-8">
+                    <p className="text-sm text-qx-text-muted">No active members yet.</p>
+                  </div>
+                ) : (
+                  filteredMembers.map((addr) => {
+                    const profileName = memberProfiles.get(addr)
+                    // ISSUE 1 FIX: Compare H160 addresses for "You" indicator
+                    const isCurrentUser = addr.toLowerCase() === currentUserH160?.toLowerCase()
+                    return (
+                      <div key={addr} className="flex items-center gap-3 px-3 py-2.5 hover:bg-qx-elevated">
+                        <Avatar address={addr} size="sm" />
+                        <div className="flex-1 min-w-0">
+                          {profileName ? (
+                            <p className="text-sm font-medium text-qx-text-primary truncate">
+                              {profileName}
+                            </p>
+                          ) : (
+                            <p className="text-sm font-medium text-qx-text-primary font-mono">
+                              {truncateAddress(addr, 'evm', 8)}
+                            </p>
+                          )}
+                          {isCurrentUser && (
+                            <p className="text-xs text-cyan-600">You</p>
+                          )}
+                        </div>
+                        {/* BUG 2 FIX: Only show three-dot menu if NOT current user */}
+                        {!isCurrentUser && (
+                          <button
+                            onClick={() => handleMemberClick(addr)}
+                            className="flex h-8 w-8 items-center justify-center text-qx-text-muted hover:text-qx-text-primary hover:bg-qx-elevated transition-colors"
+                          >
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+                              <circle cx="12" cy="5" r="2" />
+                              <circle cx="12" cy="12" r="2" />
+                              <circle cx="12" cy="19" r="2" />
+                            </svg>
+                          </button>
                         )}
                       </div>
-                      {/* BUG 2 FIX: Only show three-dot menu if NOT current user */}
-                      {!isCurrentUser && (
-                        <button
-                          onClick={() => handleMemberClick(addr)}
-                          className="flex h-8 w-8 items-center justify-center text-qx-text-muted hover:text-qx-text-primary hover:bg-qx-elevated transition-colors"
-                        >
-                          <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
-                            <circle cx="12" cy="5" r="2" />
-                            <circle cx="12" cy="12" r="2" />
-                            <circle cx="12" cy="19" r="2" />
-                          </svg>
-                        </button>
-                      )}
-                    </div>
-                  )
-                })
-              )}
-            </div>
+                    )
+                  })
+                )}
+              </div>
+            )}
 
             <p className="text-xs text-qx-text-muted text-center">
               Showing {filteredMembers.length} of {activeMemberCount} active members
+              {uniqueSenders.filter((addr) => addr.toLowerCase().includes(memberSearch.toLowerCase())).length > visibleCount && (
+                <button 
+                  onClick={() => setVisibleCount(c => c + 50)}
+                  className="ml-2 text-cyan-600 hover:text-cyan-500"
+                >
+                  Show more
+                </button>
+              )}
             </p>
           </div>
         )}
@@ -526,7 +675,7 @@ export const PodInfo: React.FC<PodInfoProps> = ({
               {isCreator && (
                 <button
                   onClick={() => handleActionClick(modStatus.get(selectedMember.toLowerCase()) ? 'removeMod' : 'addMod')}
-                  className="w-full bg-cyan-600 px-4 py-2.5 text-sm font-semibold text-white hover:bg-cyan-700 transition-colors"
+                  className="w-full bg-transparent border border-cyan-600 px-4 py-2.5 text-sm font-semibold text-cyan-600 hover:bg-cyan-600/10 transition-colors"
                 >
                   {modStatus.get(selectedMember.toLowerCase()) ? 'Remove Moderator' : 'Make Moderator'}
                 </button>
@@ -535,23 +684,22 @@ export const PodInfo: React.FC<PodInfoProps> = ({
               {(isCreator || isCurrentUserMod) && (
                 <button
                   onClick={() => handleActionClick(bannedStatus.get(selectedMember.toLowerCase()) ? 'unban' : 'ban')}
-                  className="w-full bg-red-600 px-4 py-2.5 text-sm font-semibold text-white hover:bg-red-700 transition-colors"
+                  className="w-full bg-transparent border border-red-600 px-4 py-2.5 text-sm font-semibold text-red-600 hover:bg-red-600/10 transition-colors"
                 >
                   {bannedStatus.get(selectedMember.toLowerCase()) ? 'Unban Member' : 'Ban from Pod'}
                 </button>
               )}
 
-              {/* BUG 5 FIX: Explicit bg-gray-800 for secondary actions */}
               <button
                 onClick={() => handleActionClick('message')}
-                className="w-full bg-gray-800 px-4 py-2.5 text-sm font-semibold text-white hover:bg-gray-700 transition-colors"
+                className="w-full bg-transparent border border-gray-500 px-4 py-2.5 text-sm font-semibold text-gray-400 hover:bg-gray-500/10 transition-colors"
               >
                 Send Message
               </button>
 
               <button
                 onClick={() => handleActionClick('profile')}
-                className="w-full bg-gray-800 px-4 py-2.5 text-sm font-semibold text-white hover:bg-gray-700 transition-colors"
+                className="w-full bg-transparent border border-gray-500 px-4 py-2.5 text-sm font-semibold text-gray-400 hover:bg-gray-500/10 transition-colors"
               >
                 View Profile
               </button>

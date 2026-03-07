@@ -1,0 +1,1046 @@
+
+/**
+ * contractCalls.ts — viem-based contract interaction layer (v2 micro-contracts)
+ *
+ * Uses standard publicClient.readContract / walletClient.writeContract
+ * for native Solidity ABI encoding/decoding.
+ *
+ * Pods are now split into micro-contracts:
+ * - podsCreate: createPod
+ * - podsJoin: joinPod
+ * - podsLeave: leavePod
+ * - podsBan: banMember, unbanMember
+ * - podsAddMod: addMod
+ * - podsRemoveMod: removeMod
+ * - podsAdmin: upgradePod
+ * - podsReader: all view functions
+ * - podsGetPod: getPod
+ */
+
+import {
+  stringToHex,
+  hexToString,
+  type Hash,
+} from 'viem'
+
+import { getPublicClient, getWalletClient, CONTRACT_ADDRESSES, qfChain } from './viemClient'
+import { decodeContractError, getContractErrorMessage } from './contractErrors'
+import { registryAbi } from '@/abi/registry'
+import { podsCreateAbi } from '@/abi/podsCreate'
+import { podsJoinAbi } from '@/abi/podsJoin'
+import { podsLeaveAbi } from '@/abi/podsLeave'
+import { podsBanAbi } from '@/abi/podsBan'
+import { podsAddModAbi } from '@/abi/podsAddMod'
+import { podsRemoveModAbi } from '@/abi/podsRemoveMod'
+import { podsAdminAbi } from '@/abi/podsAdmin'
+import { podsReaderAbi } from '@/abi/podsReader'
+import { podsGetPodAbi } from '@/abi/podsGetPod'
+import { paymentsAbi } from '@/abi/payments'
+import { messagesWriterAbi } from '@/abi/messagesWriter'
+import { messagesReaderAbi } from '@/abi/messagesReader'
+
+/** Convert a UTF-8 string to a right-padded bytes32 hex */
+function toBytes32(s: string): `0x${string}` {
+  return stringToHex(s, { size: 32 })
+}
+
+/** Convert a bytes32 hex back to a trimmed UTF-8 string */
+function fromBytes32(b: `0x${string}`): string {
+  return hexToString(b, { size: 32 }).replace(/\0/g, '')
+}
+
+/** Wait for a tx receipt after a write */
+async function waitReceipt(hash: Hash, functionName: string = 'unknown') {
+  console.log(`[${functionName}] Waiting for tx:`, hash)
+  
+  const client = getPublicClient()
+  
+  // Poll eth_getTransactionReceipt directly to force adapter to process
+  for (let i = 0; i < 120; i++) {
+    await new Promise(r => setTimeout(r, 500))
+    try {
+      const receipt = await client.getTransactionReceipt({ hash })
+      if (receipt) {
+        console.log(`[${functionName}] Confirmed in block:`, receipt.blockNumber)
+        return receipt
+      }
+    } catch {
+      // Not mined yet, keep polling
+    }
+  }
+  throw new Error(`${functionName} was not mined within 60 seconds`)
+}
+
+// ============================================================
+//  REGISTRY — reads
+// ============================================================
+
+export interface UserProfile {
+  displayName: string
+  encryptionPubkey: `0x${string}`
+  registeredAt: bigint
+}
+
+export async function getProfile(address: `0x${string}`): Promise<UserProfile | null> {
+  try {
+    const client = getPublicClient()
+    const [displayNameB32, encryptionPubkey, registeredAt] = await client.readContract({
+      address: CONTRACT_ADDRESSES.registry,
+      abi: registryAbi,
+      functionName: 'getProfile',
+      args: [address],
+    })
+
+    if (registeredAt === 0n) return null
+
+    return {
+      displayName: fromBytes32(displayNameB32 as `0x${string}`),
+      encryptionPubkey: encryptionPubkey as `0x${string}`,
+      registeredAt,
+    }
+  } catch (err) {
+    // UserNotFound custom error — return null
+    const errStr = String(err)
+    if (errStr.includes('UserNotFound') || errStr.includes('0x')) {
+      const raw = decodeContractError(err)
+      if (!raw || raw.includes('UserNotFound')) return null
+    }
+    console.error('[contractCalls.getProfile] Full error:', err)
+    return null
+  }
+}
+
+export async function getUserCount(): Promise<bigint> {
+  try {
+    const client = getPublicClient()
+    return await client.readContract({
+      address: CONTRACT_ADDRESSES.registry,
+      abi: registryAbi,
+      functionName: 'getUserCount',
+    })
+  } catch (err) {
+    console.error('[contractCalls.getUserCount] Full error:', err)
+    return 0n
+  }
+}
+
+// v1 stubs for removed functions — maintain backward compat
+export async function getLinkedWallets(_primaryAddress: `0x${string}`): Promise<string[]> {
+  return []
+}
+
+export async function isGloballyBanned(_address: `0x${string}`): Promise<boolean> {
+  return false
+}
+
+// ============================================================
+//  REGISTRY — writes
+// ============================================================
+
+export async function registerProfile(displayName: string, encryptionPubkey: `0x${string}`) {
+  const walletClient = await getWalletClient()
+  const [account] = await walletClient.getAddresses()
+  if (!account) throw new Error('No EVM account available. Please enable Ethereum accounts in your wallet.')
+
+
+  try {
+    const hash = await walletClient.writeContract({
+      account,
+      chain: qfChain,
+      address: CONTRACT_ADDRESSES.registry,
+      abi: registryAbi,
+      functionName: 'register',
+      args: [toBytes32(displayName), encryptionPubkey],
+    })
+    return waitReceipt(hash, 'registerProfile')
+  } catch (err) {
+    const raw = decodeContractError(err)
+    console.error('[registerProfile] Raw contract error:', raw, err)
+    throw new Error(getContractErrorMessage(err))
+  }
+}
+
+export async function updateProfile(displayName: string, encryptionPubkey: `0x${string}`) {
+  const walletClient = await getWalletClient()
+  const [account] = await walletClient.getAddresses()
+  if (!account) throw new Error('No EVM account available. Please enable Ethereum accounts in your wallet.')
+
+
+  try {
+    const hash = await walletClient.writeContract({
+      account,
+      chain: qfChain,
+      address: CONTRACT_ADDRESSES.registry,
+      abi: registryAbi,
+      functionName: 'updateProfile',
+      args: [toBytes32(displayName), encryptionPubkey],
+    })
+    return waitReceipt(hash, 'updateProfile')
+  } catch (err) {
+    const raw = decodeContractError(err)
+    console.error('[updateProfile] Raw contract error:', raw, err)
+    throw new Error(getContractErrorMessage(err))
+  }
+}
+
+// v1 stubs for removed registry write functions
+export async function linkWallet(_linkedAddress: `0x${string}`) {
+  throw new Error('Wallet linking is not available in v1')
+}
+
+export async function confirmLink(_primaryAddress: `0x${string}`) {
+  throw new Error('Wallet linking is not available in v1')
+}
+
+export async function unlinkWallet(_linkedAddress: `0x${string}`) {
+  throw new Error('Wallet linking is not available in v1')
+}
+
+export async function globalBan(_target: `0x${string}`) {
+  throw new Error('Global bans are not available in v1')
+}
+
+export async function globalUnban(_target: `0x${string}`) {
+  throw new Error('Global bans are not available in v1')
+}
+
+// ============================================================
+//  PODS — reads (all routed through PodsReader)
+// ============================================================
+
+export interface PodData {
+  id: bigint
+  name: string
+  description: string
+  minBalance: bigint
+  creator: string
+  createdAt: bigint
+  isDefault: boolean
+  podType: number
+  tier: number
+  entryFee?: bigint
+  payoutWallet?: string
+  memberCount: number
+  isPublic: boolean
+  fee?: bigint
+  threshold: bigint
+  modCount: number
+}
+
+export async function getPodCount(): Promise<number> {
+  try {
+    const client = getPublicClient()
+    const result = await client.readContract({
+      address: CONTRACT_ADDRESSES.podsReader,
+      abi: podsReaderAbi,
+      functionName: 'getPodCount',
+    })
+    const count = Number(result)
+    console.log(`[getPodCount DEBUG] Raw result: ${result}, Parsed count: ${count}`)
+    return count
+  } catch (err) {
+    console.error('[contractCalls.getPodCount] Full error:', err)
+    return 0
+  }
+}
+
+export async function getPod(podId: number): Promise<PodData | null> {
+  try {
+    const client = getPublicClient()
+    const [nameB32, creator, isPublic, tier, memberCount, modCount, threshold] = await client.readContract({
+      address: CONTRACT_ADDRESSES.podsGetPod,
+      abi: podsGetPodAbi,
+      functionName: 'getPod',
+      args: [BigInt(podId)],
+    })
+
+    const name = fromBytes32(nameB32 as `0x${string}`)
+    const creatorAddr = (creator as string).toLowerCase()
+    
+    // DEBUG: Log raw pod data to diagnose off-by-one errors
+    console.log(`[getPod DEBUG] ID=${podId}:`, {
+      rawNameBytes32: nameB32,
+      decodedName: name,
+      creator: creatorAddr,
+      isPublic,
+      tier: Number(tier),
+      memberCount: Number(memberCount),
+    })
+    
+    // Skip non-existent pods (zero address creator)
+    if (creatorAddr === '0x0000000000000000000000000000000000000000') {
+      console.log(`[getPod DEBUG] ID=${podId}: Skipping - zero address creator`)
+      return null
+    }
+
+    return {
+      id: BigInt(podId),
+      name: name || `Pod ${podId}`, // Fallback name if empty
+      description: '',
+      minBalance: threshold as bigint,
+      creator: creatorAddr,
+      createdAt: 0n,
+      isDefault: false, // All pods from contract are user-created
+      podType: 0,
+      tier: Number(tier),
+      memberCount: Number(memberCount),
+      modCount: Number(modCount),
+      isPublic: isPublic as boolean,
+      threshold: threshold as bigint,
+    }
+  } catch (err) {
+    console.error(`[contractCalls.getPod] Error for pod ${podId}:`, err)
+    return null
+  }
+}
+
+export async function getAllPods(): Promise<PodData[]> {
+  const count = await getPodCount()
+  const pods: PodData[] = []
+  for (let i = 0; i < count; i++) {
+    const pod = await getPod(i)
+    if (pod) pods.push(pod)
+  }
+  return pods
+}
+
+// Get all pods that a user is a member of
+export async function getUserPods(address: `0x${string}`): Promise<number[]> {
+  try {
+    const count = await getPodCount()
+    if (count === 0) return []
+    
+    console.log(`[getUserPods DEBUG] Checking membership for pods 0 to ${count - 1}`)
+    
+    // Check membership for all pods in parallel for better performance
+    const membershipChecks = await Promise.all(
+      Array.from({ length: count }, (_, i) =>
+        isMember(i, address).then(isMember => ({ podId: i, isMember }))
+      )
+    )
+    
+    const memberPods = membershipChecks
+      .filter(({ isMember }) => isMember)
+      .map(({ podId }) => podId)
+    
+    console.log(`[getUserPods DEBUG] User is member of pods:`, memberPods)
+    return memberPods
+  } catch (err) {
+    console.error('[contractCalls.getUserPods] Full error:', err)
+    return []
+  }
+}
+
+export async function getPodMemberCount(podId: number): Promise<number> {
+  try {
+    const client = getPublicClient()
+    const count = await client.readContract({
+      address: CONTRACT_ADDRESSES.podsReader,
+      abi: podsReaderAbi,
+      functionName: 'getMemberCount',
+      args: [BigInt(podId)],
+    })
+    return Number(count)
+  } catch (err) {
+    console.error(`[contractCalls.getPodMemberCount] Error for pod ${podId}:`, err)
+    return 0
+  }
+}
+
+export async function getModCount(podId: number): Promise<number> {
+  try {
+    const client = getPublicClient()
+    const count = await client.readContract({
+      address: CONTRACT_ADDRESSES.podsReader,
+      abi: podsReaderAbi,
+      functionName: 'getModCount',
+      args: [BigInt(podId)],
+    })
+    return Number(count)
+  } catch (err) {
+    console.error(`[contractCalls.getModCount] Error for pod ${podId}:`, err)
+    return 0
+  }
+}
+
+// v1 workaround — Get members by checking message senders and their membership status
+// The contract doesn't expose a function to enumerate all members
+// This function takes a list of candidate addresses (e.g., from messages) and filters by membership
+export async function getPodMembersFromCandidates(
+  podId: number, 
+  candidateAddresses: string[]
+): Promise<string[]> {
+  try {
+    // Check membership for all candidates in parallel
+    const membershipResults = await Promise.all(
+      candidateAddresses.map(async (addr) => ({
+        addr,
+        isMember: await isMember(podId, addr as `0x${string}`)
+      }))
+    )
+    
+    return membershipResults
+      .filter(({ isMember }) => isMember)
+      .map(({ addr }) => addr.toLowerCase())
+  } catch (err) {
+    console.error(`[contractCalls.getPodMembersFromCandidates] Error for pod ${podId}:`, err)
+    return []
+  }
+}
+
+// Legacy stub - kept for backward compatibility
+export async function getPodMembers(_podId: number): Promise<string[]> {
+  return []
+}
+
+export async function checkPodAccess(
+  podId: number,
+  address: `0x${string}`
+): Promise<{ granted: boolean; code: number }> {
+  try {
+    const client = getPublicClient()
+    const result = await client.readContract({
+      address: CONTRACT_ADDRESSES.podsReader,
+      abi: podsReaderAbi,
+      functionName: 'checkPodAccess',
+      args: [BigInt(podId), address],
+    })
+    return { granted: result as boolean, code: result ? 0 : 1 }
+  } catch (err) {
+    console.error('[contractCalls.checkPodAccess] Full error:', err)
+    return { granted: false, code: 255 }
+  }
+}
+
+export interface RawPodMessage {
+  sender: string
+  content: string
+  timestamp: number
+  id: number
+}
+
+async function _fetchMessage(client: any, id: bigint) {
+  const [sender, timestamp, content, podId, recipient] = await client.readContract({
+    address: CONTRACT_ADDRESSES.messageReader,
+    abi: messagesReaderAbi,
+    functionName: 'getMessage',
+    args: [id],
+  })
+  return {
+    sender: (sender as string).toLowerCase(),
+    timestamp: Number(timestamp as bigint) * 1000,
+    content: content as string,
+    podId: Number(podId),
+    recipient: (recipient as string).toLowerCase(),
+  }
+}
+
+export async function getPodMessages(
+  podId: number,
+  start = 0,
+  limit = 100
+): Promise<RawPodMessage[]> {
+  try {
+    const client = getPublicClient()
+    const ids = await client.readContract({
+      address: CONTRACT_ADDRESSES.messageReader,
+      abi: messagesReaderAbi,
+      functionName: 'getPodMessageIds',
+      args: [BigInt(podId), BigInt(start), BigInt(limit)],
+    }) as bigint[]
+
+    const messages = await Promise.all(
+      ids.map(async (id) => {
+        const m = await _fetchMessage(client, id)
+        return {
+          id: Number(id),
+          sender: m.sender,
+          content: m.content,
+          timestamp: m.timestamp,
+        }
+      })
+    )
+    return messages
+  } catch (err) {
+    console.error(`[contractCalls.getPodMessages] Error for pod ${podId}:`, err)
+    return []
+  }
+}
+
+export async function getPodTier(podId: number): Promise<number> {
+  try {
+    const client = getPublicClient()
+    const tier = await client.readContract({
+      address: CONTRACT_ADDRESSES.podsReader,
+      abi: podsReaderAbi,
+      functionName: 'getPodTier',
+      args: [BigInt(podId)],
+    })
+    return Number(tier)
+  } catch (err) {
+    console.error('[contractCalls.getPodTier] Full error:', err)
+    return 0
+  }
+}
+
+export async function getPodFee(podId: number): Promise<bigint> {
+  try {
+    const client = getPublicClient()
+    return await client.readContract({
+      address: CONTRACT_ADDRESSES.payments,
+      abi: paymentsAbi,
+      functionName: 'getEntryFee',
+      args: [BigInt(podId)],
+    })
+  } catch (err) {
+    console.error('[contractCalls.getPodFee] Full error:', err)
+    return 0n
+  }
+}
+
+export async function hasPaid(podId: number, address: `0x${string}`): Promise<boolean> {
+  try {
+    const client = getPublicClient()
+    return await client.readContract({
+      address: CONTRACT_ADDRESSES.payments,
+      abi: paymentsAbi,
+      functionName: 'hasPaid',
+      args: [BigInt(podId), address],
+    })
+  } catch (err) {
+    console.error('[contractCalls.hasPaid] Full error:', err)
+    return false
+  }
+}
+
+// Payment functions
+export async function payEntryFee(podId: number, fee: bigint) {
+  const walletClient = await getWalletClient()
+  const [account] = await walletClient.getAddresses()
+  if (!account) throw new Error('No EVM account available. Please enable Ethereum accounts in your wallet.')
+
+
+  try {
+    const hash = await walletClient.writeContract({
+      account,
+      chain: qfChain,
+      address: CONTRACT_ADDRESSES.payments,
+      abi: paymentsAbi,
+      functionName: 'payEntryFee',
+      args: [BigInt(podId)],
+      value: fee,
+    })
+    return waitReceipt(hash, 'payEntryFee')
+  } catch (err) {
+    const raw = decodeContractError(err)
+    console.error('[payEntryFee] Raw contract error:', raw, err)
+    throw new Error(getContractErrorMessage(err))
+  }
+}
+
+export async function setEntryFee(podId: number, fee: bigint) {
+  const walletClient = await getWalletClient()
+  const [account] = await walletClient.getAddresses()
+  if (!account) throw new Error('No EVM account available. Please enable Ethereum accounts in your wallet.')
+
+
+  try {
+    const hash = await walletClient.writeContract({
+      account,
+      chain: qfChain,
+      address: CONTRACT_ADDRESSES.payments,
+      abi: paymentsAbi,
+      functionName: 'setEntryFee',
+      args: [BigInt(podId), fee],
+    })
+    return waitReceipt(hash, 'setEntryFee')
+  } catch (err) {
+    const raw = decodeContractError(err)
+    console.error('[setEntryFee] Raw contract error:', raw, err)
+    throw new Error(getContractErrorMessage(err))
+  }
+}
+
+export async function getEntryFee(podId: number): Promise<bigint> {
+  try {
+    const client = getPublicClient()
+    return await client.readContract({
+      address: CONTRACT_ADDRESSES.payments,
+      abi: paymentsAbi,
+      functionName: 'getEntryFee',
+      args: [BigInt(podId)],
+    })
+  } catch (err) {
+    console.error('[contractCalls.getEntryFee] Full error:', err)
+    return 0n
+  }
+}
+
+// Stubs for removed functions
+export async function getProFee(): Promise<bigint> { return 0n }
+export async function getTreasury(): Promise<string | null> { return null }
+
+// ── Moderation reads (all through PodsReader) ──
+
+export async function isBanned(podId: number, address: `0x${string}`): Promise<boolean> {
+  try {
+    const client = getPublicClient()
+    return await client.readContract({
+      address: CONTRACT_ADDRESSES.podsReader,
+      abi: podsReaderAbi,
+      functionName: 'isBanned',
+      args: [BigInt(podId), address],
+    })
+  } catch (err) {
+    console.error('[contractCalls.isBanned] Full error:', err)
+    return false
+  }
+}
+
+export async function isMod(podId: number, address: `0x${string}`): Promise<boolean> {
+  try {
+    const client = getPublicClient()
+    return await client.readContract({
+      address: CONTRACT_ADDRESSES.podsReader,
+      abi: podsReaderAbi,
+      functionName: 'isMod',
+      args: [BigInt(podId), address],
+    })
+  } catch (err) {
+    console.error('[contractCalls.isMod] Full error:', err)
+    return false
+  }
+}
+
+export async function isMember(podId: number, address: `0x${string}`): Promise<boolean> {
+  try {
+    const client = getPublicClient()
+    return await client.readContract({
+      address: CONTRACT_ADDRESSES.podsReader,
+      abi: podsReaderAbi,
+      functionName: 'isMember',
+      args: [BigInt(podId), address],
+    })
+  } catch (err) {
+    console.error('[contractCalls.isMember] Full error:', err)
+    return false
+  }
+}
+
+// v1 workaround — Get mods by checking candidate addresses
+// The contract doesn't expose a function to enumerate all mods
+// This function takes a list of candidate addresses and filters by mod status
+export async function getModsFromCandidates(
+  podId: number, 
+  candidateAddresses: string[]
+): Promise<string[]> {
+  try {
+    // Check mod status for all candidates in parallel
+    const modResults = await Promise.all(
+      candidateAddresses.map(async (addr) => ({
+        addr,
+        isModStatus: await isMod(podId, addr as `0x${string}`)
+      }))
+    )
+    
+    return modResults
+      .filter(({ isModStatus }) => isModStatus)
+      .map(({ addr }) => addr.toLowerCase())
+  } catch (err) {
+    console.error(`[contractCalls.getModsFromCandidates] Error for pod ${podId}:`, err)
+    return []
+  }
+}
+
+// Legacy stub - kept for backward compatibility  
+export async function getMods(_podId: number): Promise<string[]> { return [] }
+
+export async function getCreator(podId: number): Promise<string | null> {
+  try {
+    const client = getPublicClient()
+    const creator = await client.readContract({
+      address: CONTRACT_ADDRESSES.podsReader,
+      abi: podsReaderAbi,
+      functionName: 'getCreator',
+      args: [BigInt(podId)],
+    })
+    return (creator as string).toLowerCase()
+  } catch (err) {
+    console.error('[contractCalls.getCreator] Full error:', err)
+    return null
+  }
+}
+
+// ============================================================
+//  PODS — writes (routed to specific micro-contracts)
+// ============================================================
+
+export async function createPod(
+  name: string,
+  _description: string,
+  threshold: bigint = 0n,
+  _entryFee: bigint = 0n,
+  _payoutWallet?: `0x${string}`
+) {
+  const walletClient = await getWalletClient()
+  const [account] = await walletClient.getAddresses()
+  if (!account) throw new Error('No EVM account available. Please enable Ethereum accounts in your wallet.')
+
+  // Log the name being sent to help debug stale closure issues
+  console.log('[createPod] Submitting name:', name, '| threshold:', threshold.toString())
+
+
+  try {
+    const hash = await walletClient.writeContract({
+      account,
+      chain: qfChain,
+      address: CONTRACT_ADDRESSES.podsCreate,
+      abi: podsCreateAbi,
+      functionName: 'createPod',
+      args: [toBytes32(name.trim()), true, threshold],
+    })
+    console.log('[createPod] Transaction submitted, hash:', hash)
+    return waitReceipt(hash, 'createPod')
+  } catch (err) {
+    const raw = decodeContractError(err)
+    console.error('[createPod] Raw contract error:', raw, err)
+    throw new Error(getContractErrorMessage(err))
+  }
+}
+
+export async function joinPod(podId: number, fee: bigint = 0n) {
+  const walletClient = await getWalletClient()
+  const [account] = await walletClient.getAddresses()
+  if (!account) throw new Error('No EVM account available. Please enable Ethereum accounts in your wallet.')
+
+
+  try {
+    const hash = await walletClient.writeContract({
+      account,
+      chain: qfChain,
+      address: CONTRACT_ADDRESSES.podsJoin,
+      abi: podsJoinAbi,
+      functionName: 'joinPod',
+      args: [BigInt(podId)],
+      value: fee,
+    })
+    return waitReceipt(hash, 'joinPod')
+  } catch (err) {
+    const raw = decodeContractError(err)
+    console.error('[joinPod] Raw contract error:', raw, err)
+    throw new Error(getContractErrorMessage(err))
+  }
+}
+
+export async function leavePod(podId: number) {
+  const walletClient = await getWalletClient()
+  const [account] = await walletClient.getAddresses()
+  if (!account) throw new Error('No EVM account available. Please enable Ethereum accounts in your wallet.')
+
+
+  try {
+    const hash = await walletClient.writeContract({
+      account,
+      chain: qfChain,
+      address: CONTRACT_ADDRESSES.podsLeave,
+      abi: podsLeaveAbi,
+      functionName: 'leavePod',
+      args: [BigInt(podId)],
+    })
+    return waitReceipt(hash, 'leavePod')
+  } catch (err) {
+    const raw = decodeContractError(err)
+    console.error('[leavePod] Raw contract error:', raw, err)
+    throw new Error(getContractErrorMessage(err))
+  }
+}
+
+export async function sendPodMessage(podId: number, content: string) {
+  const walletClient = await getWalletClient()
+  const [account] = await walletClient.getAddresses()
+  if (!account) throw new Error('No EVM account available. Please enable Ethereum accounts in your wallet.')
+
+
+  try {
+    const hash = await walletClient.writeContract({
+      account,
+      chain: qfChain,
+      address: CONTRACT_ADDRESSES.messageWriter,
+      abi: messagesWriterAbi,
+      functionName: 'sendPodMessage',
+      args: [BigInt(podId), content],
+    })
+    return waitReceipt(hash, 'sendPodMessage')
+  } catch (err) {
+    const raw = decodeContractError(err)
+    console.error('[sendPodMessage] Raw contract error:', raw, err)
+    throw new Error(getContractErrorMessage(err))
+  }
+}
+
+export async function upgradePod(podId: number, fee: bigint) {
+  const walletClient = await getWalletClient()
+  const [account] = await walletClient.getAddresses()
+  if (!account) throw new Error('No EVM account available. Please enable Ethereum accounts in your wallet.')
+
+
+  try {
+    const hash = await walletClient.writeContract({
+      account,
+      chain: qfChain,
+      address: CONTRACT_ADDRESSES.podsAdmin,
+      abi: podsAdminAbi,
+      functionName: 'upgradePod',
+      args: [BigInt(podId)],
+      value: fee,
+    })
+    return waitReceipt(hash, 'upgradePod')
+  } catch (err) {
+    const raw = decodeContractError(err)
+    console.error('[upgradePod] Raw contract error:', raw, err)
+    throw new Error(getContractErrorMessage(err))
+  }
+}
+
+// ── Moderation writes (routed to specific micro-contracts) ──
+
+export async function banMember(podId: number, target: `0x${string}`) {
+  const walletClient = await getWalletClient()
+  const [account] = await walletClient.getAddresses()
+  if (!account) throw new Error('No EVM account available. Please enable Ethereum accounts in your wallet.')
+
+
+  try {
+    const hash = await walletClient.writeContract({
+      account,
+      chain: qfChain,
+      address: CONTRACT_ADDRESSES.podsBan,
+      abi: podsBanAbi,
+      functionName: 'banMember',
+      args: [BigInt(podId), target],
+    })
+    return waitReceipt(hash, 'banMember')
+  } catch (err) {
+    const raw = decodeContractError(err)
+    console.error('[banMember] Raw contract error:', raw, err)
+    throw new Error(getContractErrorMessage(err))
+  }
+}
+
+export async function unbanMember(podId: number, target: `0x${string}`) {
+  const walletClient = await getWalletClient()
+  const [account] = await walletClient.getAddresses()
+  if (!account) throw new Error('No EVM account available. Please enable Ethereum accounts in your wallet.')
+
+
+  try {
+    const hash = await walletClient.writeContract({
+      account,
+      chain: qfChain,
+      address: CONTRACT_ADDRESSES.podsBan,
+      abi: podsBanAbi,
+      functionName: 'unbanMember',
+      args: [BigInt(podId), target],
+    })
+    return waitReceipt(hash, 'unbanMember')
+  } catch (err) {
+    const raw = decodeContractError(err)
+    console.error('[unbanMember] Raw contract error:', raw, err)
+    throw new Error(getContractErrorMessage(err))
+  }
+}
+
+export async function addMod(podId: number, moderator: `0x${string}`) {
+  const walletClient = await getWalletClient()
+  const [account] = await walletClient.getAddresses()
+  if (!account) throw new Error('No EVM account available. Please enable Ethereum accounts in your wallet.')
+
+
+  try {
+    const hash = await walletClient.writeContract({
+      account,
+      chain: qfChain,
+      address: CONTRACT_ADDRESSES.podsAddMod,
+      abi: podsAddModAbi,
+      functionName: 'addMod',
+      args: [BigInt(podId), moderator],
+    })
+    return waitReceipt(hash, 'addMod')
+  } catch (err) {
+    const raw = decodeContractError(err)
+    console.error('[addMod] Raw contract error:', raw, err)
+    throw new Error(getContractErrorMessage(err))
+  }
+}
+
+export async function removeMod(podId: number, moderator: `0x${string}`) {
+  const walletClient = await getWalletClient()
+  const [account] = await walletClient.getAddresses()
+  if (!account) throw new Error('No EVM account available. Please enable Ethereum accounts in your wallet.')
+
+
+  try {
+    const hash = await walletClient.writeContract({
+      account,
+      chain: qfChain,
+      address: CONTRACT_ADDRESSES.podsRemoveMod,
+      abi: podsRemoveModAbi,
+      functionName: 'removeMod',
+      args: [BigInt(podId), moderator],
+    })
+    return waitReceipt(hash, 'removeMod')
+  } catch (err) {
+    const raw = decodeContractError(err)
+    console.error('[removeMod] Raw contract error:', raw, err)
+    throw new Error(getContractErrorMessage(err))
+  }
+}
+
+// v1 stubs — admin functions removed
+export async function setProFee(_amount: bigint) { throw new Error('Not available in v1') }
+export async function setTreasury(_addr: `0x${string}`) { throw new Error('Not available in v1') }
+
+// ============================================================
+//  MESSAGES — reads
+// ============================================================
+
+export interface DirectMessageData {
+  sender: string
+  recipient: string
+  content: string
+  timestamp: number
+}
+
+export async function getMessages(
+  addr1: `0x${string}`,
+  addr2: `0x${string}`,
+  start = 0,
+  limit = 50
+): Promise<DirectMessageData[]> {
+  try {
+    const client = getPublicClient()
+    const ids = await client.readContract({
+      address: CONTRACT_ADDRESSES.messageReader,
+      abi: messagesReaderAbi,
+      functionName: 'getDirectMessageIds',
+      args: [addr1, addr2, BigInt(start), BigInt(limit)],
+    }) as bigint[]
+
+    const messages = await Promise.all(
+      ids.map(async (id) => {
+        const m = await _fetchMessage(client, id)
+        return {
+          sender: m.sender,
+          recipient: m.sender === addr1.toLowerCase()
+            ? addr2.toLowerCase()
+            : addr1.toLowerCase(),
+          content: m.content,
+          timestamp: m.timestamp,
+        }
+      })
+    )
+    return messages
+  } catch (err) {
+    console.error('[contractCalls.getMessages] Full error:', err)
+    return []
+  }
+}
+
+export async function getConversations(address: `0x${string}`): Promise<string[]> {
+  try {
+    const client = getPublicClient()
+    const result = await client.readContract({
+      address: CONTRACT_ADDRESSES.messageReader,
+      abi: messagesReaderAbi,
+      functionName: 'getConversations',
+      args: [address],
+    })
+    return (result as string[]).map((a: string) => a.toLowerCase())
+  } catch (err) {
+    console.error('[contractCalls.getConversations] Full error:', err)
+    return []
+  }
+}
+
+export async function getMessageCount(): Promise<number> {
+  try {
+    const client = getPublicClient()
+    const result = await client.readContract({
+      address: CONTRACT_ADDRESSES.messageReader,
+      abi: messagesReaderAbi,
+      functionName: 'getMessageCount',
+    })
+    return Number(result)
+  } catch (err) {
+    console.error('[contractCalls.getMessageCount] Full error:', err)
+    return 0
+  }
+}
+
+// ============================================================
+//  MESSAGES — writes
+// ============================================================
+
+export async function sendMessage(
+  recipient: `0x${string}`,
+  content: string
+) {
+  const walletClient = await getWalletClient()
+  const [account] = await walletClient.getAddresses()
+  if (!account) throw new Error('No EVM account available. Please enable Ethereum accounts in your wallet.')
+
+
+  try {
+    const hash = await walletClient.writeContract({
+      account,
+      chain: qfChain,
+      address: CONTRACT_ADDRESSES.messageWriter,
+      abi: messagesWriterAbi,
+      functionName: 'sendMessage',
+      args: [recipient, content],
+    })
+    return waitReceipt(hash, 'sendMessage')
+  } catch (err) {
+    const raw = decodeContractError(err)
+    console.error('[sendMessage] Raw contract error:', raw, err)
+    throw new Error(getContractErrorMessage(err))
+  }
+}
+
+// ============================================================
+//  MESSAGE HELPERS (backward-compatible wrappers)
+// ============================================================
+
+export async function sendPodMessageChunked(podId: number, content: string) {
+  const walletClient = await getWalletClient()
+  const [account] = await walletClient.getAddresses()
+  if (!account) throw new Error('No EVM account available. Please enable Ethereum accounts in your wallet.')
+
+  await sendPodMessage(podId, content)
+
+  return {
+    id: `${podId}-${Date.now()}`,
+    podId,
+    sender: account.toLowerCase(),
+    content,
+    timestamp: Date.now(),
+  }
+}
+
+export async function sendDirectMessageChunked(recipient: `0x${string}`, content: Uint8Array) {
+  const walletClient = await getWalletClient()
+  const [account] = await walletClient.getAddresses()
+  if (!account) throw new Error('No EVM account available. Please enable Ethereum accounts in your wallet.')
+
+  const textContent = new TextDecoder().decode(content)
+  await sendMessage(recipient, textContent)
+
+  return {
+    id: `${account}-${Date.now()}`,
+    sender: account.toLowerCase(),
+    recipient: recipient.toLowerCase(),
+    encryptedContent: content,
+    decryptedContent: textContent,
+    timestamp: Date.now(),
+  }
+}

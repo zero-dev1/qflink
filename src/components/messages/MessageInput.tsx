@@ -1,6 +1,6 @@
 import React, { useState } from 'react'
 
-const DEFAULT_MAX_LENGTH = 280
+const DEFAULT_MAX_LENGTH = 500
 
 interface MessageInputProps {
   onSend: (content: string) => void
@@ -13,16 +13,12 @@ export const MessageInput: React.FC<MessageInputProps> = ({ onSend, disabled, ma
 
   const length = text.length
   const isOverLimit = length > maxLength
-  const isNearLimit = length >= maxLength - 10
-  const isApproachingLimit = length >= maxLength - 30
-
-  // For 85-character limit: show counter at 75+, yellow at 75-84, red at 85
-  const showCounter = maxLength === 85 ? length >= 75 : isApproachingLimit
-  const counterColor = isOverLimit
-    ? 'text-red-400'
-    : (maxLength === 85 && length >= 75) || isNearLimit
-    ? 'text-yellow-500'
-    : 'text-qx-text-muted'
+  
+  // Show counter at maxLength - 50 (e.g., 450 for 500 limit)
+  // Gray at 450-499, red at 500
+  const showThreshold = maxLength - 50
+  const showCounter = length >= showThreshold
+  const counterColor = isOverLimit ? 'text-qx-error' : 'text-qx-text-muted'
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault()

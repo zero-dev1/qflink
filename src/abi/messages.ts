@@ -1,52 +1,90 @@
-// ABI for the qflink-messages contract
-// Derived from selectors in contracts.ts:
-//   send_message(address,bytes32,bytes24)
-//   get_messages(address,address,uint64,uint64)
-//   get_conversations(address)
-//   get_message_count(address,address)
+// ABI for QFLinkMessageLogic — frontend-facing contract (triple-split, resolc-optimized)
+// Returns ID arrays — frontend fetches individual messages via getMessage()
 
 export const messagesAbi = [
+  // ── Write ──
   {
     type: 'function',
-    name: 'send_message',
+    name: 'sendPodMessage',
     inputs: [
-      { name: 'recipient', type: 'address', internalType: 'address' },
-      { name: 'content_hash', type: 'bytes32', internalType: 'bytes32' },
-      { name: 'nonce', type: 'bytes24', internalType: 'bytes24' },
+      { name: 'podId', type: 'uint64', internalType: 'uint64' },
+      { name: 'content', type: 'string', internalType: 'string' },
     ],
     outputs: [],
     stateMutability: 'nonpayable',
   },
   {
     type: 'function',
-    name: 'get_messages',
+    name: 'sendMessage',
     inputs: [
-      { name: 'addr1', type: 'address', internalType: 'address' },
-      { name: 'addr2', type: 'address', internalType: 'address' },
-      { name: 'start', type: 'uint64', internalType: 'uint64' },
+      { name: 'recipient', type: 'address', internalType: 'address' },
+      { name: 'content', type: 'string', internalType: 'string' },
+    ],
+    outputs: [],
+    stateMutability: 'nonpayable',
+  },
+
+  // ── Read (single message) ──
+  {
+    type: 'function',
+    name: 'getMessage',
+    inputs: [
+      { name: 'id', type: 'uint64', internalType: 'uint64' },
+    ],
+    outputs: [
+      { name: 'sender', type: 'address', internalType: 'address' },
+      { name: 'timestamp', type: 'uint64', internalType: 'uint64' },
+      { name: 'content', type: 'string', internalType: 'string' },
+      { name: 'podId', type: 'uint64', internalType: 'uint64' },
+      { name: 'recipient', type: 'address', internalType: 'address' },
+    ],
+    stateMutability: 'view',
+  },
+
+  // ── Read (ID arrays) ──
+  {
+    type: 'function',
+    name: 'getPodMessageIds',
+    inputs: [
+      { name: 'podId', type: 'uint64', internalType: 'uint64' },
+      { name: 'offset', type: 'uint64', internalType: 'uint64' },
       { name: 'limit', type: 'uint64', internalType: 'uint64' },
     ],
     outputs: [
-      {
-        name: '',
-        type: 'tuple[]',
-        internalType: 'struct DirectMessage[]',
-        components: [
-          { name: 'sender', type: 'address', internalType: 'address' },
-          { name: 'recipient', type: 'address', internalType: 'address' },
-          { name: 'content_hash', type: 'bytes32', internalType: 'bytes32' },
-          { name: 'timestamp', type: 'uint64', internalType: 'uint64' },
-          { name: 'nonce', type: 'bytes24', internalType: 'bytes24' },
-        ],
-      },
+      { name: '', type: 'uint64[]', internalType: 'uint64[]' },
     ],
     stateMutability: 'view',
   },
   {
     type: 'function',
-    name: 'get_conversations',
+    name: 'getPodMessageCount',
     inputs: [
-      { name: 'addr', type: 'address', internalType: 'address' },
+      { name: 'podId', type: 'uint64', internalType: 'uint64' },
+    ],
+    outputs: [
+      { name: '', type: 'uint64', internalType: 'uint64' },
+    ],
+    stateMutability: 'view',
+  },
+  {
+    type: 'function',
+    name: 'getDirectMessageIds',
+    inputs: [
+      { name: 'user1', type: 'address', internalType: 'address' },
+      { name: 'user2', type: 'address', internalType: 'address' },
+      { name: 'offset', type: 'uint64', internalType: 'uint64' },
+      { name: 'limit', type: 'uint64', internalType: 'uint64' },
+    ],
+    outputs: [
+      { name: '', type: 'uint64[]', internalType: 'uint64[]' },
+    ],
+    stateMutability: 'view',
+  },
+  {
+    type: 'function',
+    name: 'getConversations',
+    inputs: [
+      { name: 'user', type: 'address', internalType: 'address' },
     ],
     outputs: [
       { name: '', type: 'address[]', internalType: 'address[]' },
@@ -55,14 +93,16 @@ export const messagesAbi = [
   },
   {
     type: 'function',
-    name: 'get_message_count',
-    inputs: [
-      { name: 'addr1', type: 'address', internalType: 'address' },
-      { name: 'addr2', type: 'address', internalType: 'address' },
-    ],
+    name: 'getMessageCount',
+    inputs: [],
     outputs: [
       { name: '', type: 'uint64', internalType: 'uint64' },
     ],
     stateMutability: 'view',
   },
+
+  // Custom errors
+  { type: 'error', name: 'NotPodMember', inputs: [] },
+  { type: 'error', name: 'SelfMessage', inputs: [] },
+  { type: 'error', name: 'EmptyContent', inputs: [] },
 ] as const

@@ -2,14 +2,14 @@ import React, { useState } from 'react'
 import { Modal } from '@/components/ui/Modal'
 import { Input } from '@/components/ui/Input'
 import { Button } from '@/components/ui/Button'
-import type { PodTier } from '@/types'
-import { POD_TIER_INFO } from '@/types'
+import type { PodTier, PodCategory } from '@/types'
+import { POD_TIER_INFO, POD_CATEGORIES } from '@/types'
 import { formatBalance } from '@/lib/utils'
 
 interface CreatePodModalProps {
   isOpen: boolean
   onClose: () => void
-  onCreate: (name: string, description: string, minBalance: bigint, isPublic: boolean, tier: PodTier, entryFee: bigint, payoutWallet: string) => void | Promise<void>
+  onCreate: (name: string, description: string, minBalance: bigint, isPublic: boolean, tier: PodTier, entryFee: bigint, payoutWallet: string, category: PodCategory) => void | Promise<void>
   userBalance: bigint
 }
 
@@ -29,7 +29,9 @@ export const CreatePodModal: React.FC<CreatePodModalProps> = ({ isOpen, onClose,
   const [entryFee, setEntryFee] = useState('')
   const [payoutWallet, setPayoutWallet] = useState('')
   const [isPublic, setIsPublic] = useState(true)
+  const [category, setCategory] = useState<PodCategory>('trading')
   const [error, setError] = useState('')
+  const [isCreating, setIsCreating] = useState(false)
 
   const reset = () => {
     setStep(1)
@@ -40,6 +42,7 @@ export const CreatePodModal: React.FC<CreatePodModalProps> = ({ isOpen, onClose,
     setEntryFee('')
     setPayoutWallet('')
     setIsPublic(true)
+    setCategory('trading')
     setError('')
   }
 
@@ -83,14 +86,22 @@ export const CreatePodModal: React.FC<CreatePodModalProps> = ({ isOpen, onClose,
     }
   }
 
-  const handleCreate = () => {
-    const bal = parseFloat(minBalance || '0')
-    const balanceBigInt = BigInt(Math.floor(bal * 1e18))
-    const entryFeeBal = parseFloat(entryFee || '0')
-    const entryFeeBigInt = BigInt(Math.floor(entryFeeBal * 1e18))
-    onCreate(name.trim(), description.trim(), balanceBigInt, isPublic, tier, entryFeeBigInt, payoutWallet.trim())
-    reset()
-    onClose()
+  const handleCreate = async () => {
+    if (isCreating) return
+    setIsCreating(true)
+    try {
+      const bal = parseFloat(minBalance || '0')
+      const balanceBigInt = BigInt(Math.floor(bal * 1e18))
+      const entryFeeBal = parseFloat(entryFee || '0')
+      const entryFeeBigInt = BigInt(Math.floor(entryFeeBal * 1e18))
+      // Capture current name at call time to avoid stale closure
+      const currentName = name.trim()
+      await onCreate(currentName, description.trim(), balanceBigInt, isPublic, tier, entryFeeBigInt, payoutWallet.trim(), category)
+      reset()
+      onClose()
+    } finally {
+      setIsCreating(false)
+    }
   }
 
   // Fee breakdown for Pro tier: 95% treasury, 5% burn
@@ -117,7 +128,9 @@ export const CreatePodModal: React.FC<CreatePodModalProps> = ({ isOpen, onClose,
             {step < 3 ? (
               <Button onClick={handleNext}>Next</Button>
             ) : (
-              <Button onClick={handleCreate}>Create Pod</Button>
+              <Button onClick={handleCreate} disabled={isCreating}>
+                {isCreating ? 'Creating...' : 'Create Pod'}
+              </Button>
             )}
           </div>
         </div>
@@ -203,6 +216,18 @@ export const CreatePodModal: React.FC<CreatePodModalProps> = ({ isOpen, onClose,
             value={description}
             onChange={(e) => { setDescription(e.target.value); setError('') }}
           />
+          <div className="flex flex-col gap-1.5">
+            <label className="text-sm font-medium text-qx-text-secondary">Category</label>
+            <select
+              value={category}
+              onChange={(e) => setCategory(e.target.value as PodCategory)}
+              className="h-10 w-full border border-gray-200 dark:border-gray-800 bg-transparent px-3 text-sm text-qx-text-primary focus:border-cyan-600 focus:outline-none focus:ring-1 focus:ring-cyan-600"
+            >
+              {POD_CATEGORIES.map((c) => (
+                <option key={c} value={c} className="capitalize">{c.charAt(0).toUpperCase() + c.slice(1)}</option>
+              ))}
+            </select>
+          </div>
           <Input
             label="Minimum Balance (QF)"
             placeholder="e.g. 1000"

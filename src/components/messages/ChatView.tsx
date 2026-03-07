@@ -1,4 +1,5 @@
 import React, { useEffect, useRef, useMemo, useState, useCallback } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { Avatar } from '@/components/ui/Avatar'
 import { MessageInput } from './MessageInput'
 import { truncateAddress, formatMessageTime } from '@/lib/utils'
@@ -27,6 +28,7 @@ export const ChatView: React.FC<ChatViewProps> = ({
   onSend,
   onBack,
 }) => {
+  const navigate = useNavigate()
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const chatContainerRef = useRef<HTMLDivElement>(null)
   const isNearBottom = useRef(true)
@@ -122,6 +124,10 @@ export const ChatView: React.FC<ChatViewProps> = ({
 
   const isOnline = useMemo(() => mockIsOnline(address), [address])
 
+  const handleNavigateToProfile = () => {
+    navigate(`/profile/${address}`)
+  }
+
   return (
     <div className="flex flex-1 flex-col h-full w-full overflow-hidden">
       {/* Header: back arrow (mobile) + avatar + name/role/online */}
@@ -134,15 +140,21 @@ export const ChatView: React.FC<ChatViewProps> = ({
             <path d="M19 12H5M12 19l-7-7 7-7" />
           </svg>
         </button>
-        <Avatar address={address} size="md" />
-        <div className="flex-1 min-w-0">
-          <p className="font-display text-sm font-semibold text-qx-text-primary">{peerProfileName || <span className="font-mono">{truncateAddress(address)}</span>}</p>
-          <p className="text-xs text-qx-text-secondary">QF Builder</p>
-          <div className="flex items-center gap-1.5 mt-0.5">
-            <div className={`h-2 w-2 rounded-full flex-shrink-0 ${isOnline ? 'bg-qx-success' : 'bg-qx-text-muted'}`} />
-            <span className="text-xs text-qx-text-muted">{isOnline ? 'Online' : 'Offline'}</span>
+        {/* Clickable avatar and name to navigate to profile */}
+        <button 
+          onClick={handleNavigateToProfile}
+          className="flex items-center gap-3 flex-1 min-w-0 text-left hover:opacity-80 transition-opacity"
+        >
+          <Avatar address={address} size="md" />
+          <div className="flex-1 min-w-0">
+            <p className="font-display text-sm font-semibold text-qx-text-primary">{peerProfileName || <span className="font-mono">{truncateAddress(address)}</span>}</p>
+            <p className="text-xs text-qx-text-secondary">QF Builder</p>
+            <div className="flex items-center gap-1.5 mt-0.5">
+              <div className={`h-2 w-2 rounded-full flex-shrink-0 ${isOnline ? 'bg-qx-success' : 'bg-qx-text-muted'}`} />
+              <span className="text-xs text-qx-text-muted">{isOnline ? 'Online' : 'Offline'}</span>
+            </div>
           </div>
-        </div>
+        </button>
       </div>
 
       <div ref={chatContainerRef} onScroll={handleScroll} className="flex-1 overflow-y-auto min-h-0 px-5 py-4 bg-qx-card">
@@ -169,9 +181,12 @@ export const ChatView: React.FC<ChatViewProps> = ({
             return (
               <div key={msg.id} className={cn('flex flex-col', isConsecutive ? 'mb-1' : 'mb-4', isMine ? 'items-end' : 'items-start')}>
                 {!isMine && !isConsecutive && (
-                  <p className="text-xs font-medium text-qx-text-secondary mb-1 px-1">
+                  <button 
+                    onClick={() => navigate(`/profile/${msg.sender}`)}
+                    className="text-xs font-medium text-qx-text-secondary mb-1 px-1 hover:text-cyan-600 transition-colors text-left"
+                  >
                     {senderName}
-                  </p>
+                  </button>
                 )}
                 <div className={cn(
                   'max-w-[65%] rounded-bubble px-4 py-2.5',
@@ -192,7 +207,7 @@ export const ChatView: React.FC<ChatViewProps> = ({
       </div>
 
       <div className="flex-shrink-0">
-        <MessageInput onSend={onSend} maxLength={85} />
+        <MessageInput onSend={onSend} maxLength={500} />
       </div>
     </div>
   )

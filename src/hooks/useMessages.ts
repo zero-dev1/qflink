@@ -1,5 +1,4 @@
 import { useCallback, useRef } from 'react'
-import { hexToBytes } from 'viem'
 import { useMessagesStore } from '@/stores/messages'
 import { useWalletStore } from '@/stores/wallet'
 import { useUIStore } from '@/stores/ui'
@@ -51,8 +50,7 @@ export function useMessages() {
             )
             if (rawMsgs.length > 0) {
               const latest = rawMsgs[rawMsgs.length - 1]
-              const bytes = hexToBytes(latest.contentHash)
-              lastMessage = new TextDecoder().decode(bytes).replace(/\0/g, '').trim() || 'Message'
+              lastMessage = latest.content || 'Message'
               lastMessageTime = latest.timestamp || Date.now()
             }
           } catch (err) {
@@ -86,14 +84,13 @@ export function useMessages() {
           otherAddress as `0x${string}`
         )
         const msgs = rawMsgs.map((m) => {
-          const bytes = hexToBytes(m.contentHash)
-          const decrypted = new TextDecoder().decode(bytes).replace(/\0/g, '').trim()
+          const contentBytes = new TextEncoder().encode(m.content)
           return {
             id: `${m.sender}-${m.timestamp}`,
             sender: m.sender,
             recipient: m.recipient,
-            encryptedContent: bytes,
-            decryptedContent: decrypted,
+            encryptedContent: contentBytes,
+            decryptedContent: m.content,
             timestamp: m.timestamp,
           }
         })

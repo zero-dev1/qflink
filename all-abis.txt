@@ -1,0 +1,923 @@
+========== messages.ts ==========
+// ABI for QFLinkMessageLogic — frontend-facing contract (triple-split, resolc-optimized)
+// Returns ID arrays — frontend fetches individual messages via getMessage()
+
+export const messagesAbi = [
+  // ── Write ──
+  {
+    type: 'function',
+    name: 'sendPodMessage',
+    inputs: [
+      { name: 'podId', type: 'uint64', internalType: 'uint64' },
+      { name: 'content', type: 'string', internalType: 'string' },
+    ],
+    outputs: [],
+    stateMutability: 'nonpayable',
+  },
+  {
+    type: 'function',
+    name: 'sendMessage',
+    inputs: [
+      { name: 'recipient', type: 'address', internalType: 'address' },
+      { name: 'content', type: 'string', internalType: 'string' },
+    ],
+    outputs: [],
+    stateMutability: 'nonpayable',
+  },
+
+  // ── Read (single message) ──
+  {
+    type: 'function',
+    name: 'getMessage',
+    inputs: [
+      { name: 'id', type: 'uint64', internalType: 'uint64' },
+    ],
+    outputs: [
+      { name: 'sender', type: 'address', internalType: 'address' },
+      { name: 'timestamp', type: 'uint64', internalType: 'uint64' },
+      { name: 'content', type: 'string', internalType: 'string' },
+      { name: 'podId', type: 'uint64', internalType: 'uint64' },
+      { name: 'recipient', type: 'address', internalType: 'address' },
+    ],
+    stateMutability: 'view',
+  },
+
+  // ── Read (ID arrays) ──
+  {
+    type: 'function',
+    name: 'getPodMessageIds',
+    inputs: [
+      { name: 'podId', type: 'uint64', internalType: 'uint64' },
+      { name: 'offset', type: 'uint64', internalType: 'uint64' },
+      { name: 'limit', type: 'uint64', internalType: 'uint64' },
+    ],
+    outputs: [
+      { name: '', type: 'uint64[]', internalType: 'uint64[]' },
+    ],
+    stateMutability: 'view',
+  },
+  {
+    type: 'function',
+    name: 'getPodMessageCount',
+    inputs: [
+      { name: 'podId', type: 'uint64', internalType: 'uint64' },
+    ],
+    outputs: [
+      { name: '', type: 'uint64', internalType: 'uint64' },
+    ],
+    stateMutability: 'view',
+  },
+  {
+    type: 'function',
+    name: 'getDirectMessageIds',
+    inputs: [
+      { name: 'user1', type: 'address', internalType: 'address' },
+      { name: 'user2', type: 'address', internalType: 'address' },
+      { name: 'offset', type: 'uint64', internalType: 'uint64' },
+      { name: 'limit', type: 'uint64', internalType: 'uint64' },
+    ],
+    outputs: [
+      { name: '', type: 'uint64[]', internalType: 'uint64[]' },
+    ],
+    stateMutability: 'view',
+  },
+  {
+    type: 'function',
+    name: 'getConversations',
+    inputs: [
+      { name: 'user', type: 'address', internalType: 'address' },
+    ],
+    outputs: [
+      { name: '', type: 'address[]', internalType: 'address[]' },
+    ],
+    stateMutability: 'view',
+  },
+  {
+    type: 'function',
+    name: 'getMessageCount',
+    inputs: [],
+    outputs: [
+      { name: '', type: 'uint64', internalType: 'uint64' },
+    ],
+    stateMutability: 'view',
+  },
+
+  // Custom errors
+  { type: 'error', name: 'NotPodMember', inputs: [] },
+  { type: 'error', name: 'SelfMessage', inputs: [] },
+  { type: 'error', name: 'EmptyContent', inputs: [] },
+] as const
+
+
+========== messagesReader.ts ==========
+// ABI for QFLinkMessageReader — read-only message contract (resolc-optimized)
+
+export const messagesReaderAbi = [
+  {
+    type: 'function',
+    name: 'getMessage',
+    inputs: [
+      { name: 'id', type: 'uint64', internalType: 'uint64' },
+    ],
+    outputs: [
+      { name: 'sender', type: 'address', internalType: 'address' },
+      { name: 'timestamp', type: 'uint64', internalType: 'uint64' },
+      { name: 'content', type: 'string', internalType: 'string' },
+      { name: 'podId', type: 'uint64', internalType: 'uint64' },
+      { name: 'recipient', type: 'address', internalType: 'address' },
+    ],
+    stateMutability: 'view',
+  },
+  {
+    type: 'function',
+    name: 'getPodMessageIds',
+    inputs: [
+      { name: 'podId', type: 'uint64', internalType: 'uint64' },
+      { name: 'offset', type: 'uint64', internalType: 'uint64' },
+      { name: 'limit', type: 'uint64', internalType: 'uint64' },
+    ],
+    outputs: [
+      { name: '', type: 'uint64[]', internalType: 'uint64[]' },
+    ],
+    stateMutability: 'view',
+  },
+  {
+    type: 'function',
+    name: 'getPodMessageCount',
+    inputs: [
+      { name: 'podId', type: 'uint64', internalType: 'uint64' },
+    ],
+    outputs: [
+      { name: '', type: 'uint64', internalType: 'uint64' },
+    ],
+    stateMutability: 'view',
+  },
+  {
+    type: 'function',
+    name: 'getDirectMessageIds',
+    inputs: [
+      { name: 'user1', type: 'address', internalType: 'address' },
+      { name: 'user2', type: 'address', internalType: 'address' },
+      { name: 'offset', type: 'uint64', internalType: 'uint64' },
+      { name: 'limit', type: 'uint64', internalType: 'uint64' },
+    ],
+    outputs: [
+      { name: '', type: 'uint64[]', internalType: 'uint64[]' },
+    ],
+    stateMutability: 'view',
+  },
+  {
+    type: 'function',
+    name: 'getConversations',
+    inputs: [
+      { name: 'user', type: 'address', internalType: 'address' },
+    ],
+    outputs: [
+      { name: '', type: 'address[]', internalType: 'address[]' },
+    ],
+    stateMutability: 'view',
+  },
+  {
+    type: 'function',
+    name: 'getMessageCount',
+    inputs: [],
+    outputs: [
+      { name: '', type: 'uint64', internalType: 'uint64' },
+    ],
+    stateMutability: 'view',
+  },
+] as const
+
+
+========== messagesWriter.ts ==========
+// ABI for QFLinkMessageWriter — write-only message contract (resolc-optimized)
+
+export const messagesWriterAbi = [
+  {
+    type: 'function',
+    name: 'sendPodMessage',
+    inputs: [
+      { name: 'podId', type: 'uint64', internalType: 'uint64' },
+      { name: 'content', type: 'string', internalType: 'string' },
+    ],
+    outputs: [],
+    stateMutability: 'nonpayable',
+  },
+  {
+    type: 'function',
+    name: 'sendMessage',
+    inputs: [
+      { name: 'recipient', type: 'address', internalType: 'address' },
+      { name: 'content', type: 'string', internalType: 'string' },
+    ],
+    outputs: [],
+    stateMutability: 'nonpayable',
+  },
+
+  // Custom errors
+  { type: 'error', name: 'NotPodMember', inputs: [] },
+  { type: 'error', name: 'SelfMessage', inputs: [] },
+  { type: 'error', name: 'EmptyContent', inputs: [] },
+] as const
+
+
+========== payments.ts ==========
+// ABI for the QFLinkPayments Solidity contract
+// Handles entry fees and payment tracking for pods
+
+export const paymentsAbi = [
+  // ── Write ──
+  {
+    type: 'function',
+    name: 'payEntryFee',
+    inputs: [
+      { name: 'podId', type: 'uint64', internalType: 'uint64' },
+    ],
+    outputs: [],
+    stateMutability: 'payable',
+  },
+  {
+    type: 'function',
+    name: 'setEntryFee',
+    inputs: [
+      { name: 'podId', type: 'uint64', internalType: 'uint64' },
+      { name: 'fee', type: 'uint256', internalType: 'uint256' },
+    ],
+    outputs: [],
+    stateMutability: 'nonpayable',
+  },
+  {
+    type: 'function',
+    name: 'setPods',
+    inputs: [
+      { name: '_pods', type: 'address', internalType: 'address' },
+    ],
+    outputs: [],
+    stateMutability: 'nonpayable',
+  },
+  {
+    type: 'function',
+    name: 'setTreasury',
+    inputs: [
+      { name: '_treasury', type: 'address', internalType: 'address' },
+    ],
+    outputs: [],
+    stateMutability: 'nonpayable',
+  },
+  {
+    type: 'function',
+    name: 'withdraw',
+    inputs: [
+      { name: 'amount', type: 'uint256', internalType: 'uint256' },
+    ],
+    outputs: [],
+    stateMutability: 'nonpayable',
+  },
+  {
+    type: 'function',
+    name: 'withdrawToTreasury',
+    inputs: [
+      { name: 'amount', type: 'uint256', internalType: 'uint256' },
+    ],
+    outputs: [],
+    stateMutability: 'nonpayable',
+  },
+
+  // ── Read ──
+  {
+    type: 'function',
+    name: 'getEntryFee',
+    inputs: [
+      { name: 'podId', type: 'uint64', internalType: 'uint64' },
+    ],
+    outputs: [
+      { name: '', type: 'uint256', internalType: 'uint256' },
+    ],
+    stateMutability: 'view',
+  },
+  {
+    type: 'function',
+    name: 'hasPaid',
+    inputs: [
+      { name: 'podId', type: 'uint64', internalType: 'uint64' },
+      { name: 'user', type: 'address', internalType: 'address' },
+    ],
+    outputs: [
+      { name: '', type: 'bool', internalType: 'bool' },
+    ],
+    stateMutability: 'view',
+  },
+  {
+    type: 'function',
+    name: 'getContractBalance',
+    inputs: [],
+    outputs: [
+      { name: '', type: 'uint256', internalType: 'uint256' },
+    ],
+    stateMutability: 'view',
+  },
+  {
+    type: 'function',
+    name: 'owner',
+    inputs: [],
+    outputs: [
+      { name: '', type: 'address', internalType: 'address' },
+    ],
+    stateMutability: 'view',
+  },
+  {
+    type: 'function',
+    name: 'pods',
+    inputs: [],
+    outputs: [
+      { name: '', type: 'address', internalType: 'address' },
+    ],
+    stateMutability: 'view',
+  },
+  {
+    type: 'function',
+    name: 'treasury',
+    inputs: [],
+    outputs: [
+      { name: '', type: 'address', internalType: 'address' },
+    ],
+    stateMutability: 'view',
+  },
+
+  // Custom errors
+  { type: 'error', name: 'NotAuthorized', inputs: [] },
+  { type: 'error', name: 'NotOwner', inputs: [] },
+  { type: 'error', name: 'InvalidFee', inputs: [] },
+  { type: 'error', name: 'PaymentNotRequired', inputs: [] },
+  { type: 'error', name: 'AlreadyPaid', inputs: [] },
+  { type: 'error', name: 'InsufficientPayment', inputs: [] },
+] as const
+
+
+========== podsAddMod.ts ==========
+// ABI for QFLinkPodsAddMod — Single function: addMod
+
+export const podsAddModAbi = [
+  // ── Write ──
+  {
+    type: 'function',
+    name: 'addMod',
+    inputs: [
+      { name: 'podId', type: 'uint64', internalType: 'uint64' },
+      { name: 'user', type: 'address', internalType: 'address' },
+    ],
+    outputs: [],
+    stateMutability: 'nonpayable',
+  },
+
+  // ── Read ──
+  {
+    type: 'function',
+    name: 'storage_',
+    inputs: [],
+    outputs: [
+      { name: '', type: 'address', internalType: 'address' },
+    ],
+    stateMutability: 'view',
+  },
+
+  // Custom errors
+  { type: 'error', name: 'NotCreator', inputs: [] },
+  { type: 'error', name: 'NotMember', inputs: [] },
+  { type: 'error', name: 'AlreadyMod', inputs: [] },
+  { type: 'error', name: 'ModCapReached', inputs: [] },
+] as const
+
+
+========== podsAdmin.ts ==========
+// ABI for QFLinkPodsAdmin — Single function: upgradePod
+
+export const podsAdminAbi = [
+  // ── Write ──
+  {
+    type: 'function',
+    name: 'upgradePod',
+    inputs: [
+      { name: 'podId', type: 'uint64', internalType: 'uint64' },
+    ],
+    outputs: [],
+    stateMutability: 'payable',
+  },
+
+  // ── Read ──
+  {
+    type: 'function',
+    name: 'storage_',
+    inputs: [],
+    outputs: [
+      { name: '', type: 'address', internalType: 'address' },
+    ],
+    stateMutability: 'view',
+  },
+
+  // Custom errors
+  { type: 'error', name: 'NotCreator', inputs: [] },
+  { type: 'error', name: 'AlreadyPro', inputs: [] },
+] as const
+
+
+========== podsBan.ts ==========
+// ABI for QFLinkPodsBan — Ban/Unban functions
+
+export const podsBanAbi = [
+  // ── Write ──
+  {
+    type: 'function',
+    name: 'banMember',
+    inputs: [
+      { name: 'podId', type: 'uint64', internalType: 'uint64' },
+      { name: 'user', type: 'address', internalType: 'address' },
+    ],
+    outputs: [],
+    stateMutability: 'nonpayable',
+  },
+  {
+    type: 'function',
+    name: 'unbanMember',
+    inputs: [
+      { name: 'podId', type: 'uint64', internalType: 'uint64' },
+      { name: 'user', type: 'address', internalType: 'address' },
+    ],
+    outputs: [],
+    stateMutability: 'nonpayable',
+  },
+
+  // ── Read ──
+  {
+    type: 'function',
+    name: 'storage_',
+    inputs: [],
+    outputs: [
+      { name: '', type: 'address', internalType: 'address' },
+    ],
+    stateMutability: 'view',
+  },
+
+  // Custom errors
+  { type: 'error', name: 'NotModOrCreator', inputs: [] },
+  { type: 'error', name: 'CannotBanCreator', inputs: [] },
+] as const
+
+
+========== podsCreate.ts ==========
+// ABI for QFLinkPodsCreate — Single function: createPod
+
+export const podsCreateAbi = [
+  // ── Write ──
+  {
+    type: 'function',
+    name: 'createPod',
+    inputs: [
+      { name: 'name', type: 'bytes32', internalType: 'bytes32' },
+      { name: 'isPublic', type: 'bool', internalType: 'bool' },
+      { name: 'threshold', type: 'uint256', internalType: 'uint256' },
+    ],
+    outputs: [
+      { name: '', type: 'uint64', internalType: 'uint64' },
+    ],
+    stateMutability: 'nonpayable',
+  },
+
+  // ── Read ──
+  {
+    type: 'function',
+    name: 'storage_',
+    inputs: [],
+    outputs: [
+      { name: '', type: 'address', internalType: 'address' },
+    ],
+    stateMutability: 'view',
+  },
+
+  // Custom errors
+  { type: 'error', name: 'InvalidName', inputs: [] },
+] as const
+
+
+========== podsGetPod.ts ==========
+// ABI for QFLinkPodsGetPod — Single function: getPod
+
+export const podsGetPodAbi = [
+  // ── Read ──
+  {
+    type: 'function',
+    name: 'getPod',
+    inputs: [
+      { name: 'podId', type: 'uint64', internalType: 'uint64' },
+    ],
+    outputs: [
+      { name: 'name', type: 'bytes32', internalType: 'bytes32' },
+      { name: 'creator', type: 'address', internalType: 'address' },
+      { name: 'isPublic', type: 'bool', internalType: 'bool' },
+      { name: 'tier', type: 'uint8', internalType: 'uint8' },
+      { name: 'memberCount', type: 'uint64', internalType: 'uint64' },
+      { name: 'modCount', type: 'uint64', internalType: 'uint64' },
+      { name: 'threshold', type: 'uint256', internalType: 'uint256' },
+    ],
+    stateMutability: 'view',
+  },
+  {
+    type: 'function',
+    name: 'storage_',
+    inputs: [],
+    outputs: [
+      { name: '', type: 'address', internalType: 'address' },
+    ],
+    stateMutability: 'view',
+  },
+] as const
+
+
+========== podsJoin.ts ==========
+// ABI for QFLinkPodsJoin — Single function: joinPod
+
+export const podsJoinAbi = [
+  // ── Write ──
+  {
+    type: 'function',
+    name: 'joinPod',
+    inputs: [
+      { name: 'podId', type: 'uint64', internalType: 'uint64' },
+    ],
+    outputs: [],
+    stateMutability: 'payable',
+  },
+
+  // ── Read ──
+  {
+    type: 'function',
+    name: 'storage_',
+    inputs: [],
+    outputs: [
+      { name: '', type: 'address', internalType: 'address' },
+    ],
+    stateMutability: 'view',
+  },
+  {
+    type: 'function',
+    name: 'payments',
+    inputs: [],
+    outputs: [
+      { name: '', type: 'address', internalType: 'address' },
+    ],
+    stateMutability: 'view',
+  },
+
+  // Custom errors
+  { type: 'error', name: 'AlreadyMember', inputs: [] },
+  { type: 'error', name: 'Banned', inputs: [] },
+  { type: 'error', name: 'PodFull', inputs: [] },
+  { type: 'error', name: 'PaymentRequired', inputs: [] },
+] as const
+
+
+========== podsLeave.ts ==========
+// ABI for QFLinkPodsLeave — Single function: leavePod
+
+export const podsLeaveAbi = [
+  // ── Write ──
+  {
+    type: 'function',
+    name: 'leavePod',
+    inputs: [
+      { name: 'podId', type: 'uint64', internalType: 'uint64' },
+    ],
+    outputs: [],
+    stateMutability: 'nonpayable',
+  },
+
+  // ── Read ──
+  {
+    type: 'function',
+    name: 'storage_',
+    inputs: [],
+    outputs: [
+      { name: '', type: 'address', internalType: 'address' },
+    ],
+    stateMutability: 'view',
+  },
+
+  // Custom errors
+  { type: 'error', name: 'NotMember', inputs: [] },
+  { type: 'error', name: 'CreatorCantLeave', inputs: [] },
+] as const
+
+
+========== podsMod.ts ==========
+// ABI for QFLinkPodsMod — View functions only (ban/unban moved to PodsBan, mod management to PodsModAdmin)
+
+export const podsModAbi = [
+  // ── Read ──
+  {
+    type: 'function',
+    name: 'isBanned',
+    inputs: [
+      { name: 'podId', type: 'uint64', internalType: 'uint64' },
+      { name: 'user', type: 'address', internalType: 'address' },
+    ],
+    outputs: [
+      { name: '', type: 'bool', internalType: 'bool' },
+    ],
+    stateMutability: 'view',
+  },
+  {
+    type: 'function',
+    name: 'isMod',
+    inputs: [
+      { name: 'podId', type: 'uint64', internalType: 'uint64' },
+      { name: 'user', type: 'address', internalType: 'address' },
+    ],
+    outputs: [
+      { name: '', type: 'bool', internalType: 'bool' },
+    ],
+    stateMutability: 'view',
+  },
+  {
+    type: 'function',
+    name: 'storage_',
+    inputs: [],
+    outputs: [
+      { name: '', type: 'address', internalType: 'address' },
+    ],
+    stateMutability: 'view',
+  },
+] as const
+
+
+========== podsReader.ts ==========
+// ABI for QFLinkPodsReader — All view functions (no auth needed)
+
+export const podsReaderAbi = [
+  // ── Pod Info ──
+  {
+    type: 'function',
+    name: 'getPod',
+    inputs: [
+      { name: 'podId', type: 'uint64', internalType: 'uint64' },
+    ],
+    outputs: [
+      { name: 'name', type: 'bytes32', internalType: 'bytes32' },
+      { name: 'creator', type: 'address', internalType: 'address' },
+      { name: 'isPublic', type: 'bool', internalType: 'bool' },
+      { name: 'tier', type: 'uint8', internalType: 'uint8' },
+      { name: 'memberCount', type: 'uint64', internalType: 'uint64' },
+      { name: 'modCount', type: 'uint64', internalType: 'uint64' },
+      { name: 'threshold', type: 'uint256', internalType: 'uint256' },
+    ],
+    stateMutability: 'view',
+  },
+  {
+    type: 'function',
+    name: 'getCreator',
+    inputs: [
+      { name: 'podId', type: 'uint64', internalType: 'uint64' },
+    ],
+    outputs: [
+      { name: '', type: 'address', internalType: 'address' },
+    ],
+    stateMutability: 'view',
+  },
+  {
+    type: 'function',
+    name: 'getPodTier',
+    inputs: [
+      { name: 'podId', type: 'uint64', internalType: 'uint64' },
+    ],
+    outputs: [
+      { name: '', type: 'uint8', internalType: 'uint8' },
+    ],
+    stateMutability: 'view',
+  },
+  {
+    type: 'function',
+    name: 'getPodCount',
+    inputs: [],
+    outputs: [
+      { name: '', type: 'uint64', internalType: 'uint64' },
+    ],
+    stateMutability: 'view',
+  },
+  {
+    type: 'function',
+    name: 'getMemberCount',
+    inputs: [
+      { name: 'podId', type: 'uint64', internalType: 'uint64' },
+    ],
+    outputs: [
+      { name: '', type: 'uint64', internalType: 'uint64' },
+    ],
+    stateMutability: 'view',
+  },
+  {
+    type: 'function',
+    name: 'getModCount',
+    inputs: [
+      { name: 'podId', type: 'uint64', internalType: 'uint64' },
+    ],
+    outputs: [
+      { name: '', type: 'uint64', internalType: 'uint64' },
+    ],
+    stateMutability: 'view',
+  },
+  {
+    type: 'function',
+    name: 'getThreshold',
+    inputs: [
+      { name: 'podId', type: 'uint64', internalType: 'uint64' },
+    ],
+    outputs: [
+      { name: '', type: 'uint256', internalType: 'uint256' },
+    ],
+    stateMutability: 'view',
+  },
+  {
+    type: 'function',
+    name: 'getPodName',
+    inputs: [
+      { name: 'podId', type: 'uint64', internalType: 'uint64' },
+    ],
+    outputs: [
+      { name: '', type: 'bytes32', internalType: 'bytes32' },
+    ],
+    stateMutability: 'view',
+  },
+  {
+    type: 'function',
+    name: 'isPublic',
+    inputs: [
+      { name: 'podId', type: 'uint64', internalType: 'uint64' },
+    ],
+    outputs: [
+      { name: '', type: 'bool', internalType: 'bool' },
+    ],
+    stateMutability: 'view',
+  },
+
+  // ── Membership ──
+  {
+    type: 'function',
+    name: 'isMember',
+    inputs: [
+      { name: 'podId', type: 'uint64', internalType: 'uint64' },
+      { name: 'user', type: 'address', internalType: 'address' },
+    ],
+    outputs: [
+      { name: '', type: 'bool', internalType: 'bool' },
+    ],
+    stateMutability: 'view',
+  },
+  {
+    type: 'function',
+    name: 'isBanned',
+    inputs: [
+      { name: 'podId', type: 'uint64', internalType: 'uint64' },
+      { name: 'user', type: 'address', internalType: 'address' },
+    ],
+    outputs: [
+      { name: '', type: 'bool', internalType: 'bool' },
+    ],
+    stateMutability: 'view',
+  },
+  {
+    type: 'function',
+    name: 'isMod',
+    inputs: [
+      { name: 'podId', type: 'uint64', internalType: 'uint64' },
+      { name: 'user', type: 'address', internalType: 'address' },
+    ],
+    outputs: [
+      { name: '', type: 'bool', internalType: 'bool' },
+    ],
+    stateMutability: 'view',
+  },
+
+  // ── Access Check ──
+  {
+    type: 'function',
+    name: 'checkPodAccess',
+    inputs: [
+      { name: 'podId', type: 'uint64', internalType: 'uint64' },
+      { name: 'user', type: 'address', internalType: 'address' },
+    ],
+    outputs: [
+      { name: '', type: 'bool', internalType: 'bool' },
+    ],
+    stateMutability: 'view',
+  },
+
+  // ── Storage Reference ──
+  {
+    type: 'function',
+    name: 'storage_',
+    inputs: [],
+    outputs: [
+      { name: '', type: 'address', internalType: 'address' },
+    ],
+    stateMutability: 'view',
+  },
+] as const
+
+
+========== podsRemoveMod.ts ==========
+// ABI for QFLinkPodsRemoveMod — Single function: removeMod
+
+export const podsRemoveModAbi = [
+  // ── Write ──
+  {
+    type: 'function',
+    name: 'removeMod',
+    inputs: [
+      { name: 'podId', type: 'uint64', internalType: 'uint64' },
+      { name: 'user', type: 'address', internalType: 'address' },
+    ],
+    outputs: [],
+    stateMutability: 'nonpayable',
+  },
+
+  // ── Read ──
+  {
+    type: 'function',
+    name: 'storage_',
+    inputs: [],
+    outputs: [
+      { name: '', type: 'address', internalType: 'address' },
+    ],
+    stateMutability: 'view',
+  },
+
+  // Custom errors
+  { type: 'error', name: 'NotCreator', inputs: [] },
+  { type: 'error', name: 'NotMod', inputs: [] },
+  { type: 'error', name: 'CannotRemoveCreator', inputs: [] },
+] as const
+
+
+========== registry.ts ==========
+// ABI for the QFLinkRegistry v1 Solidity contract (resolc-optimized)
+
+export const registryAbi = [
+  {
+    type: 'function',
+    name: 'register',
+    inputs: [
+      { name: 'displayName', type: 'bytes32', internalType: 'bytes32' },
+      { name: 'encryptionPubkey', type: 'bytes32', internalType: 'bytes32' },
+    ],
+    outputs: [],
+    stateMutability: 'nonpayable',
+  },
+  {
+    type: 'function',
+    name: 'updateProfile',
+    inputs: [
+      { name: 'displayName', type: 'bytes32', internalType: 'bytes32' },
+      { name: 'encryptionPubkey', type: 'bytes32', internalType: 'bytes32' },
+    ],
+    outputs: [],
+    stateMutability: 'nonpayable',
+  },
+  {
+    type: 'function',
+    name: 'getProfile',
+    inputs: [
+      { name: 'addr', type: 'address', internalType: 'address' },
+    ],
+    outputs: [
+      { name: '', type: 'bytes32', internalType: 'bytes32' },
+      { name: '', type: 'bytes32', internalType: 'bytes32' },
+      { name: '', type: 'uint64', internalType: 'uint64' },
+    ],
+    stateMutability: 'view',
+  },
+  {
+    type: 'function',
+    name: 'getUserCount',
+    inputs: [],
+    outputs: [
+      { name: '', type: 'uint64', internalType: 'uint64' },
+    ],
+    stateMutability: 'view',
+  },
+  {
+    type: 'function',
+    name: 'profileExists',
+    inputs: [
+      { name: 'addr', type: 'address', internalType: 'address' },
+    ],
+    outputs: [
+      { name: '', type: 'bool', internalType: 'bool' },
+    ],
+    stateMutability: 'view',
+  },
+  // Custom errors
+  { type: 'error', name: 'UserExists', inputs: [] },
+  { type: 'error', name: 'UserNotFound', inputs: [] },
+  { type: 'error', name: 'InvalidName', inputs: [] },
+] as const
+
+

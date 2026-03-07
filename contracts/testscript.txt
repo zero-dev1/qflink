@@ -1,0 +1,108 @@
+# 1. Stop and restart dev server to pick up any env changes
+pkill -f vite || true
+sleep 2
+
+# 2. Redeploy all contracts
+cd /Users/ismaelwali/CascadeProjects/QFDapps/qflink
+node scripts/deploy-all.mjs
+
+# 3. Verify new addresses
+cat .env.development | grep VITE_
+
+# 4. Restart dev server
+npm run dev &
+sleep 5
+
+# 5. Verify RPC is responding
+cast block-number --rpc-url http://127.0.0.1:8545
+
+# 6. Verify pod count is 0 (fresh deploy)
+cast call $(grep VITE_PODS_READER_ADDRESS .env.development | cut -d'=' -f2) "getPodCount()(uint64)" --rpc-url http://127.0.0.1:8545
+Step 2 — Full cast test suite. Use these two accounts:
+
+Copyexport RPC="http://127.0.0.1:8545"
+# Deployer/Treasury — the account that deployed contracts (receives fees)
+export DEPLOYER_KEY="0x5fb92d6e98884f76de468fa3f6278f8807c48bebc13595d45af5bdc1da7f2dc6"
+export DEPLOYER_ADDR="0xf24FF3a9CF04c71Dbc94D0b566f7A27B94566cac"
+
+# User 1 — creates pods, pays creation fee (which goes to treasury)
+export KEY1="bee3eaf8e26afd7ce6380288b935da83433a02ffd93ce9e556fd80906097314d"
+export ADDR1="0xb6f330d2e7854fc381a293392c00115a620afc0b"
+
+# User 2 — joins pods, pays entry fee (split: 95% creator, 5% treasury)
+export KEY2="70d51c29a65b7152857e0e3710f2b173a937d3e411f6782e24384e12b7e0a76d"
+export ADDR2="0x5d5bccf2ad391c34e271f14c2275c4f6e5a9e7d5"
+
+Then load contract addresses and run every test:
+
+Copyexport READER=$(grep VITE_PODS_READER_ADDRESS .env.development | cut -d'=' -f2)
+export CREATE=$(grep VITE_PODS_CREATE_ADDRESS .env.development | cut -d'=' -f2)
+export CREATE_PAID=$(grep VITE_PODS_CREATE_PAID_ADDRESS .env.development | cut -d'=' -f2)
+export STORAGE=$(grep VITE_PODS_STORAGE_ADDRESS .env.development | cut -d'=' -f2)
+
+# Test 1: Create free pod (trading, with description)
+cast send $CREATE "createPod(bytes32,bool,uint256,bytes32,bytes)" $(cast --format-bytes32-string "Chefs") true 10000000000000000000 $(cast --format-bytes32-string "social") $(cast --from-utf8 "QF holders with 10+ tokens") --rpc-url $RPC --private-key $KEY1
+echo "--- Test 1: Create Chefs pod (10 QF gate) ---"
+
+# Test 2: Create whale pod (1M gate)
+cast send $CREATE "createPod(bytes32,bool,uint256,bytes32,bytes)" $(cast --format-bytes32-string "Whales") true 1000000000000000000000000 $(cast --format-bytes32-string "alpha") $(cast --from-utf8 "Exclusive club for 1M+ QF holders") --rpc-url $RPC --private-key $KEY1
+echo "--- Test 2: Create Whales pod (1M gate) ---"
+
+# Test 3: Create paid pod
+cast send $CREATE_PAID "createPaidPod(bytes32,bool,uint256,bytes32,bytes,uint256)" $(cast --format-bytes32-string "Alpha Signals") true 0 $(cast --format-bytes32-string "trading") $(cast --from-utf8 "Premium trading signals and analysis") 500000000000000000000 --rpc-url $RPC --private-key $KEY1 --value 500000000000000000000
+echo "--- Test 3: Create Alpha Signals paid pod (500 QF entry) ---"
+
+# Test 4: Create builders pod
+cast send $CREATE "createPod(bytes32,bool,uint256,bytes32,bytes)" $(cast --format-bytes32-string "Builders") true 0 $(cast --format-bytes32-string "builders") $(cast --from-utf8 "For developers building on QF Network") --rpc-url $RPC --private-key $KEY1
+echo "--- Test 4: Create Builders pod (free, open) ---"
+
+# Test 5: Verify pod count = 4
+cast call $READER "getPodCount()(uint64)" --rpc-url $RPC
+echo "--- Test 5: Pod count should be 4 ---"
+
+# Test 6: Verify each pod
+cast call $READER "getPod(uint64)" 1 --rpc-url $RPC
+cast call $READER "getPod(uint64)" 2 --rpc-url $RPC
+cast call $READER "getPod(uint64)" 3 --rpc-url $RPC
+cast call $READER "getPod(uint64)" 4 --rpc-url $RPC
+echo "--- Test 6: All 4 pods returned ---"
+
+# Test 7: Join free pod from second account
+cast send $CREATE "joinPod(uint64)" 4 --rpc-url $RPC --private-key $KEY2
+echo "--- Test 7: Account 2 joined Builders ---"
+
+# Test 8: Join paid pod from second account (send entry fee)
+cast send $CREATE_PAID "joinPod(uint64)" 3 --rpc-url $RPC --private-key $KEY2 --value 500000000000000000000
+echo "--- Test 8: Account 2 joined Alpha Signals ---"
+
+# Test 9: Add mod
+cast send $(grep VITE_PODS_ADDMOD_ADDRESS .env.development | cut -d'=' -f2 || echo $STORAGE) "addMod(uint64,address)" 4 $ADDR2 --rpc-url $RPC --private-key $KEY1
+echo "--- Test 9: Added Account 2 as mod on Builders ---"
+
+# Test 10: Remove mod
+cast send $(grep VITE_PODS_REMOVEMOD_ADDRESS .env.development | cut -d'=' -f2 || echo $STORAGE) "removeMod(uint64,address)" 4 $ADDR2 --rpc-url $RPC --private-key $KEY1
+echo "--- Test 10: Removed Account 2 as mod ---"
+
+# Test 11: Ban member
+cast send $(grep VITE_PODS_BAN_ADDRESS .env.development | cut -d'=' -f2 || echo $STORAGE) "banMember(uint64,address)" 4 $ADDR2 --rpc-url $RPC --private-key $KEY1
+echo "--- Test 11: Banned Account 2 from Builders ---"
+
+# Test 12: Unban member
+cast send $(grep VITE_PODS_BAN_ADDRESS .env.development | cut -d'=' -f2 || echo $STORAGE) "unbanMember(uint64,address)" 4 $ADDR2 --rpc-url $RPC --private-key $KEY1
+echo "--- Test 12: Unbanned Account 2 ---"
+
+# Test 13: Rejoin after unban
+cast send $CREATE "joinPod(uint64)" 4 --rpc-url $RPC --private-key $KEY2
+echo "--- Test 13: Account 2 rejoined Builders after unban ---"
+
+# Test 14: Leave pod
+cast send $(grep VITE_PODS_LEAVE_ADDRESS .env.development | cut -d'=' -f2 || echo $STORAGE) "leavePod(uint64)" 4 --rpc-url $RPC --private-key $KEY2
+echo "--- Test 14: Account 2 left Builders ---"
+
+# Test 15: Verify final pod count still 4
+cast call $READER "getPodCount()(uint64)" --rpc-url $RPC
+echo "--- Test 15: Pod count still 4 ---"
+Copy
+Important: For KEY2/ADDR2, use the second dev private key from .env.development. If there's no second key, use any of the pre-funded dev accounts. Adapt the joinPod contract address — check if it's on CREATE, CREATE_PAID, or a separate join contract: grep VITE_.*JOIN .env.development || grep VITE_.*join .env.development.
+
+Report every single output. Mark each test PASS or FAIL.

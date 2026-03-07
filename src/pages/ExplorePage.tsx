@@ -7,7 +7,8 @@ import { SkeletonCard } from '@/components/ui/Skeleton'
 import { Button } from '@/components/ui/Button'
 import { POD_CATEGORIES } from '@/types'
 import type { Pod, DefaultPod, CustomPod } from '@/types'
-import { cn } from '@/lib/utils'
+import { cn, formatCompactBalance, formatExactAmount } from '@/lib/utils'
+import { TokenGateBar } from '@/components/pods/TokenGateBar'
 import * as cc from '@/lib/contractCalls'
 import { useWalletStore } from '@/stores/wallet'
 import { usePodsStore } from '@/stores/pods'
@@ -15,6 +16,7 @@ import { usePodsStore } from '@/stores/pods'
 const ExplorePage: React.FC = () => {
   const navigate = useNavigate()
   const { balance, address } = useWallet()
+  const refreshBalance = useWalletStore((s) => s.refreshBalance)
   const { 
     pods, 
     myPods, 
@@ -26,6 +28,7 @@ const ExplorePage: React.FC = () => {
   const [search, setSearch] = useState('')
   const [category, setCategory] = useState<string | null>(null)
   const [paidPodModalPod, setPaidPodModalPod] = useState<Pod | null>(null)
+  const [paidPodHasPaid, setPaidPodHasPaid] = useState(false)
   const [isJoining, setIsJoining] = useState(false)
 
   useEffect(() => {
@@ -46,18 +49,15 @@ const ExplorePage: React.FC = () => {
     if (category) {
       allPods = allPods.filter((p) => !p.isDefault && (p as CustomPod).category === category)
     }
+
     return allPods
   }, [defaultPods, pods, search, category])
 
-  const formatBal = (b: bigint) => {
-    const whole = b / (10n ** 18n)
-    if (whole >= 1_000_000n) return `${(Number(whole) / 1_000_000).toFixed(0)}M`
-    if (whole >= 1_000n) return `${(Number(whole) / 1_000).toFixed(0)}K`
-    return whole.toLocaleString()
-  }
+  const formatBal = (b: bigint) => formatCompactBalance(b)
+  const formatExact = (b: bigint) => formatExactAmount(b)  // Use for entry fees to show exact amount
 
   // Handle pod selection - show modal for paid pods, navigate directly for free pods
-  const handlePodSelect = async (pod: Pod) => {
+  const handlePodSelect = async (pod: Pod, options?: { isRejoin?: boolean }) => {
     const entryFee = !pod.isDefault ? ((pod as CustomPod).entryFee || 0n) : 0n
     const evmAddress = useWalletStore.getState().evmAddress
 
@@ -67,36 +67,72 @@ const ExplorePage: React.FC = () => {
       return
     }
 
-    // If pod has entry fee, check if user has already paid
-    if (entryFee > 0n && evmAddress) {
+    // If pod has entry fee and user is NOT a member, check if they need to pay
+    if (entryFee > 0n && evmAddress && !myPodIds.includes(pod.id)) {
       const hasPaid = await cc.hasPaid(pod.id, evmAddress as `0x${string}`)
       if (hasPaid) {
-        // User already paid, navigate directly
-        navigate(`/pods/${pod.id}`)
-      } else {
-        // User hasn't paid, show modal
-        setPaidPodModalPod(pod)
-      }
-    } else {
-      // Free pod (default or custom) - join on-chain first so user_pods reverse index is updated
-      if (!myPodIds.includes(pod.id) && address) {
+        // User already paid but left - rejoin without paying again
         setIsJoining(true)
         try {
-          await cc.joinPod(pod.id, 0n)
+          const isBanned = await cc.isBanned(pod.id, evmAddress as `0x${string}`)
+          if (isBanned) {
+            alert('You are banned from this pod')
+            setIsJoining(false)
+            return
+          }
+          // Rejoin with 0 value since they already paid
+          const joinReceipt = await cc.joinPod(pod.id, 0n)
+          await cc.waitForBlockSync(joinReceipt.blockNumber)
+          await new Promise(r => setTimeout(r, 1000))
           await usePodsStore.getState().fetchPods()
+          await refreshBalance()
           navigate(`/pods/${pod.id}`)
-          return
         } catch (err) {
-          console.error('Failed to join free pod:', err)
-        } finally {
+          console.error('Failed to rejoin pod:', err)
+          alert(`Failed to rejoin pod: ${err instanceof Error ? err.message : 'Unknown error'}`)
           setIsJoining(false)
         }
+        return
+      } else {
+        // User hasn't paid, show modal
+        setPaidPodHasPaid(false)
+        setPaidPodModalPod(pod)
+        return
       }
-      navigate(`/pods/${pod.id}`)
     }
+
+    // Free pod (default or custom) - join on-chain first so user_pods reverse index is updated
+    if (!myPodIds.includes(pod.id) && address) {
+      setIsJoining(true)
+      try {
+        const evmAddress = useWalletStore.getState().evmAddress
+        if (evmAddress) {
+          const isBanned = await cc.isBanned(pod.id, evmAddress as `0x${string}`)
+          if (isBanned) {
+            alert('You are banned from this pod')
+            setIsJoining(false)
+            return
+          }
+        }
+        const joinReceipt = await cc.joinPod(pod.id, 0n)
+        await cc.waitForBlockSync(joinReceipt.blockNumber)
+        await new Promise(r => setTimeout(r, 1000))
+        await usePodsStore.getState().fetchPods()
+        await refreshBalance()
+        navigate(`/pods/${pod.id}`)
+        return
+      } catch (err) {
+        console.error('Failed to join free pod:', err)
+        alert(`Failed to join pod: ${err instanceof Error ? err.message : 'Unknown error'}`)
+        setIsJoining(false)
+        return
+      }
+    }
+    // Already a member - navigate to chat
+    navigate(`/pods/${pod.id}`)
   }
 
-  // Handle joining a paid pod
+  // Handle joining a paid pod (new user - needs to pay)
   const handleJoinPaidPod = async () => {
     if (!paidPodModalPod) return
     
@@ -109,9 +145,25 @@ const ExplorePage: React.FC = () => {
         throw new Error('Wallet not connected')
       }
       
-      await cc.joinPod(paidPodModalPod.id, entryFee)
+      // Check ban status before joining
+      const evmAddress = useWalletStore.getState().evmAddress
+      if (evmAddress) {
+        const isBanned = await cc.isBanned(paidPodModalPod.id, evmAddress as `0x${string}`)
+        if (isBanned) {
+          alert('You are banned from this pod')
+          setIsJoining(false)
+          setPaidPodModalPod(null)
+          return
+        }
+      }
+      
+      const joinReceipt = await cc.joinPod(paidPodModalPod.id, entryFee)
       // Refresh pods to update sidebar immediately (myPods now comes from on-chain check)
+      await cc.waitForBlockSync(joinReceipt.blockNumber)
+      // BUG 4 FIX: Add delay before fetching to ensure contract state is updated
+      await new Promise(r => setTimeout(r, 1000))
       await fetchPods()
+      await refreshBalance()
       
       navigate(`/pods/${paidPodModalPod.id}`)
     } catch (err) {
@@ -120,6 +172,7 @@ const ExplorePage: React.FC = () => {
     } finally {
       setIsJoining(false)
       setPaidPodModalPod(null)
+      setPaidPodHasPaid(false)
     }
   }
 
@@ -197,9 +250,11 @@ const ExplorePage: React.FC = () => {
         <PaidPodModal
           pod={paidPodModalPod}
           onJoin={handleJoinPaidPod}
-          onCancel={() => setPaidPodModalPod(null)}
+          onCancel={() => { setPaidPodModalPod(null); setPaidPodHasPaid(false) }}
           isJoining={isJoining}
           formatBal={formatBal}
+          formatExact={formatExact}
+          hasPaid={paidPodHasPaid}
         />
       )}
     </div>
@@ -229,13 +284,15 @@ const ExplorePodCard: React.FC<ExplorePodCardProps> = ({
   const description = isDefault
     ? (pod as DefaultPod).description
     : (pod as CustomPod).description
+  const category = isDefault
+    ? 'trading'
+    : ((pod as CustomPod).category || 'trading')
   const minBal = isDefault
     ? (pod as DefaultPod).minBalance
     : ((pod as CustomPod).minBalance || 0n)
   const entryFee = isDefault ? 0n : ((pod as CustomPod).entryFee || 0n)
   const hasEntryFee = entryFee > 0n
   const meetsBalanceThreshold = userBalance >= minBal
-  const isComingSoon = isDefault && minBal === 0n
   const isCreator = !isDefault && evmAddress && (pod as CustomPod).creator?.toLowerCase() === evmAddress.toLowerCase()
   
   // Check if user has paid for this pod
@@ -262,15 +319,12 @@ const ExplorePodCard: React.FC<ExplorePodCardProps> = ({
     return () => { cancelled = true }
   }, [pod.id, hasEntryFee, evmAddress])
 
+
+
   return (
-    <div className={cn(
-      "flex flex-col bg-transparent border border-gray-200 dark:border-gray-800 p-5",
-      !isComingSoon && "transition-[border-color,transform] duration-150 hover:border-cyan-600 hover:-translate-y-0.5"
-    )}>
-      {/* Badge label for Coming Soon and Featured (top-left) */}
-      {isComingSoon ? (
-        <p className="text-xs text-gray-500 mb-2 uppercase tracking-wider">Coming Soon</p>
-      ) : isDefault && !hasEntryFee && (
+    <div className="flex flex-col bg-transparent border border-gray-200 dark:border-gray-800 p-5 transition-[border-color,transform] duration-150 hover:border-cyan-600 hover:-translate-y-0.5">
+      {/* Badge label for Featured (top-left) */}
+      {isDefault && !hasEntryFee && (
         <p className="text-xs text-qx-text-secondary dark:text-gray-400 mb-2">Featured</p>
       )}
 
@@ -285,8 +339,24 @@ const ExplorePodCard: React.FC<ExplorePodCardProps> = ({
         )}
       </div>
 
+      {/* Category badge */}
+      <p className="text-xs text-cyan-600 uppercase tracking-wider font-semibold mb-2">
+        {category}
+      </p>
+
+      {/* TokenGateBar for pods with threshold > 0 */}
+      {minBal > 0n && (
+        <div className="mb-3">
+          <TokenGateBar userBalance={userBalance} threshold={minBal} />
+        </div>
+      )}
+
       {/* Description */}
-      <p className="text-sm text-qx-text-secondary mb-4 line-clamp-2 flex-1">{description}</p>
+      {description && (
+        <p className="text-sm text-qx-text-secondary mb-3 line-clamp-2 overflow-hidden text-ellipsis">
+          {description}
+        </p>
+      )}
 
       {/* Divider */}
       <hr className="border-gray-200 dark:border-gray-800 mb-4" />
@@ -295,35 +365,21 @@ const ExplorePodCard: React.FC<ExplorePodCardProps> = ({
       <div className="flex items-start justify-between mb-5">
         <div>
           <p className="text-xs text-qx-text-muted dark:text-gray-400 mb-0.5">Requirement</p>
-          <p className={cn(
-            "text-sm font-semibold",
-            isComingSoon ? "text-gray-500" : "text-qx-text-primary"
-          )}>
-            {isComingSoon ? "Deploy a contract on QF Network" : `${formatBal(minBal)}+ QF`}
+          <p className="text-sm font-semibold text-qx-text-primary">
+            {minBal === 0n ? 'Open' : `${formatBal(minBal)} QF`}
           </p>
         </div>
         <div className="text-right">
           <p className="text-xs text-qx-text-muted dark:text-gray-400 mb-0.5">Members</p>
-          <p className={cn(
-            "text-sm font-semibold",
-            isComingSoon ? "text-gray-500" : "text-qx-text-primary dark:text-gray-400"
-          )}>
-            {isComingSoon ? "Coming Soon" : "Open"}
+          <p className="text-sm font-semibold text-qx-text-primary dark:text-gray-400">
+            {pod.memberCount || 0}
           </p>
         </div>
       </div>
 
       {/* CTA button - 5 states */}
-      {isComingSoon ? (
-        // STATE 5: Coming Soon (default pod with non-balance gate)
-        <button
-          disabled
-          className="w-full bg-transparent border border-gray-600 text-gray-500 py-2.5 text-sm font-semibold cursor-not-allowed"
-        >
-          Coming Soon
-        </button>
-      ) : isCreator || isMember || (hasEntryFee && hasPaid === true) ? (
-        // STATE 1: View Pod (creator OR member per chain OR already paid)
+      {isCreator || isMember ? (
+        // STATE 1: View Pod (creator OR current member)
         <button
           onClick={onView}
           className="w-full bg-cyan-600 py-2.5 text-sm font-semibold text-white hover:bg-cyan-700 transition-colors"
@@ -331,15 +387,23 @@ const ExplorePodCard: React.FC<ExplorePodCardProps> = ({
           View Pod
         </button>
       ) : !meetsBalanceThreshold ? (
-        // STATE 4: You need X QF (doesn't meet balance threshold)
+        // STATE 5: You need X QF (doesn't meet balance threshold)
         <button
           disabled
           className="w-full bg-transparent border border-gray-600 text-gray-500 py-2.5 text-sm font-semibold cursor-not-allowed"
         >
-          You need {formatBal(minBal)}+ QF
+          You need {minBal === 0n ? 'tokens' : `${formatBal(minBal)} QF`}
+        </button>
+      ) : hasEntryFee && hasPaid === true ? (
+        // STATE 2: Rejoin Pod (paid but left - no payment needed)
+        <button
+          onClick={onView}
+          className="w-full bg-cyan-600 py-2.5 text-sm font-semibold text-white hover:bg-cyan-700 transition-colors"
+        >
+          Rejoin Pod
         </button>
       ) : hasEntryFee && hasPaid === false ? (
-        // STATE 3: Join · X QF (meets threshold, has entry fee, hasn't paid)
+        // STATE 3: Join · X QF (new user, needs to pay)
         <button
           onClick={onView}
           className="w-full bg-cyan-600 py-2.5 text-sm font-semibold text-white hover:bg-cyan-700 transition-colors"
@@ -347,7 +411,7 @@ const ExplorePodCard: React.FC<ExplorePodCardProps> = ({
           Join · {formatBal(entryFee)} QF
         </button>
       ) : (
-        // STATE 2: Join Pod (meets threshold, no entry fee, not yet member)
+        // STATE 4: Join Pod (free pod, no entry fee)
         <button
           onClick={onView}
           className="w-full bg-cyan-600 py-2.5 text-sm font-semibold text-white hover:bg-cyan-700 transition-colors"
@@ -366,10 +430,26 @@ const PaidPodModal: React.FC<{
   onCancel: () => void
   isJoining: boolean
   formatBal: (b: bigint) => string
-}> = ({ pod, onJoin, onCancel, isJoining, formatBal }) => {
+  formatExact: (b: bigint) => string
+  hasPaid: boolean
+}> = ({ pod, onJoin, onCancel, isJoining, formatBal, formatExact, hasPaid }) => {
   const { balance } = useWallet()
-  const entryFee = ((pod as CustomPod).entryFee || 0n)
-  const hasInsufficientBalance = balance < entryFee
+  const [freshEntryFee, setFreshEntryFee] = React.useState<bigint | null>(null)
+  
+  // Fetch fresh entry fee when modal opens to avoid stale cached data
+  React.useEffect(() => {
+    let cancelled = false
+    const fetchFee = async () => {
+      const fee = await cc.getEntryFee(pod.id)
+      if (!cancelled) setFreshEntryFee(fee)
+    }
+    fetchFee()
+    return () => { cancelled = true }
+  }, [pod.id])
+  
+  // Use fresh fee if available, fallback to cached pod data
+  const entryFee = freshEntryFee ?? ((pod as CustomPod).entryFee || 0n)
+  const hasInsufficientBalance = !hasPaid && balance < entryFee
   
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70">
@@ -386,13 +466,19 @@ const PaidPodModal: React.FC<{
         {/* Entry Fee */}
         <div className="mb-2">
           <p className="text-gray-400 text-sm mb-1">Entry Fee</p>
-          <p className="text-white font-bold text-lg">{formatBal(entryFee)} QF</p>
+          {hasPaid ? (
+            <p className="text-green-400 font-bold text-lg">Already Paid ✓</p>
+          ) : (
+            <p className="text-white font-bold text-lg">{formatExact(entryFee)} QF</p>
+          )}
         </div>
         
         {/* Fee breakdown */}
-        <p className="text-gray-500 text-sm mb-4">
-          95% to creator · 5% to treasury
-        </p>
+        {!hasPaid && (
+          <p className="text-gray-500 text-sm mb-4">
+            95% to creator · 5% to treasury
+          </p>
+        )}
         
         {/* Your Balance */}
         <div className="mb-6">
@@ -420,7 +506,7 @@ const PaidPodModal: React.FC<{
             disabled={isJoining || hasInsufficientBalance}
             className="flex-1 bg-cyan-600 text-white py-2.5 text-sm font-semibold hover:bg-cyan-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
           >
-            {isJoining ? 'Joining...' : `Join & Pay ${formatBal(entryFee)} QF`}
+            {isJoining ? 'Joining...' : hasPaid ? 'Rejoin Pod' : `Join & Pay ${formatExact(entryFee)} QF`}
           </button>
         </div>
       </div>

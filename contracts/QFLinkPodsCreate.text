@@ -1,0 +1,42 @@
+// SPDX-License-Identifier: MIT
+pragma solidity ^0.8.20;
+
+import {IPodsStorage} from "./IPodsStorage.sol";
+
+// QFLinkPodsCreate — Single function: createPod
+// Max 4 external calls: ~27 KB
+
+// Custom errors
+error InvalidName();
+
+contract QFLinkPodsCreate {
+    // ============ Immutable Reference ============
+    
+    IPodsStorage public immutable storage_;
+    
+    // ============ Constructor ============
+    
+    constructor(address _storage) {
+        storage_ = IPodsStorage(_storage);
+    }
+    
+    // ============ Create Function ============
+    
+    function createPod(
+        bytes32 name,
+        bool isPublic,
+        uint256 threshold
+    ) external returns (uint64) {
+        if (name == bytes32(0)) revert InvalidName();
+        
+        // Create pod (1)
+        uint64 podId = storage_.createPod(name, msg.sender, isPublic, threshold);
+        
+        // Auto-add creator as member and mod (3)
+        storage_.addMember(podId, msg.sender);
+        storage_.setMod(podId, msg.sender, true);
+        storage_.incrementModCount(podId);
+        
+        return podId;
+    }
+}

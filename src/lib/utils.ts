@@ -17,6 +17,45 @@ export function formatBalance(balance: bigint, decimals = 18, displayDecimals = 
   return `${whole.toString()}.${fractionStr}`
 }
 
+/**
+ * Format balance with compact notation for large numbers:
+ * 1,000+ → "1K+", 10,000+ → "10K+", 100,000+ → "100K+",
+ * 1,000,000+ → "1M+", 1,000,000,000+ → "1B+"
+ * Uses rounding: values >= 999,500 show as "1M+" instead of "1000K+"
+ * 
+ * NOTE: For entry fees and exact amounts, use formatBalance() instead to avoid
+ * confusing users with rounded values (e.g., showing 497+ instead of 500).
+ */
+export function formatCompactBalance(balance: bigint, decimals = 18): string {
+  const divisor = BigInt(10 ** decimals)
+  const whole = balance / divisor
+  
+  // Billions (with rounding threshold at 999,500,000)
+  if (whole >= 999_500_000n) {
+    return `${(Number(whole) / 1_000_000_000).toFixed(0)}B+`
+  }
+  // Millions (with rounding threshold at 999,500)
+  if (whole >= 999_500n) {
+    return `${(Number(whole) / 1_000_000).toFixed(0)}M+`
+  }
+  // Thousands
+  if (whole >= 1_000n) {
+    return `${(Number(whole) / 1_000).toFixed(0)}K+`
+  }
+  return `${whole.toLocaleString()}+`
+}
+
+/**
+ * Format balance for display - shows exact value without rounding/compact notation.
+ * Use this for entry fees and exact amounts where precision matters.
+ * Example: 500000000000000000000 → "500"
+ */
+export function formatExactAmount(balance: bigint, decimals = 18): string {
+  const divisor = BigInt(10 ** decimals)
+  const whole = balance / divisor
+  return whole.toLocaleString()
+}
+
 export function formatTimestamp(timestamp: number): string {
   const date = new Date(timestamp)
   const now = new Date()

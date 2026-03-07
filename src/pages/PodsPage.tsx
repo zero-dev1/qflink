@@ -1,12 +1,17 @@
-import React, { useState, useEffect, useMemo } from 'react'
+import React, { useState, useEffect, useMemo, useRef } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { usePods } from '@/hooks/usePods'
 import { useWallet } from '@/hooks/useWallet'
 import { useUIStore } from '@/stores/ui'
+import { usePodsStore } from '@/stores/pods'
 import { PodChat } from '@/components/pods/PodChat'
 import { InviteModal } from '@/components/pods/InviteModal'
 import { Spinner } from '@/components/ui/Spinner'
 import { cn } from '@/lib/utils'
+import * as cc from '@/lib/contractCalls'
+import { markPodAsRead, getUnreadCount } from '@/lib/unreadTracker'
+import { sendNotification } from '@/lib/notifications'
+
 import type { Pod, DefaultPod, PodMessage } from '@/types'
 
 const formatHolderReq = (minBal: bigint): string => {
@@ -36,8 +41,9 @@ const formatMessageTime = (timestamp: number): string => {
 const PodsPage: React.FC = () => {
   const { podId: podIdParam } = useParams<{ podId?: string }>()
   const navigate = useNavigate()
-  const { address, balance, isConnected } = useWallet()
+  const { address, balance, isConnected, evmAddress } = useWallet()
   const setShowConnectWallet = useUIStore((s) => s.setShowConnectWallet)
+  const addToast = useUIStore((s) => s.addToast)
   const [selectedPodId, setSelectedPodId] = useState<number | null>(
     podIdParam ? Number(podIdParam) : null
   )
@@ -53,7 +59,16 @@ const PodsPage: React.FC = () => {
     loadPodMessages,
     loadPodMembers,
     sendPodMessage,
+    loadMyPods,
+    leavePod,
   } = usePods()
+  
+  // Get message counts from store for unread indicator
+  const podMessageCounts = usePodsStore((s) => s.podMessageCounts)
+  const fetchPodMessageCount = usePodsStore((s) => s.fetchPodMessageCount)
+  
+  // Track previous message counts for notification detection
+  const prevMessageCountsRef = useRef<Record<number, number>>({})
 
   // Access check state
   const [hasAccess, setHasAccess] = useState<boolean | null>(null)
@@ -88,9 +103,26 @@ const PodsPage: React.FC = () => {
 
   // Only show pods the user has access to (myPods is already filtered by checkAccess)
   // Also ensure pods have been loaded (myPods not empty after initial load)
+  // Sort by latest message timestamp (descending) - newest activity first
   const accessiblePods: Pod[] = useMemo(() => {
-    return myPods
-  }, [myPods])
+    return [...myPods].sort((a, b) => {
+      const msgsA = podMessages[a.id] || []
+      const msgsB = podMessages[b.id] || []
+      
+      // Get timestamp of last message for each pod
+      const lastTimeA = msgsA.length > 0 ? msgsA[msgsA.length - 1].timestamp : 0
+      const lastTimeB = msgsB.length > 0 ? msgsB[msgsB.length - 1].timestamp : 0
+      
+      if (lastTimeA !== lastTimeB) {
+        return lastTimeB - lastTimeA // Newest first
+      }
+      
+      // Fallback: sort by message count (highest first as proxy for activity)
+      const countA = podMessageCounts[a.id] || 0
+      const countB = podMessageCounts[b.id] || 0
+      return countB - countA
+    })
+  }, [myPods, podMessages, podMessageCounts])
 
   // Show loading or empty state while determining accessible pods
   const showPodsList = !isLoading && accessiblePods.length > 0
@@ -118,6 +150,72 @@ const PodsPage: React.FC = () => {
     }, 5000)
     return () => clearInterval(interval)
   }, [selectedPodId, loadPodMessages])
+  
+  // Check for new messages and send notifications for non-active pods
+  useEffect(() => {
+    accessiblePods.forEach((pod) => {
+      const currentCount = podMessageCounts[pod.id] || 0
+      const prevCount = prevMessageCountsRef.current[pod.id] || 0
+      
+      // If new messages arrived and pod is not currently active
+      if (currentCount > prevCount && selectedPodId !== pod.id && prevCount > 0) {
+        // Get the latest message from podMessages for this pod
+        const podMsgs = podMessages[pod.id] || []
+        const latestMessage = podMsgs[podMsgs.length - 1]
+        const messagePreview = latestMessage 
+          ? latestMessage.content.substring(0, 50) + (latestMessage.content.length > 50 ? '...' : '')
+          : 'New message'
+        
+        sendNotification(
+          `New message in ${pod.name}`,
+          messagePreview,
+          `pod-${pod.id}`,
+          () => {
+            // Navigate to the pod when notification is clicked
+            navigate(`/pods/${pod.id}`)
+          }
+        )
+      }
+      
+      // Update the reference
+      prevMessageCountsRef.current[pod.id] = currentCount
+    })
+  }, [podMessageCounts, accessiblePods, selectedPodId, navigate, podMessages])
+  
+  // Poll for message counts on all myPods to show unread indicators
+  useEffect(() => {
+    if (myPods.length === 0) return
+    
+    const fetchCounts = async () => {
+      await Promise.all(
+        myPods.map(pod => fetchPodMessageCount(pod.id))
+      )
+    }
+    
+    // Initial fetch
+    fetchCounts()
+    
+    // Poll every 10 seconds
+    const interval = setInterval(fetchCounts, 10000)
+    return () => clearInterval(interval)
+  }, [myPods, fetchPodMessageCount])
+  
+  // Fetch latest message for each pod on mount to populate sidebar previews
+  useEffect(() => {
+    if (accessiblePods.length === 0) return
+    
+    const fetchPreviews = async () => {
+      // Fetch just the most recent message for each pod (limit=1)
+      await Promise.all(
+        accessiblePods.map(pod => loadPodMessages(pod.id))
+      )
+    }
+    
+    fetchPreviews()
+  }, [accessiblePods.length]) // Only re-run when pod count changes
+
+  // Ban detection is now handled instantly via ACCESS_DENIED error on message send
+  // in usePods.ts sendPodMessage. No polling needed - reduces RPC load.
 
   const selectedPod = useMemo(() => {
     if (selectedPodId === null) return null
@@ -135,6 +233,10 @@ const PodsPage: React.FC = () => {
   }, [podMembers, selectedPodId])
 
   const handlePodSelect = (podId: number) => {
+    // Mark pod as read with current message count before opening
+    const currentCount = podMessageCounts[podId] || 0
+    markPodAsRead(podId, currentCount)
+    
     setSelectedPodId(podId)
     // Update URL without full navigation
     navigate(`/pods/${podId}`, { replace: true })
@@ -146,7 +248,15 @@ const PodsPage: React.FC = () => {
   }
 
   const handleLeave = async () => {
-    navigate('/pods')
+    if (selectedPodId === null) return
+    
+    try {
+      await leavePod(selectedPodId)
+      setSelectedPodId(null)
+      navigate('/pods', { replace: true })
+    } catch (err) {
+      // Error already handled by the hook
+    }
   }
 
   if (!isConnected) {
@@ -176,7 +286,19 @@ const PodsPage: React.FC = () => {
           members={currentMembers}
           currentUserAddress={address || ''}
           userBalance={balance}
-          onSend={(content) => sendPodMessage(selectedPodId, content)}
+          onSend={async (content) => {
+            try {
+              await sendPodMessage(selectedPodId, content)
+              // BUG 2 FIX: Mark pod as read after sending to prevent unread dot on own message
+              const currentCount = podMessageCounts[selectedPodId] || currentMessages.length
+              markPodAsRead(selectedPodId, currentCount + 1)
+            } catch (err) {
+              // If access denied (banned), navigate back to pods list
+              if (err instanceof Error && err.message === 'ACCESS_DENIED') {
+                navigate('/pods', { replace: true })
+              }
+            }
+          }}
           onBack={handleBack}
           onInvite={isCustom ? () => setShowInvite(true) : undefined}
           onLeave={isCustom ? handleLeave : undefined}
@@ -227,55 +349,57 @@ const PodsPage: React.FC = () => {
             accessiblePods.map((pod) => {
               const isDefault = (pod as DefaultPod).isDefault === true
               const minBal = isDefault ? (pod as DefaultPod).minBalance : ((pod as any).minBalance || 0n)
-              const isComingSoon = isDefault && minBal === 0n
-              const holderReq = isComingSoon 
-                ? 'Coming Soon' 
-                : (isDefault ? formatHolderReq(minBal) : 'Open')
+              const holderReq = isDefault ? formatHolderReq(minBal) : 'Open'
               const lastMsg = getPodLastMessage(pod.id)
               const isActive = selectedPodId === pod.id
+              
+              // Calculate unread count
+              const currentMsgCount = podMessageCounts[pod.id] || 0
+              const unreadCount = getUnreadCount(pod.id, currentMsgCount)
+              const hasUnread = unreadCount > 0 && !isActive
+              
+              // Better subtitle: use category for custom pods instead of just 'Open'
+              const category = isDefault 
+                ? 'Featured' 
+                : ((pod as any).category || 'trading')
+              const subtitle = isDefault ? holderReq : category.charAt(0).toUpperCase() + category.slice(1)
 
               return (
                 <button
                   key={pod.id}
-                  onClick={isComingSoon ? undefined : () => handlePodSelect(pod.id)}
-                  disabled={isComingSoon}
+                  onClick={() => handlePodSelect(pod.id)}
                   className={cn(
                     'w-full px-4 py-3 text-left transition-colors border-b border-b-gray-200 dark:border-b-gray-800 border-l-2',
-                    isComingSoon
-                      ? 'border-l-transparent bg-transparent opacity-70 cursor-not-allowed'
-                      : isActive
-                        ? 'border-l-cyan-600 bg-gray-100 dark:bg-white/5'
-                        : 'border-l-transparent bg-transparent hover:bg-gray-50 dark:hover:bg-white/[0.03]'
+                    isActive
+                      ? 'border-l-cyan-600 bg-gray-100 dark:bg-white/5'
+                      : 'border-l-transparent bg-transparent hover:bg-gray-50 dark:hover:bg-white/[0.03]'
                   )}
                 >
                   <div className="flex items-center justify-between mb-0.5">
-                    <p className={cn(
-                      'text-sm font-semibold truncate',
-                      isComingSoon ? 'text-gray-500' : 'text-qx-text-primary'
-                    )}>
+                    <p className="text-sm font-semibold truncate text-qx-text-primary">
                       {pod.name}
                     </p>
-                    {isComingSoon ? (
-                      <span className="text-[10px] uppercase tracking-wider text-gray-500 flex-shrink-0 ml-2">
-                        Coming Soon
-                      </span>
-                    ) : lastMsg && (
-                      <span className="text-xs text-qx-text-muted flex-shrink-0 ml-2">
-                        {formatMessageTime(lastMsg.timestamp)}
-                      </span>
-                    )}
+                    <div className="flex items-center gap-2 flex-shrink-0">
+                      {/* Unread indicator */}
+                      {hasUnread && (
+                        unreadCount > 1 ? (
+                          <span className="bg-cyan-600 text-white text-[10px] font-bold px-1.5 py-0.5 rounded-full min-w-[18px] text-center">
+                            {unreadCount > 99 ? '99+' : unreadCount}
+                          </span>
+                        ) : (
+                          <span className="h-2 w-2 bg-cyan-600 rounded-full"></span>
+                        )
+                      )}
+                      {lastMsg && (
+                        <span className="text-xs text-qx-text-muted">
+                          {formatMessageTime(lastMsg.timestamp)}
+                        </span>
+                      )}
+                    </div>
                   </div>
-                  <p className={cn(
-                    'text-xs truncate',
-                    isComingSoon ? 'text-gray-500' : 'text-qx-text-muted'
-                  )}>
-                    {isComingSoon ? 'Deploy a contract on QF Network' : (isDefault ? holderReq : 'Open')}
+                  <p className="text-xs truncate text-qx-text-muted">
+                    {lastMsg ? lastMsg.content : subtitle}
                   </p>
-                  {lastMsg && !isComingSoon && (
-                    <p className="text-xs text-qx-text-secondary truncate mt-1">
-                      {lastMsg.content}
-                    </p>
-                  )}
                 </button>
               )
             })
