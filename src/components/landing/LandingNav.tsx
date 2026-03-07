@@ -33,6 +33,18 @@ export const LandingNav: React.FC = () => {
           {/* Center nav links */}
           <div className="hidden md:flex items-center gap-6">
             <Link
+              to="/creators"
+              className="text-sm text-gray-500 hover:text-gray-900 dark:hover:text-white transition-colors duration-200"
+            >
+              Creators
+            </Link>
+            <Link
+              to="/communities"
+              className="text-sm text-gray-500 hover:text-gray-900 dark:hover:text-white transition-colors duration-200"
+            >
+              Communities
+            </Link>
+            <Link
               to="/whitepaper"
               className="text-sm text-gray-500 hover:text-gray-900 dark:hover:text-white transition-colors duration-200"
             >

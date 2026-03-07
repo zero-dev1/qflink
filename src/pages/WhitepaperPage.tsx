@@ -199,26 +199,39 @@ const WhitepaperPage: React.FC = () => {
           <section id="section-04" className="scroll-mt-24">
             <SectionNum>04 — Architecture</SectionNum>
             <H2>Architecture &amp; Smart Contracts</H2>
-            <P>QFLink is composed of two primary smart contracts deployed on QuantumFusion, written in plain Rust using the <Code>qf-polkavm-sdk</Code> and <Code>pallet-revive-uapi</Code> crates, compiled to PolkaVM bytecode. Both contracts are <Code>#![no_std]</Code> / <Code>#![no_main]</Code> binaries — there is no <Code>ink!</Code> DSL or macro layer. Both contracts are immutable once deployed per version, with upgrade paths managed through a master controller contract.</P>
-            <H3>qflink-pods</H3>
-            <P>The Pods contract manages community spaces. It handles Pod creation, configuration, member management, and message storage for Pod channels. Key storage structures include:</P>
+            <P>QFLink is composed of a modular multi-contract system deployed on QuantumFusion, written in Solidity 0.8.x and compiled with <Code>resolc</Code> (the Revive compiler) to PolkaVM bytecode. The contracts are deployed via the <Code>pallet-revive</Code> EVM compatibility layer, enabling standard EVM tooling and wallet compatibility. The architecture separates concerns across storage, logic, and read layers for maintainability and upgradeability.</P>
+            <H3>Storage Layer</H3>
+            <P>Storage contracts hold the protocol state and are designed to be persistent across logic upgrades:</P>
             <UL>
-              <li><Code>pods: Mapping&lt;PodId, Pod&gt;</Code> — core Pod metadata including name, description, creator, token gate config, and creation timestamp.</li>
-              <li><Code>pod_members: Mapping&lt;(PodId, AccountId), MemberInfo&gt;</Code> — per-pod membership records with join timestamps and roles.</li>
-              <li><Code>pod_messages: Mapping&lt;(PodId, u64), Message&gt;</Code> — indexed message storage keyed by Pod ID and sequential message index.</li>
-              <li><Code>pod_message_count: Mapping&lt;PodId, u64&gt;</Code> — monotonic counter per Pod for deterministic message ordering.</li>
+              <li><Code>QFLinkRegistry</Code> — user registration and account mapping.</li>
+              <li><Code>QFLinkPodsStorage</Code> — pod state, members, bans, and moderator lists. Key structures include <Code>mapping(uint64 =&gt; Pod) pods</Code> and <Code>mapping(uint64 =&gt; mapping(address =&gt; bool)) podMembers</Code>.</li>
+              <li><Code>QFLinkPayments</Code> — fee handling, treasury accounting, and payment splits.</li>
+              <li><Code>QFLinkMessageStorage</Code> — pod message storage with sequential indexing.</li>
+              <li><Code>QFLinkDMStorage</Code> — direct message storage between wallet pairs.</li>
             </UL>
-            <H3>qflink-messages</H3>
-            <P>The Messages contract handles direct wallet-to-wallet messaging. It maintains separate conversation threads keyed by a canonically-ordered pair of account IDs, ensuring that the conversation between addresses A and B is always stored under the same key regardless of who initiates.</P>
+            <H3>Logic Layer</H3>
+            <P>Logic contracts contain the executable business logic and interact with storage contracts:</P>
             <UL>
-              <li><Code>conversations: Mapping&lt;ConversationId, Vec&lt;Message&gt;&gt;</Code> — ordered message history per conversation pair.</li>
-              <li><Code>conversation_index: Mapping&lt;AccountId, Vec&lt;ConversationId&gt;&gt;</Code> — index of all conversation IDs an account participates in.</li>
+              <li><Code>QFLinkPodsCreate</Code> — pod creation with 500 QF protocol fee.</li>
+              <li><Code>QFLinkPodsCreatePaid</Code> — paid pod creation with creator-defined entry fees.</li>
+              <li><Code>QFLinkPodsJoin</Code> — joining logic with fee splitting between creator and treasury.</li>
+              <li><Code>QFLinkPodsLeave</Code> — member exit handling.</li>
+              <li><Code>QFLinkPodsAddMod / QFLinkPodsRemoveMod</Code> — moderator management (up to 3 per pod).</li>
+              <li><Code>QFLinkPodsBan</Code> — ban and unban functionality.</li>
+            </UL>
+            <H3>Read Layer</H3>
+            <P>Read-optimized contracts provide efficient data access without modifying state:</P>
+            <UL>
+              <li><Code>QFLinkPodsReader</Code> — aggregated pod data queries.</li>
+              <li><Code>QFLinkPodsGetPod</Code> — individual pod detail queries.</li>
+              <li><Code>QFLinkMessageReader</Code> — pod message history retrieval.</li>
+              <li><Code>QFLinkDMReader</Code> — direct message conversation retrieval.</li>
             </UL>
             <HighlightBox title="On Storage Costs">
               <P>On-chain storage is finite and metered. Every message written to contract storage consumes storage deposit on QF Network. QFLink is designed to make this cost transparent and predictable, surfacing estimated fees to users before every message send. Future versions will support configurable message retention windows with partial on-chain storage and content-addressed IPFS fallback for archived messages.</P>
             </HighlightBox>
             <H3>Contract Interactions</H3>
-            <P>The frontend communicates with both contracts via <Code>@polkadot/api</Code> directly, using <Code>api.call.reviveApi.call()</Code> for dry-run reads and <Code>api.tx.revive.call()</Code> for signed writes. All reads are performed as RPC dry-run calls (no fee, no signature). All writes — creating a Pod, sending a message, joining a Pod — are submitted as signed extrinsics and confirmed on-chain before the UI updates.</P>
+            <P>The frontend communicates with contracts via <Code>viem</Code> for type-safe EVM interactions through the <Code>eth-rpc</Code> proxy layer that translates EVM JSON-RPC calls to Substrate extrinsics. Wallet connection is via MetaMask and other EVM-compatible wallets — not Polkadot.js extension. All reads are performed as standard <Code>eth_call</Code> operations (no fee, no signature). All writes — creating a Pod, sending a message, joining a Pod — are submitted as signed EVM transactions and confirmed on-chain before the UI updates.</P>
             <P>This means the QFLink UI has <Strong>no optimistic updates</Strong> for write operations. The UI waits for on-chain confirmation before reflecting a new message or membership state. While this introduces a 2–6 second latency per write on current QF Network block times, it guarantees that the UI state is always a faithful representation of the on-chain state.</P>
           </section>
 
@@ -230,38 +243,46 @@ const WhitepaperPage: React.FC = () => {
             <H3>Pod Configuration</H3>
             <P>Each Pod has the following configurable properties at creation time:</P>
             <UL>
-              <li><Strong>Name</Strong> — display name, stored on-chain (max 64 bytes).</li>
-              <li><Strong>Description</Strong> — short description, stored on-chain (max 256 bytes).</li>
-              <li><Strong>Token Gate</Strong> — optional. If set, only wallets holding a specified asset (NFT contract or fungible token above a threshold) can join.</li>
-              <li><Strong>Visibility</Strong> — public (listed in the Pod discovery index) or private (known only to those with the Pod ID).</li>
-              <li><Strong>Creation Fee</Strong> — Pod creation requires a protocol fee paid in QF native tokens, anti-spam mechanism discussed in Section 09.</li>
+              <li><Strong>Name</Strong> — display name, stored on-chain as <Code>bytes32</Code> (max 32 bytes).</li>
+              <li><Strong>Description</Strong> — short description, stored on-chain as <Code>bytes</Code> (max ~200 bytes, enforced by gas limit).</li>
+              <li><Strong>Category</Strong> — stored on-chain as <Code>bytes32</Code>. Options: Trading, Tokens, NFTs, DeFi, Gaming, Builders, Social, Alpha.</li>
+              <li><Strong>Token Gate</Strong> — optional minimum QF balance threshold, verified at join time.</li>
+              <li><Strong>Visibility</Strong> — public (listed on the Explore page) or private (known only to those with the Pod ID).</li>
+              <li><Strong>Creation Fee</Strong> — 500 QF (95% to protocol treasury, 5% burned).</li>
+              <li><Strong>Entry Fee</Strong> — optional fee set by creator for paid pods (95% to creator, 5% to treasury).</li>
+              <li><Strong>Moderators</Strong> — all pods support up to 3 moderators appointed by the creator.</li>
             </UL>
+            <H3>Pod Types</H3>
+            <P>All pods cost 500 QF to create with identical features. There is no longer a distinction between "free" and "pro" pod types. Creators can optionally set an entry fee that joiners must pay to access the pod.</P>
             <H3>Joining a Pod</H3>
-            <P>Joining a Pod is a signed on-chain transaction. When a user calls <Code>join_pod(pod_id)</Code>, the contract verifies the token gate condition (if any) by querying the relevant token contract. If the condition is satisfied, the caller's account is added to the Pod's member mapping with the current block timestamp.</P>
-            <P>Token gate verification happens <Em>at join time only</Em>. A member who sells their qualifying token after joining retains their membership. This is an intentional design choice — it reflects the snapshot-based membership model used by most token-gated communities today. Future versions will support <Em>continuous eligibility checking</Em> as an opt-in Pod configuration.</P>
+            <P>Joining a Pod is a signed on-chain transaction. When a user calls the join function, the contract verifies the token gate condition (if any) by checking the caller's QF balance. If an entry fee is set, the payment is split 95% to the creator and 5% to the protocol treasury. If the conditions are satisfied, the caller's address is added to the pod's member mapping.</P>
+            <P>Token gate verification happens <Em>at join time only</Em>. A member who sells their qualifying tokens after joining retains their membership. This is an intentional design choice — it reflects the snapshot-based membership model used by most token-gated communities today. Future versions will support <Em>continuous eligibility checking</Em> as an opt-in pod configuration.</P>
             <H3>Sending Messages in a Pod</H3>
-            <P>Once a member, a wallet can call <Code>send_pod_message(pod_id, content)</Code>. The contract verifies membership, increments the Pod's message counter, and stores the message with sender, content, and block timestamp. Each message is permanently and immutably stored in contract state.</P>
+            <P>Once a member, a wallet can call the send message function. The contract verifies membership, increments the pod's message counter, and stores the message with sender, content, and block timestamp. Each message is permanently and immutably stored in contract state.</P>
             <Blockquote><p>There is no delete. There is no edit. Once a message is on-chain, it is part of the permanent record of that Pod. QFLink surfaces a UI warning to users before their first message to ensure this is understood.</p></Blockquote>
             <H3>Pod Moderation</H3>
-            <P>Pod admins can <Em>ban</Em> a member — preventing them from sending future messages — but cannot delete messages already sent. This is enforced at the contract level. The immutability of past messages is a core guarantee of QFLink and cannot be overridden by admin action. See <Code>docs/pod-moderation-spec.md</Code> for the full moderation specification.</P>
+            <P>Pod creators and appointed moderators can <Em>ban</Em> a member — preventing them from sending future messages — but cannot delete messages already sent. This is enforced at the contract level. The immutability of past messages is a core guarantee of QFLink and cannot be overridden by admin action. Creators can appoint up to 3 moderators per pod.</P>
           </section>
 
           <Divider />
           <section id="section-06" className="scroll-mt-24">
             <SectionNum>06 — Direct Messaging</SectionNum>
             <H2>Direct Messaging &amp; Encryption</H2>
-            <P>QFLink supports wallet-to-wallet direct messages. Like Pod messages, DMs are stored on-chain as contract state. Unlike Pod messages, DMs between two parties are visible only to those two parties — not because they are hidden from the chain (all chain state is public), but because their content is <Strong>end-to-end encrypted</Strong> before being written on-chain.</P>
-            <H3>Encryption Model</H3>
-            <P>QFLink uses an X25519 Diffie-Hellman key exchange scheme to derive a shared secret between two parties. Each user generates (or derives from their wallet keypair) a <Code>curve25519</Code> key pair. When Alice sends a DM to Bob:</P>
+            <P>QFLink supports wallet-to-wallet direct messages. DMs are stored on-chain as contract state and are fully functional. Each conversation is keyed by a canonically-ordered pair of addresses, ensuring that the conversation between addresses A and B is always stored under the same key regardless of who initiates.</P>
+            <H3>Current Implementation</H3>
+            <P>DMs are currently stored as <Strong>plaintext on-chain</Strong>. While the conversation is only accessible to the two participants through the UI, the content is visible on-chain to anyone with access to query the contract state. We believe in transparency about this — users should understand that their DMs are not currently encrypted.</P>
+            <H3>Planned Encryption Model</H3>
+            <P>End-to-end encryption is planned for a future release. The planned implementation uses an X25519 Diffie-Hellman key exchange scheme to derive a shared secret between two parties:</P>
             <OL>
-              <li>Alice's frontend performs ECDH between Alice's private key and Bob's public key to derive a shared secret.</li>
+              <li>Each user generates (or derives from their wallet keypair) a <Code>curve25519</Code> key pair.</li>
+              <li>When Alice sends a DM to Bob, Alice's frontend performs ECDH between Alice's private key and Bob's public key to derive a shared secret.</li>
               <li>The message content is encrypted with AES-256-GCM using the derived shared secret.</li>
               <li>The ciphertext is submitted on-chain as the message content.</li>
               <li>When Bob reads the message, his frontend performs the same ECDH derivation and decrypts the ciphertext locally.</li>
             </OL>
-            <P>No server ever sees the plaintext. The chain stores only ciphertext. This gives QFLink DMs a strong end-to-end encryption guarantee, with the additional property that the <Em>existence</Em> of a conversation is publicly verifiable on-chain, even if the <Em>content</Em> is not.</P>
-            <HighlightBox title="Limitations &amp; Future Work">
-              <P>The current encryption implementation derives the encryption key deterministically from the wallet keypair. This is a pragmatic choice for a first version — it means users don't need to manage a separate keypair — but it ties message security to wallet key security. Future versions will support session keys and forward secrecy via a ratchet protocol.</P>
+            <P>This model would ensure that no server ever sees the plaintext — only ciphertext would be stored on-chain. The <Em>existence</Em> of a conversation would remain publicly verifiable on-chain, even if the <Em>content</Em> is not readable without the shared secret.</P>
+            <HighlightBox title="Transparency Note">
+              <P>We are committed to being honest about the current state of DM encryption. Current DMs are plaintext on-chain. Do not send sensitive information through QFLink DMs until end-to-end encryption is implemented and deployed. Transparency builds trust, and we want users to make informed decisions about their communication.</P>
             </HighlightBox>
           </section>
 
@@ -275,12 +296,25 @@ const WhitepaperPage: React.FC = () => {
                 <tr><Th>Platform</Th><Th>On-Chain Messages</Th><Th>Token Gating</Th><Th>E2E Encryption</Th><Th>No Off-Chain DB</Th><Th>Composable</Th></tr>
               </thead>
               <tbody>
-                <tr><Td strong>QFLink</Td><Td><Check /></Td><Td><Check /></Td><Td><Check /></Td><Td><Check /></Td><Td><Check /></Td></tr>
+                <tr><Td strong>QFLink</Td><Td><Check /></Td><Td><Check /></Td><Td>Planned</Td><Td><Check /></Td><Td><Check /></Td></tr>
                 <tr><Td strong>Discord</Td><Td><Cross /></Td><Td>Via bots only</Td><Td><Cross /></Td><Td><Cross /></Td><Td><Cross /></Td></tr>
                 <tr><Td strong>Telegram</Td><Td><Cross /></Td><Td><Cross /></Td><Td>Optional</Td><Td><Cross /></Td><Td><Cross /></Td></tr>
                 <tr><Td strong>Lens Protocol</Td><Td>Partial</Td><Td>Via modules</Td><Td><Cross /></Td><Td><Cross /></Td><Td><Check /></Td></tr>
                 <tr><Td strong>XMTP</Td><Td><Cross /></Td><Td><Cross /></Td><Td><Check /></Td><Td><Cross /></Td><Td>Partial</Td></tr>
                 <tr><Td strong>Push Protocol</Td><Td><Cross /></Td><Td>Via channels</Td><Td>Partial</Td><Td><Cross /></Td><Td>Partial</Td></tr>
+              </tbody>
+            </TableWrap>
+            <H3>Fee Comparison</H3>
+            <TableWrap>
+              <thead>
+                <tr><Th>Platform</Th><Th>Platform Fee</Th></tr>
+              </thead>
+              <tbody>
+                <tr><Td strong>QFLink</Td><Td>5% of entry fees, 0% monthly</Td></tr>
+                <tr><Td strong>Patreon</Td><Td>8-12% + 2.9% + $0.30 per transaction</Td></tr>
+                <tr><Td strong>Whop</Td><Td>3% transaction fee</Td></tr>
+                <tr><Td strong>Discord</Td><Td>Free but no monetization</Td></tr>
+                <tr><Td strong>Telegram</Td><Td>Free but no monetization</Td></tr>
               </tbody>
             </TableWrap>
             <P>The key differentiator is <Em>full on-chain storage with no off-chain dependency</Em>. Competitors like XMTP or Push Protocol provide a superior developer experience for applications that don't require full on-chain storage, and they are better suited for high-frequency notification use cases. QFLink is not trying to compete in those use cases — it is purpose-built for the use case where permanence, composability, and verifiability of every message matter.</P>
@@ -316,14 +350,19 @@ const WhitepaperPage: React.FC = () => {
             <H2>Tokenomics &amp; Fee Model</H2>
             <P>QFLink does not have a native token. It runs entirely on QF Network's native token for gas and protocol fees. This is an intentional design choice: introducing a QFLink-specific token would add speculative complexity and create misaligned incentives between token price and protocol usage.</P>
             <H3>Protocol Fee Summary</H3>
-            <StatGrid items={[
-              { value: '0.1 QF', label: 'Pod Creation Fee' },
-              { value: '~0.001 QF', label: 'Per Message (gas)' },
-              { value: '500 QF', label: 'Max Paid Pod Entry' },
-              { value: '0 QF', label: 'Read Operations' },
-            ]} />
+            <TableWrap>
+              <thead>
+                <tr><Th>Fee</Th><Th>Amount</Th></tr>
+              </thead>
+              <tbody>
+                <tr><Td strong>Pod Creation Fee</Td><Td>500 QF (95% treasury, 5% burned)</Td></tr>
+                <tr><Td strong>Paid Pod Entry Fee</Td><Td>Set by creator (95% to creator, 5% to treasury)</Td></tr>
+                <tr><Td strong>Per Message</Td><Td>~gas cost in QF</Td></tr>
+                <tr><Td strong>Read Operations</Td><Td>0 QF</Td></tr>
+              </tbody>
+            </TableWrap>
             <H3>Pod Creation Fee</H3>
-            <P>Creating a Pod requires a one-time fee of <Strong>0.1 QF</Strong>. This fee serves as an anti-spam mechanism — it makes it economically unattractive to create thousands of junk Pods. The fee is sent to a protocol treasury address controlled by the QFLink development multisig. Future governance upgrades may route treasury funds to a community-controlled DAO.</P>
+            <P>Creating a Pod requires a one-time fee of <Strong>500 QF</Strong>. This fee serves as an anti-spam mechanism — it makes it economically unattractive to create thousands of junk Pods. The fee is split: <Strong>95% to the protocol treasury</Strong> and <Strong>5% burned</Strong>. The treasury is controlled by the QFLink development multisig. Future governance upgrades may route treasury funds to a community-controlled DAO.</P>
             <H3>Pod Access Types</H3>
             <P>QFLink supports four distinct Pod access configurations. Creators choose freely between them at Pod creation time — any combination of a token gate threshold and an entry fee is valid:</P>
             <TableWrap>
@@ -338,18 +377,18 @@ const WhitepaperPage: React.FC = () => {
               </tbody>
             </TableWrap>
             <H3>Paid Pod Entry Fees</H3>
-            <P>Paid Pods are live on QFLink today. A Pod creator sets a one-time entry fee in QF tokens when creating the Pod. The fee is anchored to a fiat reference: the <Strong>maximum recommended entry fee is 500 QF, anchored to approximately $15 USD</Strong> at launch pricing. Creators may set any fee above the minimum of 1 QF — the $15 anchor applies to the 500 QF recommended ceiling, not a hard cap.</P>
-            <P>When a user joins a Paid Pod, the <Code>join_pod(pod_id)</Code> contract call is payable. The contract enforces the exact fee amount, then immediately and atomically splits the payment on-chain:</P>
+            <P>Paid Pods are live on QFLink today. A Pod creator sets a one-time entry fee in QF tokens when creating the Pod. Entry fees are set by creators with <Strong>no maximum cap</Strong> — creators are free to price access to their communities according to their own valuation.</P>
+            <P>When a user joins a Paid Pod, the contract call is payable. The contract enforces the exact fee amount, then immediately and atomically splits the payment on-chain:</P>
             <StatGrid items={[
               { value: '95%', label: "To Pod Creator's Payout Wallet" },
               { value: '5%', label: 'To Platform Treasury' },
             ]} />
-            <P>The creator specifies a <Em>payout wallet</Em> at Pod creation time — it defaults to the creator's connected wallet but can be any valid QF address. The platform treasury address is set in the contract constructor and updateable only by the protocol admin via <Code>set_treasury(new_address)</Code>.</P>
+            <P>The creator specifies a <Em>payout wallet</Em> at Pod creation time — it defaults to the creator's connected wallet but can be any valid QF address. The platform treasury address is set in the contract constructor and updateable only by the protocol admin.</P>
             <HighlightBox title="Payment Rules">
               <P>All entry fees are in QF tokens only. Payment is one-time (lifetime access — no subscriptions in the current version). Payments are <Strong>non-refundable</Strong>, even if the member is later banned. Users pay before accessing Pod content — there is no preview. The revenue split is enforced at the smart-contract level and cannot be overridden by the Pod creator.</P>
             </HighlightBox>
             <H3>Message Gas Costs</H3>
-            <P>Sending a message is a contract call on QF Network and incurs standard gas fees. The cost depends on the length of the message content (longer messages consume more storage and therefore more gas). The QFLink UI calculates and displays the estimated cost before submission. Current average cost per message is approximately <Strong>0.001 QF</Strong> at current network gas prices.</P>
+            <P>Sending a message is a contract call on QF Network and incurs standard gas fees. The cost depends on the length of the message content (longer messages consume more storage and therefore more gas). The QFLink UI calculates and displays the estimated cost before submission. Current average cost per message is approximately <Strong>~0.001 QF</Strong> at current network gas prices.</P>
             <H3>Storage Deposits</H3>
             <P>QF Network requires storage deposits for contract state. Every message written to contract storage locks a small amount of QF as a storage deposit. This deposit is permanently locked — it is not returned if the message could theoretically be deleted (which it cannot, by design). Users should be aware that sending many messages will lock small amounts of QF permanently.</P>
             <Blockquote><p>The economic cost of storing data forever on-chain is by design a feature, not a bug. It aligns user incentives: you pay a small permanent cost to store a permanent record. Free ephemeral messages belong on centralised servers. Permanent on-chain messages have a cost that reflects their permanence.</p></Blockquote>
@@ -359,20 +398,20 @@ const WhitepaperPage: React.FC = () => {
           <section id="section-10" className="scroll-mt-24">
             <SectionNum>10 — Roadmap</SectionNum>
             <H2>Roadmap</H2>
-            <P>QFLink is developed iteratively. Each phase ships a working product increment before work on the next phase begins. The following roadmap reflects the current plan as of the date of this document.</P>
+            <P>QFLink is developed iteratively. Each phase ships a working product increment before work on the next phase begins. The following roadmap reflects the current state of the project.</P>
             <div className="relative border-l-2 border-gray-200 dark:border-[#1e293b] pl-6 my-6">
-              <TimelineItem phase="Phase 1 — Completed" title="Core Protocol & MVP" completed
-                description={<>Deployment of <Code>qflink-pods</Code> and <Code>qflink-messages</Code> contracts on QF Network testnet. Basic UI for Pod creation, messaging, and DMs. Wallet connection via Polkadot.js extension.</>} />
-              <TimelineItem phase="Phase 2 — Completed" title="Token Gating & Production Launch" completed
-                description="Token-gated Pod support. End-to-end encryption for DMs. Production deployment on QF Network mainnet. Landing page and public launch." />
-              <TimelineItem phase="Phase 3 — In Progress" title="Moderation, Roles & Pod Discovery"
-                description="Full Pod moderation system (ban, mute, admin roles). Pod discovery index contract. Search and browse Pods. Light/dark mode UI polish and mobile responsiveness." />
-              <TimelineItem phase="Phase 4 — Planned Q3 2026" title="Paid Pods & Creator Economy"
-                description="Paid membership Pods with on-chain revenue routing to creators. Tipping and reactions as on-chain micro-transactions. Pod analytics dashboard." />
-              <TimelineItem phase="Phase 5 — Planned Q4 2026" title="Protocol SDK & Composability"
-                description="Public TypeScript SDK for QFLink contract interactions. Developer documentation and integration guides. First third-party integrations (DAO tooling, NFT launchpads)." />
-              <TimelineItem phase="Phase 6 — Planned 2027" title="Governance & Community Ownership"
-                description="On-chain governance for protocol parameters. Community treasury DAO. Potential QFLink-native token if ecosystem growth warrants it (community vote required)." />
+              <TimelineItem phase="Phase 1 — Completed" title="Core Protocol" completed
+                description="Core protocol deployment, pod creation, messaging, DMs, wallet connection." />
+              <TimelineItem phase="Phase 2 — Completed" title="Token Gating & Monetization" completed
+                description="Token gating, paid pods with fee splitting, Solidity migration, EVM compatibility." />
+              <TimelineItem phase="Phase 3 — Completed" title="Moderation & Discovery" completed
+                description="Moderation (ban/unban, moderator management), pod categories and descriptions, pod discovery (Explore page), unread indicators, browser notifications, light/dark theme." />
+              <TimelineItem phase="Phase 4 — In Progress" title="Identity & Infrastructure"
+                description="QNS (Quantum Name Service) integration for human-readable identities, DM encryption, proxy pattern for upgradeable contracts, mainnet deployment." />
+              <TimelineItem phase="Phase 5 — Planned" title="Creator Tools & SDK"
+                description="Tipping and reactions, pod analytics dashboard, TypeScript SDK, third-party integrations, continuous token-gate re-checking." />
+              <TimelineItem phase="Phase 6 — Planned" title="Governance & Scale"
+                description="On-chain governance, community treasury DAO, IPFS fallback for message archival, forward-secrecy DM encryption." />
             </div>
           </section>
 
@@ -380,24 +419,25 @@ const WhitepaperPage: React.FC = () => {
           <section id="section-11" className="scroll-mt-24">
             <SectionNum>11 — Security</SectionNum>
             <H2>Security &amp; Audits</H2>
-            <P>QFLink's security model is built on the security of QF Network itself and the correctness of the two smart contracts. The following security properties are in scope:</P>
+            <P>QFLink's security model is built on the security of QF Network itself and the correctness of the smart contract system. The following security properties are in scope:</P>
             <H3>Contract Security</H3>
             <UL>
               <li><Strong>Access control.</Strong> All privileged operations (creating a Pod, banning a member, updating Pod config) enforce on-chain ownership checks. There is no admin backdoor that bypasses contract logic.</li>
               <li><Strong>Reentrancy.</Strong> The contracts do not make external calls during state-modifying operations. Token gate checks are read-only calls and are performed before state changes, following the checks-effects-interactions pattern.</li>
-              <li><Strong>Integer overflow.</Strong> Message counters use Rust's checked arithmetic. Overflow panics rather than wrapping silently.</li>
+              <li><Strong>Integer overflow.</Strong> Solidity 0.8.x provides built-in overflow protection. Arithmetic operations revert on overflow/underflow rather than wrapping silently.</li>
               <li><Strong>Storage exhaustion.</Strong> Storage deposits enforced by QF Network prevent unbounded storage growth from malicious actors.</li>
             </UL>
             <H3>Encryption Security</H3>
             <UL>
-              <li>X25519 ECDH is a well-studied, widely deployed key exchange scheme.</li>
-              <li>AES-256-GCM provides authenticated encryption — ciphertext tampering is detectable by the recipient.</li>
-              <li>The current scheme does not provide forward secrecy. A compromised wallet key exposes all past DMs. This is a known limitation documented in Section 06.</li>
+              <li>End-to-end encryption for DMs is planned but not yet implemented.</li>
+              <li>The planned implementation uses X25519 ECDH, a well-studied, widely deployed key exchange scheme.</li>
+              <li>AES-256-GCM will provide authenticated encryption — ciphertext tampering will be detectable by the recipient.</li>
+              <li>Forward secrecy is planned for a future release via a ratchet protocol.</li>
             </UL>
             <H3>Audit Status</H3>
-            <P>The v1.0 contracts have undergone an internal security review. An independent third-party audit is scheduled for Q2 2026 ahead of the Phase 3 deployment. Audit reports will be published publicly in the QFLink repository.</P>
+            <P>The v1.0 Solidity contracts have passed a four-phase internal audit covering access control (9/10), fee math verification (all correct), edge case testing (11/12), and static analysis (no critical vulnerabilities). An independent third-party audit is planned before significant TVL accumulates. Audit reports will be published publicly in the QFLink repository.</P>
             <HighlightBox title="Responsible Disclosure">
-              <P>Security vulnerabilities should be reported privately to the QFLink team before public disclosure. A responsible disclosure policy and contact details are available in the project repository. There is currently no bug bounty programme, but one is planned for launch alongside the Phase 3 release.</P>
+              <P>Security vulnerabilities should be reported privately to the QFLink team before public disclosure. A responsible disclosure policy and contact details are available in the project repository. There is currently no bug bounty programme, but one is planned for a future release.</P>
             </HighlightBox>
           </section>
 

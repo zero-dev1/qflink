@@ -18,6 +18,8 @@ const ProfilePage = lazy(() => import('@/pages/ProfilePage'))
 const SettingsPage = lazy(() => import('@/pages/SettingsPage'))
 const CreatePodPage = lazy(() => import('@/pages/CreatePodPage'))
 const WhitepaperPage = lazy(() => import('@/pages/WhitepaperPage'))
+const CreatorsPage = lazy(() => import('@/pages/CreatorsPage'))
+const CommunitiesPage = lazy(() => import('@/pages/CommunitiesPage'))
 
 const PageLoader: React.FC = () => (
   <div className="flex h-screen items-center justify-center">
@@ -56,6 +58,10 @@ const App: React.FC = () => {
           
           {/* Whitepaper - public, no layout wrapper, no auth guard */}
           <Route path="/whitepaper" element={<WhitepaperPage />} />
+          
+          {/* Marketing pages - public */}
+          <Route path="/creators" element={<CreatorsPage />} />
+          <Route path="/communities" element={<CommunitiesPage />} />
           
           {/* App routes - protected with AuthGuard and wrapped with Layout */}
           <Route element={<ProtectedLayout />}>

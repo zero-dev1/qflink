@@ -62,6 +62,18 @@ export const FooterCTA: React.FC = () => {
                 App
               </Link>
               <Link
+                to="/creators"
+                className="text-gray-500 hover:text-gray-900 dark:hover:text-white transition-colors text-sm"
+              >
+                Creators
+              </Link>
+              <Link
+                to="/communities"
+                className="text-gray-500 hover:text-gray-900 dark:hover:text-white transition-colors text-sm"
+              >
+                Communities
+              </Link>
+              <Link
                 to="/whitepaper"
                 className="text-gray-500 hover:text-gray-900 dark:hover:text-white transition-colors text-sm"
               >
