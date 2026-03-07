@@ -58,7 +58,7 @@ export function usePods() {
     } finally {
       setLoading(false)
     }
-  }, [setLoading, setMyPods, fetchPods])
+  }, [setLoading, fetchPods])
 
   const createPod = useCallback(
     async (
