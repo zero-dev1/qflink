@@ -301,6 +301,44 @@ VITE_PODS_CREATE_PAID_ADDRESS=${podsCreatePaid}
   console.log(`  ✅ Written to ${envPath}`);
 
   // ════════════════════════════════════════════
+  // APPEND QNS ADDRESSES from sister project
+  // ════════════════════════════════════════════
+  console.log('\n═══ Appending QNS addresses ═══');
+
+  // Append QNS addresses from sister project (local dev only)
+  if (process.env.NODE_ENV !== 'production') {
+    try {
+      const qnsEnvPath = path.resolve(__dirname, '../../qns/.env.development');
+      const qnsEnv = readFileSync(qnsEnvPath, 'utf8');
+      const qnsLines = qnsEnv.split('\n').filter(l => l.startsWith('VITE_QNS_'));
+      
+      if (qnsLines.length > 0) {
+        // Check which lines are already present
+        const currentEnv = readFileSync(envPath, 'utf8');
+        const newLines = qnsLines.filter(l => !currentEnv.includes(l.split('=')[0]));
+        
+        if (newLines.length > 0) {
+          const appendContent = '\n# QNS Contract Addresses (from qns/.env.development)\n' + newLines.join('\n') + '\n';
+          writeFileSync(envPath, appendContent, { flag: 'a' });
+          console.log(`  ✅ Appended ${newLines.length} QNS address(es)`);
+          for (const line of newLines) {
+            console.log(`     ${line}`);
+          }
+        } else {
+          console.log('  ℹ️  All QNS addresses already present');
+        }
+      } else {
+        console.log('  ⚠️  No VITE_QNS_ addresses found in QNS .env');
+      }
+    } catch (e) {
+      console.log('  ⚠️  QNS .env not found - skipping QNS address import');
+      console.log(`     Expected at: ${path.resolve(__dirname, '../../qns/.env.development')}`);
+    }
+  } else {
+    console.log('  ℹ️  Production mode - QNS addresses should be set manually in .env.production');
+  }
+
+  // ════════════════════════════════════════════
   // SUMMARY
   // ════════════════════════════════════════════
   console.log('\n═══════════════════════════════════════');

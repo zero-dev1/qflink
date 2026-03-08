@@ -55,13 +55,10 @@ export const useProfileStore = create<ProfileState>((set, get) => ({
   },
 
   fetchProfile: async (address?: string) => {
-    console.log('[AUTH_TRACE] profile.ts fetchProfile() ENTRY, address param:', address)
     const { evmAddress } = useWalletStore.getState()
     const targetAddress = address || evmAddress
-    console.log('[AUTH_TRACE] profile.ts fetchProfile() targetAddress:', targetAddress)
 
     if (!targetAddress) {
-      console.log('[AUTH_TRACE] profile.ts fetchProfile() no targetAddress, setting needsRegistration=true')
       set({ needsRegistration: true, isRegistered: false })
       return
     }
@@ -69,18 +66,19 @@ export const useProfileStore = create<ProfileState>((set, get) => ({
     set({ isLoading: true })
     try {
       const profile = await cc.getProfile(targetAddress as `0x${string}`)
-      console.log('[AUTH_TRACE] profile.ts fetchProfile() raw contract response:', profile)
 
-      if (profile && profile.displayName && profile.displayName.trim().length > 0 && profile.registeredAt > 0n) {
-        console.log('[AUTH_TRACE] profile.ts fetchProfile() has valid profile, setting isRegistered=true, needsRegistration=false')
+      // Check if registered (only requires registeredAt > 0, displayName no longer required)
+      const hasProfile = !!(profile && profile.registeredAt && profile.registeredAt > 0n)
+
+      if (hasProfile) {
         // Convert hex pubkey back to Uint8Array
         const { hexToBytes } = await import('viem')
-        const pubkeyBytes = hexToBytes(profile.encryptionPubkey)
+        const pubkeyBytes = hexToBytes(profile!.encryptionPubkey)
 
         set({
-          displayName: profile.displayName,
+          displayName: profile!.displayName || null,
           encryptionPubkey: pubkeyBytes,
-          registeredAt: Number(profile.registeredAt),
+          registeredAt: Number(profile!.registeredAt),
           isRegistered: true,
           needsRegistration: false,
         })
@@ -90,7 +88,6 @@ export const useProfileStore = create<ProfileState>((set, get) => ({
           secretKey: new Uint8Array(32),
         })
       } else {
-        console.log('[AUTH_TRACE] profile.ts fetchProfile() no valid profile found, setting isRegistered=false, needsRegistration=true')
         set({
           needsRegistration: true,
           isRegistered: false,
@@ -105,8 +102,6 @@ export const useProfileStore = create<ProfileState>((set, get) => ({
       console.error('[fetchProfile] Network error fetching profile:', err)
       throw err
     } finally {
-      const finalState = get()
-      console.log('[AUTH_TRACE] profile.ts fetchProfile() EXIT, isRegistered:', finalState.isRegistered, 'needsRegistration:', finalState.needsRegistration)
       set({ isLoading: false })
     }
   },

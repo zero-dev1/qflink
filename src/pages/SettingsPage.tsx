@@ -5,6 +5,10 @@ import { Avatar } from '@/components/ui/Avatar'
 import { useWallet } from '@/hooks/useWallet'
 import { useToast } from '@/hooks/useToast'
 import { useUIStore } from '@/stores/ui'
+import { hasRegisteredName, checkAvailability, getPrice, getAnnualPriceWithDuration, registerName, registerPermanentName, isValidName, getValidationError } from '@/lib/qnsRegistrar'
+import { useQFName } from '@/hooks/useQFName'
+import { QNSRegistration } from '@/components/qns/QNSRegistration'
+import { useWalletStore } from '@/stores/wallet'
 import { formatBalance, truncateAddress, copyToClipboard } from '@/lib/utils'
 import { NETWORKS, DEV_ACCOUNTS, DEV_MNEMONIC, type NetworkId } from '@/lib/network'
 import { switchNetwork } from '@/lib/chain'
@@ -44,6 +48,7 @@ const SettingsPage: React.FC = () => {
   const [switching, setSwitching] = useState(false)
   const [notifStatus, setNotifStatus] = useState<NotificationStatus>('disabled')
   const [isTogglingNotif, setIsTogglingNotif] = useState(false)
+  const [qnsRegistrationOpen, setQnsRegistrationOpen] = useState(false)
 
   const activeNetwork = useNetworkStore((s) => s.currentNetwork)
   const connectionStatus = useNetworkStore((s) => s.connectionStatus)
@@ -170,6 +175,8 @@ const SettingsPage: React.FC = () => {
 
   const notifStatusInfo = getNotificationStatusText()
   const isDev = import.meta.env.DEV
+  const evmAddress = useWalletStore((s) => s.evmAddress)
+  const userQNSName = useQFName(evmAddress || undefined)
 
   return (
     <div className="max-w-2xl mx-auto p-6 space-y-6">
@@ -207,7 +214,43 @@ const SettingsPage: React.FC = () => {
         </div>
       </Card>
 
-      {/* Section 2 — Notifications */}
+      {/* Section 2 — QNS Name */}
+      <Card header={{ title: 'QNS Name' }}>
+        <div className="space-y-4">
+          {userQNSName ? (
+            <div className="flex items-center justify-between bg-qx-elevated p-3">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-full bg-cyan-600/20 flex items-center justify-center">
+                  <svg className="w-5 h-5 text-cyan-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
+                  </svg>
+                </div>
+                <div>
+                  <p className="text-sm font-medium text-cyan-600">{userQNSName}</p>
+                  <p className="text-xs text-qx-text-muted">Your identity across QF</p>
+                </div>
+              </div>
+              <span className="px-2 py-1 bg-cyan-600/20 text-cyan-600 text-xs font-medium rounded">
+                Active
+              </span>
+            </div>
+          ) : (
+            <div className="space-y-4">
+              <p className="text-sm text-qx-text-secondary">
+                You don&apos;t have a .qf name yet. Register one to make your identity recognizable across the QF ecosystem.
+              </p>
+              <Button
+                onClick={() => setQnsRegistrationOpen(true)}
+                className="w-full"
+              >
+                Register .qf Name
+              </Button>
+            </div>
+          )}
+        </div>
+      </Card>
+
+      {/* Section 3 — Notifications */}
       <Card header={{ title: 'Notifications' }}>
         <div className="space-y-4">
           {/* Notification toggle */}
@@ -244,7 +287,7 @@ const SettingsPage: React.FC = () => {
         </div>
       </Card>
 
-      {/* Section 3 — Appearance */}
+      {/* Section 4 — Appearance */}
       <Card header={{ title: 'Appearance' }}>
         <div className="space-y-3">
           <p className="text-sm text-qx-text-secondary">Theme</p>
@@ -401,7 +444,7 @@ const SettingsPage: React.FC = () => {
         </Card>
       )}
 
-      {/* Section 4 — About */}
+      {/* Section 5 — About */}
       <Card header={{ title: 'About' }}>
         <div className="space-y-3">
           <div className="flex items-center justify-between">
@@ -432,6 +475,12 @@ const SettingsPage: React.FC = () => {
           </div>
         </div>
       </Card>
+      {/* QNS Registration Modal */}
+      {qnsRegistrationOpen && (
+        <div className="fixed inset-0 z-50">
+          <QNSRegistration onComplete={() => setQnsRegistrationOpen(false)} />
+        </div>
+      )}
     </div>
   )
 }

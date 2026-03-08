@@ -3,6 +3,8 @@ import { Navigate, useLocation } from 'react-router-dom'
 import { useWalletStore } from '@/stores/wallet'
 import { useProfileStore } from '@/stores/profile'
 import { Spinner } from '@/components/ui/Spinner'
+import { QNSRegistration } from '@/components/qns/QNSRegistration'
+import { hasRegisteredName } from '@/lib/qnsRegistrar'
 
 interface AuthGuardProps {
   children: React.ReactNode
@@ -15,8 +17,11 @@ export const AuthGuard: React.FC<AuthGuardProps> = ({ children }) => {
   const location = useLocation()
   const [isChecking, setIsChecking] = useState(true)
   const [networkError, setNetworkError] = useState(false)
+  const [showQNSRegistration, setShowQNSRegistration] = useState(false)
+  const [isCheckingQNS, setIsCheckingQNS] = useState(true)
   const retryCountRef = useRef(0)
   const retryTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const qnsCheckedRef = useRef(false)
   
   const isConnected = useWalletStore((s) => s.isConnected)
   const isConnecting = useWalletStore((s) => s.isConnecting)
@@ -26,30 +31,22 @@ export const AuthGuard: React.FC<AuthGuardProps> = ({ children }) => {
   const isLoadingProfile = useProfileStore((s) => s.isLoading)
   const fetchProfile = useProfileStore((s) => s.fetchProfile)
 
-  console.log('[AUTH_TRACE] AuthGuard.tsx RENDER, isConnected:', isConnected, 'isRegistered:', isRegistered, 'needsRegistration:', needsRegistration, 'isChecking:', isChecking, 'isConnecting:', isConnecting, 'isLoadingProfile:', isLoadingProfile)
-
   useEffect(() => {
-    console.log('[AUTH_TRACE] AuthGuard.tsx useEffect[checkProfile] FIRED, isConnected:', isConnected, 'evmAddress:', evmAddress, 'isRegistered:', isRegistered)
     let cancelled = false
 
     const checkProfile = async () => {
-      console.log('[AUTH_TRACE] AuthGuard.tsx checkProfile() ENTRY, isConnected:', isConnected, 'evmAddress:', evmAddress, 'isRegistered:', isRegistered)
       if (!isConnected || !evmAddress || isRegistered) {
-        console.log('[AUTH_TRACE] AuthGuard.tsx checkProfile() EARLY RETURN - !isConnected:', !isConnected, '!evmAddress:', !evmAddress, 'isRegistered:', isRegistered)
         setIsChecking(false)
         return
       }
 
       try {
-        console.log('[AUTH_TRACE] AuthGuard.tsx checkProfile() CALLING fetchProfile')
         await fetchProfile(evmAddress)
-        console.log('[AUTH_TRACE] AuthGuard.tsx checkProfile() fetchProfile SUCCESS')
         if (!cancelled) {
           setNetworkError(false)
           setIsChecking(false)
         }
       } catch (err: any) {
-        console.log('[AUTH_TRACE] AuthGuard.tsx checkProfile() fetchProfile ERROR:', err)
         if (cancelled) return
         const msg: string = err?.message || String(err) || ''
 
@@ -86,10 +83,44 @@ export const AuthGuard: React.FC<AuthGuardProps> = ({ children }) => {
     }
   }, [isConnected, evmAddress, isRegistered, fetchProfile])
 
-  // Show loading while checking auth state or retrying after network error
-  console.log('[AUTH_TRACE] AuthGuard.tsx DECISION POINT - isConnecting:', isConnecting, 'isChecking:', isChecking, 'isLoadingProfile:', isLoadingProfile)
-  if (isConnecting || isChecking || (isConnected && isLoadingProfile)) {
-    console.log('[AUTH_TRACE] AuthGuard.tsx DECISION: SHOW LOADING')
+  // Check QNS registration after profile is confirmed
+  useEffect(() => {
+    const checkQNS = async () => {
+      // Only check QNS after profile is confirmed registered
+      if (!isRegistered || !evmAddress || qnsCheckedRef.current) {
+        setIsCheckingQNS(false)
+        return
+      }
+
+      // Check if user has already skipped
+      const hasSkipped = localStorage.getItem('qns-skipped') === 'true'
+      if (hasSkipped) {
+        qnsCheckedRef.current = true
+        setIsCheckingQNS(false)
+        return
+      }
+
+      try {
+        const qnsName = await hasRegisteredName(evmAddress)
+        if (!qnsName) {
+          // No QNS name registered - show registration screen
+          setShowQNSRegistration(true)
+        }
+        qnsCheckedRef.current = true
+      } catch (err) {
+        console.error('Error checking QNS registration:', err)
+        // On error, allow through (don't block user)
+        qnsCheckedRef.current = true
+      } finally {
+        setIsCheckingQNS(false)
+      }
+    }
+
+    checkQNS()
+  }, [isRegistered, evmAddress])
+
+  // Show loading while checking auth state or QNS status
+  if (isConnecting || isChecking || (isConnected && isLoadingProfile) || isCheckingQNS) {
     return (
       <div className="flex h-screen items-center justify-center bg-[#0D0D0D]">
         <div className="flex flex-col items-center gap-4">
@@ -104,7 +135,6 @@ export const AuthGuard: React.FC<AuthGuardProps> = ({ children }) => {
 
   // Not connected → redirect to /connect, preserving current location for return
   if (!isConnected) {
-    console.log('[AUTH_TRACE] AuthGuard.tsx DECISION: REDIRECT /connect (not connected)')
     return <Navigate to="/connect" replace state={{ from: location }} />
   }
 
@@ -131,12 +161,22 @@ export const AuthGuard: React.FC<AuthGuardProps> = ({ children }) => {
 
   // Connected but confirmed no profile (query succeeded, returned null) → redirect to /connect
   if (needsRegistration || !isRegistered) {
-    console.log('[AUTH_TRACE] AuthGuard.tsx DECISION: REDIRECT /connect (needsRegistration:', needsRegistration, '!isRegistered:', !isRegistered, ')')
     return <Navigate to="/connect" replace state={{ from: location }} />
   }
 
+  // Show QNS registration if needed
+  if (showQNSRegistration) {
+    return (
+      <QNSRegistration
+        onComplete={() => {
+          setShowQNSRegistration(false)
+          qnsCheckedRef.current = true
+        }}
+      />
+    )
+  }
+
   // All good → render the protected content
-  console.log('[AUTH_TRACE] AuthGuard.tsx DECISION: ALLOW (render children)')
   return <>{children}</>
 }
 

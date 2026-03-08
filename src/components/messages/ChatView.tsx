@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import { Avatar } from '@/components/ui/Avatar'
 import { MessageInput } from './MessageInput'
 import { truncateAddress, formatMessageTime } from '@/lib/utils'
+import { useQFName } from '@/hooks/useQFName'
 import { getProfile } from '@/lib/contractCalls'
 import { cn } from '@/lib/utils'
 import type { Message } from '@/types'
@@ -34,8 +35,13 @@ export const ChatView: React.FC<ChatViewProps> = ({
   const isNearBottom = useRef(true)
   const [peerProfileName, setPeerProfileName] = useState<string | null>(null)
   const [senderProfiles, setSenderProfiles] = useState<Map<string, string>>(new Map())
+  const [senderQFNames, setSenderQFNames] = useState<Map<string, string>>(new Map())
   const profileFetchedRef = useRef<boolean>(false)
   const senderProfilesFetchedRef = useRef<Set<string>>(new Set())
+  const senderQFNamesFetchedRef = useRef<Set<string>>(new Set())
+
+  // Use QNS hook for peer's .qf name
+  const peerQFName = useQFName(address)
 
   const handleScroll = () => {
     const el = chatContainerRef.current
@@ -66,6 +72,38 @@ export const ChatView: React.FC<ChatViewProps> = ({
     
     fetchProfile()
   }, [address])
+
+  // Fetch QNS names for all message senders
+  useEffect(() => {
+    const fetchSenderQFNames = async () => {
+      const uniqueSenders = new Set<string>()
+      messages.forEach(msg => {
+        const senderAddr = msg.sender.toLowerCase()
+        if (senderAddr !== currentUserAddress.toLowerCase() && !senderQFNamesFetchedRef.current.has(senderAddr)) {
+          uniqueSenders.add(msg.sender)
+        }
+      })
+      
+      if (uniqueSenders.size === 0) return
+      
+      const { reverseResolve } = await import('@/lib/qns')
+      const newQFNames = new Map<string, string>(senderQFNames)
+      
+      await Promise.all(Array.from(uniqueSenders).map(async (senderAddr) => {
+        senderQFNamesFetchedRef.current.add(senderAddr.toLowerCase())
+        try {
+          const name = await reverseResolve(senderAddr)
+          if (name) {
+            newQFNames.set(senderAddr.toLowerCase(), name)
+          }
+        } catch {}
+      }))
+      
+      setSenderQFNames(newQFNames)
+    }
+    
+    fetchSenderQFNames()
+  }, [messages, currentUserAddress])
 
   // Fetch profiles for all message senders
   useEffect(() => {
@@ -108,6 +146,12 @@ export const ChatView: React.FC<ChatViewProps> = ({
       return 'You'
     }
     
+    // Check QNS name first (priority)
+    const qfName = senderQFNames.get(normalizedSender)
+    if (qfName) {
+      return qfName
+    }
+    
     // Check cached profile from message senders
     const cachedProfile = senderProfiles.get(normalizedSender)
     if (cachedProfile) {
@@ -120,7 +164,7 @@ export const ChatView: React.FC<ChatViewProps> = ({
     }
     
     return truncateAddress(senderAddress)
-  }, [currentUserAddress, address, peerProfileName, senderProfiles])
+  }, [currentUserAddress, address, peerProfileName, senderProfiles, senderQFNames])
 
   const isOnline = useMemo(() => mockIsOnline(address), [address])
 
@@ -147,7 +191,15 @@ export const ChatView: React.FC<ChatViewProps> = ({
         >
           <Avatar address={address} size="md" />
           <div className="flex-1 min-w-0">
-            <p className="font-display text-sm font-semibold text-qx-text-primary">{peerProfileName || <span className="font-mono">{truncateAddress(address)}</span>}</p>
+            <p className="font-display text-sm font-semibold text-qx-text-primary">
+              {peerQFName ? (
+                <span className="text-cyan-600">{peerQFName}</span>
+              ) : peerProfileName ? (
+                peerProfileName
+              ) : (
+                <span className="font-mono">{truncateAddress(address)}</span>
+              )}
+            </p>
             <p className="text-xs text-qx-text-secondary">QF Builder</p>
             <div className="flex items-center gap-1.5 mt-0.5">
               <div className={`h-2 w-2 rounded-full flex-shrink-0 ${isOnline ? 'bg-qx-success' : 'bg-qx-text-muted'}`} />

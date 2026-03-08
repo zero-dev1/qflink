@@ -6,6 +6,7 @@ import { ProgressBar } from '@/components/ui/ProgressBar'
 import { truncateAddress, formatMessageTime, formatBalance } from '@/lib/utils'
 import { TokenGateBar } from './TokenGateBar'
 import { getProfile } from '@/lib/contractCalls'
+import { reverseResolve } from '@/lib/qns'
 import { usePodsStore } from '@/stores/pods'
 import { useWalletStore } from '@/stores/wallet'
 import type { Pod, PodMessage, DefaultPod, CustomPod } from '@/types'
@@ -48,20 +49,30 @@ export const PodChat: React.FC<PodChatProps> = ({
   const isNearBottom = useRef(true)
   const navigate = useNavigate()
   const [senderProfiles, setSenderProfiles] = useState<Map<string, string>>(new Map())
+  const [senderQFNames, setSenderQFNames] = useState<Map<string, string>>(new Map())
   const profilesFetchedRef = useRef<Set<string>>(new Set())
+  const qfNamesFetchedRef = useRef<Set<string>>(new Set())
   const [showPodInfo, setShowPodInfo] = useState(false)
   
   const myPods = usePodsStore((s) => s.myPods)
   const evmAddress = useWalletStore((s) => s.evmAddress)
   
   const getSenderName = (senderAddress: string): string => {
+    const normalizedAddr = senderAddress.toLowerCase()
+    
     // Check if it's the current user
-    if (evmAddress && senderAddress.toLowerCase() === evmAddress.toLowerCase()) {
+    if (evmAddress && normalizedAddr === evmAddress.toLowerCase()) {
       return 'You'
     }
     
+    // Check QNS name first (priority)
+    const qfName = senderQFNames.get(normalizedAddr)
+    if (qfName) {
+      return qfName
+    }
+    
     // Check cached profile
-    const profileName = senderProfiles.get(senderAddress.toLowerCase())
+    const profileName = senderProfiles.get(normalizedAddr)
     if (profileName) {
       return profileName
     }
@@ -69,35 +80,50 @@ export const PodChat: React.FC<PodChatProps> = ({
     return truncateAddress(senderAddress)
   }
   
-  // Fetch profiles for all unique senders
+  // Fetch profiles and QNS names for all unique senders
   useEffect(() => {
-    const fetchProfiles = async () => {
+    const fetchData = async () => {
       const uniqueSenders = new Set<string>()
       messages.forEach(msg => {
         const addr = msg.sender.toLowerCase()
-        if (addr !== evmAddress?.toLowerCase() && !profilesFetchedRef.current.has(addr)) {
-          uniqueSenders.add(msg.sender)
+        if (addr !== evmAddress?.toLowerCase()) {
+          if (!profilesFetchedRef.current.has(addr)) {
+            uniqueSenders.add(msg.sender)
+          }
         }
       })
       
       if (uniqueSenders.size === 0) return
       
       const newProfiles = new Map(senderProfiles)
+      const newQFNames = new Map(senderQFNames)
       
       await Promise.all(Array.from(uniqueSenders).map(async (addr) => {
-        profilesFetchedRef.current.add(addr.toLowerCase())
+        const lowerAddr = addr.toLowerCase()
+        profilesFetchedRef.current.add(lowerAddr)
+        
+        // Fetch both profile and QNS name in parallel
         try {
           const profile = await getProfile(addr as `0x${string}`)
           if (profile?.displayName) {
-            newProfiles.set(addr.toLowerCase(), profile.displayName)
+            newProfiles.set(lowerAddr, profile.displayName)
+          }
+        } catch {}
+        
+        try {
+          const qfName = await reverseResolve(addr)
+          if (qfName) {
+            newQFNames.set(lowerAddr, qfName)
+            qfNamesFetchedRef.current.add(lowerAddr)
           }
         } catch {}
       }))
       
       setSenderProfiles(newProfiles)
+      setSenderQFNames(newQFNames)
     }
     
-    fetchProfiles()
+    fetchData()
   }, [messages, evmAddress])
 
   const handleScroll = () => {
@@ -361,7 +387,10 @@ export const PodChat: React.FC<PodChatProps> = ({
               return (
                 <div key={msg.id} className={cn('flex flex-col', isConsecutive ? 'mb-1' : 'mb-4', isMine ? 'items-end' : 'items-start')}>
                   {!isMine && !isConsecutive && (
-                    <p className="text-xs font-medium text-qx-text-secondary mb-1 px-1">
+                    <p className={cn(
+                      'text-xs font-medium mb-1 px-1',
+                      senderQFNames.get(msg.sender.toLowerCase()) ? 'text-cyan-600' : 'text-qx-text-secondary'
+                    )}>
                       {senderName}
                     </p>
                   )}

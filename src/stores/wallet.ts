@@ -52,7 +52,6 @@ export const useWalletStore = create<WalletState>((set, get) => ({
   walletType: null,
 
   connect: async (selectedAccount?: InjectedAccountWithMeta) => {
-    console.log('[AUTH_TRACE] wallet.ts connect() START')
     set({ isConnecting: true })
 
     try {
@@ -109,24 +108,18 @@ export const useWalletStore = create<WalletState>((set, get) => ({
       // Ensure account is mapped BEFORE setting isConnected=true.
       // Contract queries (registryGetProfile, etc.) will fail with AccountUnmapped
       // if we allow components to fire them against an unmapped account.
-      console.log('[AUTH_TRACE] wallet.ts connect() BEFORE getEvmAddress')
       evmAddr = await getEvmAddress(address)
-      console.log('[AUTH_TRACE] wallet.ts connect() AFTER getEvmAddress, evmAddr:', evmAddr)
 
       if (evmAddr) {
         // Mapping already exists on-chain — proceed immediately
-        console.log('[AUTH_TRACE] wallet.ts connect() Mapping exists')
       } else {
         // No mapping — submit mapAccount and WAIT for finalization before continuing
-        console.log('[AUTH_TRACE] wallet.ts connect() BEFORE ensureAccountMapped')
         set({ isMappingAccount: true })
         try {
           evmAddr = await ensureAccountMapped(account)
-          console.log('[AUTH_TRACE] wallet.ts connect() AFTER ensureAccountMapped, evmAddr:', evmAddr)
         } catch (mapErr: any) {
           // Surface the error to the UI — do NOT fall back to a derived address
           // and do NOT set isConnected=true. The user must resolve this first.
-          console.log('[AUTH_TRACE] wallet.ts connect() ensureAccountMapped FAILED:', mapErr)
           set({ isMappingAccount: false, isConnecting: false })
           throw mapErr
         }
@@ -134,7 +127,6 @@ export const useWalletStore = create<WalletState>((set, get) => ({
       }
 
       if (!evmAddr) {
-        console.log('[AUTH_TRACE] wallet.ts connect() ERROR: no evmAddr')
         set({ isConnecting: false })
         throw new Error('Could not determine EVM address after mapping')
       }
@@ -142,7 +134,6 @@ export const useWalletStore = create<WalletState>((set, get) => ({
       saveSession(address, source, 'substrate')
 
       // Only NOW set isConnected=true — mapping is confirmed, contract queries are safe
-      console.log('[AUTH_TRACE] wallet.ts connect() BEFORE setting isConnected=true')
       set({
         address,
         evmAddress: evmAddr.toLowerCase(),
@@ -153,16 +144,11 @@ export const useWalletStore = create<WalletState>((set, get) => ({
         walletType: 'substrate',
         balance: initialBalance,
       })
-      console.log('[AUTH_TRACE] wallet.ts connect() AFTER set isConnected=true')
 
       const { useProfileStore } = await import('./profile')
-      console.log('[AUTH_TRACE] wallet.ts connect() BEFORE fetchProfile')
       try {
         await useProfileStore.getState().fetchProfile(evmAddr)
-        const profileState = useProfileStore.getState()
-        console.log('[AUTH_TRACE] wallet.ts connect() AFTER fetchProfile, isRegistered:', profileState.isRegistered, 'needsRegistration:', profileState.needsRegistration)
       } catch (profileErr) {
-        console.log('[AUTH_TRACE] wallet.ts connect() fetchProfile ERROR:', profileErr)
         // Don't block connection if profile fetch fails — AuthGuard/ConnectPage will handle it
       }
 
@@ -171,13 +157,9 @@ export const useWalletStore = create<WalletState>((set, get) => ({
         const { usePodsStore } = await import('./pods')
         await usePodsStore.getState().fetchPods()
       } catch (podsErr) {
-        console.log('[AUTH_TRACE] wallet.ts connect() fetchPods ERROR:', podsErr)
         // Don't block connection if pods fetch fails
       }
-
-      console.log('[AUTH_TRACE] wallet.ts connect() COMPLETE')
     } catch (error) {
-      console.log('[AUTH_TRACE] wallet.ts connect() ERROR:', error)
       set({ isConnecting: false })
       throw error
     }
@@ -248,7 +230,6 @@ export const useWalletStore = create<WalletState>((set, get) => ({
    * Finalize MetaMask connection - shared between connect and silent connect.
    */
   finalizeMetaMaskConnection: async (evmAddress: string) => {
-    console.log('[AUTH_TRACE] wallet.ts finalizeMetaMaskConnection() START, evmAddress:', evmAddress)
     try {
       // Get balance from Ethereum RPC
       let balance = BigInt(0)
@@ -279,7 +260,6 @@ export const useWalletStore = create<WalletState>((set, get) => ({
       saveSession(evmAddress, 'metamask', 'evm')
 
       // Set all state atomically
-      console.log('[AUTH_TRACE] wallet.ts finalizeMetaMaskConnection() BEFORE setting isConnected=true')
       set({
         address: evmAddress,
         evmAddress: evmAddress,
@@ -291,14 +271,10 @@ export const useWalletStore = create<WalletState>((set, get) => ({
         balance,
         linkedWallets: [],
       })
-      console.log('[AUTH_TRACE] wallet.ts finalizeMetaMaskConnection() AFTER set isConnected=true')
 
       // Fetch profile and pods
       const { useProfileStore } = await import('./profile')
-      console.log('[AUTH_TRACE] wallet.ts finalizeMetaMaskConnection() BEFORE fetchProfile')
       await useProfileStore.getState().fetchProfile(evmAddress)
-      const profileState = useProfileStore.getState()
-      console.log('[AUTH_TRACE] wallet.ts finalizeMetaMaskConnection() AFTER fetchProfile, isRegistered:', profileState.isRegistered, 'needsRegistration:', profileState.needsRegistration)
 
       const { usePodsStore } = await import('./pods')
       await usePodsStore.getState().fetchPods()

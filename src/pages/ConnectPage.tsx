@@ -11,7 +11,7 @@ import { Spinner } from '@/components/ui/Spinner'
 import { QFLinkWordmark } from '@/components/QFLinkWordmark'
 import type { InjectedAccountWithMeta } from '@/lib/chain'
 
-type Step = 1 | 2
+type Step = 1 | 2 | 3
 
 // Extension wallet options
 const SUBSTRATE_WALLETS = [
@@ -26,8 +26,7 @@ const ConnectPage: React.FC = () => {
   const navigate = useNavigate()
   const location = useLocation()
   const [step, setStep] = useState<Step>(1)
-  const [displayName, setDisplayName] = useState('')
-  const [isCreating, setIsCreating] = useState(false)
+  const [isRegistering, setIsRegistering] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [loadingWallet, setLoadingWallet] = useState<WalletId | null>(null)
   const [showWalletOptions, setShowWalletOptions] = useState(false)
@@ -48,51 +47,35 @@ const ConnectPage: React.FC = () => {
   // registryGetProfile directly so a mapped-but-unregistered account is never
   // accidentally treated as registered.
   useEffect(() => {
-    console.log('[AUTH_TRACE] ConnectPage.tsx useEffect[checkAndRoute] FIRED, isConnected:', isConnected, 'evmAddress:', evmAddress)
     if (!isConnected || !evmAddress) {
-      console.log('[AUTH_TRACE] ConnectPage.tsx useEffect[checkAndRoute] EARLY RETURN - !isConnected:', !isConnected, '!evmAddress:', !evmAddress)
       return
     }
 
     let cancelled = false
     const returnTo = (location.state as any)?.from?.pathname || '/home'
-    console.log('[AUTH_TRACE] ConnectPage.tsx useEffect[checkAndRoute] returnTo:', returnTo)
 
     const checkAndRoute = async () => {
-      console.log('[AUTH_TRACE] ConnectPage.tsx checkAndRoute() ENTRY')
       try {
-        console.log('[AUTH_TRACE] ConnectPage.tsx checkAndRoute() CALLING getProfile')
         const profileData = await getProfile(evmAddress as `0x${string}`)
-        console.log('[AUTH_TRACE] ConnectPage.tsx checkAndRoute() getProfile response:', profileData)
         if (cancelled) {
-          console.log('[AUTH_TRACE] ConnectPage.tsx checkAndRoute() CANCELLED, returning')
           return
         }
 
-        const hasProfile = !!(profileData
-          && profileData.displayName
-          && profileData.displayName.trim().length > 0
-          && profileData.registeredAt
-          && profileData.registeredAt > 0n)
-        console.log('[AUTH_TRACE] ConnectPage.tsx checkAndRoute() hasProfile:', hasProfile, 'displayName:', profileData?.displayName, 'registeredAt:', profileData?.registeredAt)
+        // Check if registered (only requires registeredAt > 0, displayName is no longer required)
+        const hasProfile = !!(profileData && profileData.registeredAt && profileData.registeredAt > 0n)
 
         if (hasProfile) {
-          console.log('[AUTH_TRACE] ConnectPage.tsx checkAndRoute() HAS VALID PROFILE, navigating to', returnTo)
           navigate(returnTo, { replace: true })
         } else {
           // No valid profile — stay on connect page at step 2 for registration
-          console.log('[AUTH_TRACE] ConnectPage.tsx checkAndRoute() NO VALID PROFILE, setting step=2')
           setStep(2)
         }
       } catch (err) {
         // Network error — fall back to store state to avoid blocking the user
-        console.log('[AUTH_TRACE] ConnectPage.tsx checkAndRoute() ERROR:', err)
         if (cancelled) return
         if (profile.isRegistered) {
-          console.log('[AUTH_TRACE] ConnectPage.tsx checkAndRoute() FALLBACK navigate to', returnTo, '(profile.isRegistered=true)')
           navigate(returnTo, { replace: true })
         } else {
-          console.log('[AUTH_TRACE] ConnectPage.tsx checkAndRoute() FALLBACK setting step=2 (profile.isRegistered=false)')
           setStep(2)
         }
       }
@@ -100,26 +83,20 @@ const ConnectPage: React.FC = () => {
 
     checkAndRoute()
     return () => { 
-      console.log('[AUTH_TRACE] ConnectPage.tsx useEffect[checkAndRoute] CLEANUP')
       cancelled = true 
     }
   }, [isConnected, evmAddress])
 
   // Navigate after profile registration completes (with delay for chain indexing)
   useEffect(() => {
-    console.log('[AUTH_TRACE] ConnectPage.tsx useEffect[postRegistration] FIRED, profile.isRegistered:', profile.isRegistered, 'isConnected:', isConnected)
     if (!profile.isRegistered || !isConnected) {
-      console.log('[AUTH_TRACE] ConnectPage.tsx useEffect[postRegistration] EARLY RETURN')
       return
     }
     const returnTo = (location.state as any)?.from?.pathname || '/home'
-    console.log('[AUTH_TRACE] ConnectPage.tsx useEffect[postRegistration] Setting 2s timer to navigate to', returnTo)
     const timer = setTimeout(() => {
-      console.log('[AUTH_TRACE] ConnectPage.tsx useEffect[postRegistration] TIMER FIRED, navigating to', returnTo)
       navigate(returnTo, { replace: true })
     }, 2000)
     return () => {
-      console.log('[AUTH_TRACE] ConnectPage.tsx useEffect[postRegistration] CLEANUP (clearing timer)')
       clearTimeout(timer)
     }
   }, [profile.isRegistered, isConnected, navigate, location])
@@ -181,17 +158,15 @@ const ConnectPage: React.FC = () => {
     }
   }
 
-  // Handle profile creation
-  const handleCreateProfile = async () => {
-    if (!displayName.trim()) return
-
-    setIsCreating(true)
+  // Handle auto-registration (no display name input required)
+  const handleAutoRegister = async () => {
+    setIsRegistering(true)
     setError(null)
 
     let keyPair: { publicKey: Uint8Array; secretKey: Uint8Array } | undefined
 
     try {
-      const { walletType: wt, address: walletAddress } = useWalletStore.getState()
+      const { walletType: wt, address: walletAddress, evmAddress: evmAddr } = useWalletStore.getState()
       
       if (!walletAddress) throw new Error('No wallet connected')
 
@@ -244,11 +219,14 @@ const ConnectPage: React.FC = () => {
         })
       }
 
-      await profile.register(displayName.trim(), keyPair.publicKey)
-      addToast('success', 'Profile created! Redirecting in a moment...')
+      // Use truncated address as placeholder display name
+      const placeholderName = evmAddr ? truncateAddress(evmAddr, 'evm') : truncateAddress(walletAddress, 'substrate')
+      
+      await profile.register(placeholderName, keyPair.publicKey)
+      addToast('success', 'Welcome to QFLink! Redirecting...')
       // Navigation will happen via useEffect when profile.isRegistered updates (with 2s delay)
     } catch (err: any) {
-      console.error('Profile creation failed:', err)
+      console.error('Registration failed:', err)
       const msg: string = err?.message || String(err) || ''
 
       // FIX 2: AccountUnmapped auto-recovery
@@ -270,8 +248,9 @@ const ConnectPage: React.FC = () => {
             useWalletStore.setState({ evmAddress: newEvmAddr.toLowerCase(), accountMapped: true })
             // Wait 2 seconds for the mapping to be indexed on-chain, then retry
             await new Promise(resolve => setTimeout(resolve, 2000))
-            await profile.register(displayName.trim(), keyPair!.publicKey)
-            addToast('success', 'Profile created! Redirecting in a moment...')
+            const placeholderName = newEvmAddr ? truncateAddress(newEvmAddr, 'evm') : truncateAddress(address, 'substrate')
+            await profile.register(placeholderName, keyPair!.publicKey)
+            addToast('success', 'Welcome to QFLink! Redirecting...')
             return
           }
         } catch (recoveryErr: any) {
@@ -286,7 +265,7 @@ const ConnectPage: React.FC = () => {
           addToast('error', recoveryUserMsg)
           return
         } finally {
-          setIsCreating(false)
+          setIsRegistering(false)
         }
         return
       }
@@ -302,13 +281,13 @@ const ConnectPage: React.FC = () => {
         userMessage = 'Registration failed. Please try again.'
         addToast('error', userMessage)
       } else {
-        userMessage = msg || 'Failed to create profile'
+        userMessage = msg || 'Failed to register'
         addToast('error', userMessage)
       }
       setError(userMessage)
       // Do NOT redirect — stay on registration page so user can retry
     } finally {
-      setIsCreating(false)
+      setIsRegistering(false)
     }
   }
 
@@ -464,7 +443,7 @@ const ConnectPage: React.FC = () => {
 
             {/* Headline */}
             <h1 className="font-display font-semibold text-2xl text-white text-center mb-3">
-              Create Profile
+              Welcome to QFLink
             </h1>
 
             {/* Mapping should be done before we reach this step, but show status if still in progress */}
@@ -478,39 +457,22 @@ const ConnectPage: React.FC = () => {
               <>
                 {/* Subtitle */}
                 <p className="text-gray-400 text-sm text-center mb-10">
-                  Choose a display name for on-chain messaging.
+                  Click below to create your on-chain profile and get started.
                 </p>
 
-                {/* Form Field */}
-                <div className="mb-6">
-                  <label className="text-xs font-medium text-gray-400 uppercase tracking-wider mb-2 block">
-                    DISPLAY NAME
-                  </label>
-                  <input
-                    type="text"
-                    value={displayName}
-                    onChange={(e) => setDisplayName(e.target.value)}
-                    onKeyDown={(e) => e.key === 'Enter' && displayName.trim() && !isCreating && !isMappingAccount && handleCreateProfile()}
-                    placeholder="Enter a display name"
-                    maxLength={30}
-                    disabled={isCreating}
-                    className="w-full bg-white/5 border border-gray-800 rounded-sm px-4 py-3 text-white placeholder:text-gray-500 focus:border-cyan-600 focus:outline-none focus:ring-0 transition-colors"
-                  />
-                </div>
-
-                {/* Create Button */}
+                {/* Get Started Button */}
                 <button
-                  onClick={handleCreateProfile}
-                  disabled={!displayName.trim() || isCreating || isMappingAccount}
+                  onClick={handleAutoRegister}
+                  disabled={isRegistering || isMappingAccount}
                   className="w-full bg-cyan-600 text-white hover:bg-cyan-700 disabled:opacity-40 disabled:cursor-not-allowed py-3.5 px-6 rounded-md font-medium text-sm uppercase tracking-wider transition-colors flex items-center justify-center gap-2 mb-6"
                 >
-                  {isCreating ? (
+                  {isRegistering ? (
                     <>
                       <Spinner size="sm" />
-                      <span className="uppercase tracking-wider">Creating...</span>
+                      <span className="uppercase tracking-wider">Setting up...</span>
                     </>
                   ) : (
-                    'CREATE PROFILE'
+                    'GET STARTED'
                   )}
                 </button>
               </>
@@ -518,7 +480,7 @@ const ConnectPage: React.FC = () => {
 
             {/* Info Text */}
             <p className="text-gray-500 text-xs text-center">
-              Stored on-chain and visible to other users.
+              Your identity will be your .qf name or wallet address.
             </p>
 
             {/* Error Message */}

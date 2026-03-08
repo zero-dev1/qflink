@@ -1,70 +1,36 @@
-import React, { useState, useEffect } from 'react'
+import React, { useState } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { useWallet } from '@/hooks/useWallet'
 import { usePodsStore } from '@/stores/pods'
-import { useProfileStore } from '@/stores/profile'
 import { Avatar } from '@/components/ui/Avatar'
 import { Button } from '@/components/ui/Button'
 import { Card } from '@/components/ui/Card'
 import { LinkWalletModal } from '@/components/wallet/LinkWalletModal'
-import { EditProfileModal } from '@/components/profile/EditProfileModal'
 import { truncateAddress, formatBalance, copyToClipboard } from '@/lib/utils'
 import { useToast } from '@/hooks/useToast'
 import { LIMITS } from '@/types'
-import * as cc from '@/lib/contractCalls'
-
-interface UserProfile {
-  displayName: string
-  encryptionPubkey: `0x${string}`
-  registeredAt: bigint
-}
+import { useQFName } from '@/hooks/useQFName'
 
 const ProfilePage: React.FC = () => {
   const { address: routeAddress } = useParams<{ address?: string }>()
   const navigate = useNavigate()
   const { address, balance, linkedWallets, removeLinkedWallet, evmAddress } = useWallet()
   const myPods = usePodsStore((s) => s.myPods)
-  const defaultPods = usePodsStore((s) => s.defaultPods)
-  const profile = useProfileStore()
   const toast = useToast()
   const [showLinkWallet, setShowLinkWallet] = useState(false)
-  const [showEditProfile, setShowEditProfile] = useState(false)
-  
-  // State for viewing other users' profiles
-  const [viewedProfile, setViewedProfile] = useState<UserProfile | null>(null)
-  const [isLoadingProfile, setIsLoadingProfile] = useState(false)
 
   // Determine if viewing own profile or someone else's
-  const targetAddress = routeAddress || address || ''
+  const targetAddress = routeAddress || evmAddress || address || ''
   const isOwnProfile = !routeAddress || routeAddress.toLowerCase() === (evmAddress || address || '').toLowerCase()
 
-  // Fetch profile when route address changes
-  useEffect(() => {
-    if (isOwnProfile) {
-      setViewedProfile(null)
-      return
-    }
-
-    const fetchProfile = async () => {
-      setIsLoadingProfile(true)
-      try {
-        const profileData = await cc.getProfile(routeAddress as `0x${string}`)
-        setViewedProfile(profileData)
-      } catch (err) {
-        console.error('Failed to fetch profile:', err)
-      } finally {
-        setIsLoadingProfile(false)
-      }
-    }
-
-    fetchProfile()
-  }, [routeAddress, isOwnProfile])
+  // Get QNS name for display
+  const qnsName = useQFName(targetAddress)
 
   const totalBalance = linkedWallets.reduce((sum, w) => sum + w.balance, balance)
   const podsJoined = myPods.length
 
-  // Use viewed profile data when viewing someone else, otherwise use own profile
-  const displayName = isOwnProfile ? profile.displayName : viewedProfile?.displayName
+  // Display name: QNS name > truncated address
+  const displayName = qnsName || truncateAddress(targetAddress, 'evm', 6)
   const displayAddress = targetAddress
 
   const handleCopy = () => {
@@ -82,11 +48,11 @@ const ProfilePage: React.FC = () => {
     setShowLinkWallet(true)
   }
 
-  if (isLoadingProfile) {
+  if (!targetAddress) {
     return (
       <div className="max-w-2xl mx-auto p-4 md:p-6">
         <div className="flex items-center justify-center py-20">
-          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-cyan-600" />
+          <p className="text-qx-text-secondary">No address provided</p>
         </div>
       </div>
     )
@@ -104,25 +70,14 @@ const ProfilePage: React.FC = () => {
           <Avatar address={displayAddress || ''} size="lg" className="mb-4 !w-20 !h-20" />
           <div className="flex items-center gap-2">
             <h2 className="font-display text-lg font-semibold text-qx-text-primary">
-              {displayName || 'QF Holder'}
+              {displayName}
             </h2>
-            {/* Only show edit button for own profile */}
-            {isOwnProfile && (
-              <button
-                onClick={() => setShowEditProfile(true)}
-                className="flex h-6 w-6 items-center justify-center rounded-md text-qx-text-muted hover:text-qx-text-primary hover:bg-qx-elevated transition-colors"
-              >
-                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                  <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" />
-                  <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" />
-                </svg>
-              </button>
+            {qnsName && (
+              <span className="text-[10px] rounded bg-cyan-600/15 px-1.5 py-0.5 text-cyan-600 font-medium">.qf</span>
             )}
           </div>
           <p className="text-xs text-qx-text-muted mt-1">
-            {viewedProfile?.registeredAt 
-              ? `Member since ${new Date(Number(viewedProfile.registeredAt) * 1000).toLocaleDateString('en-US', { month: 'long', year: 'numeric' })}`
-              : 'Member since February 2026'}
+            Member since February 2026
           </p>
           <button
             onClick={handleCopy}
@@ -207,22 +162,10 @@ const ProfilePage: React.FC = () => {
       )}
 
       {isOwnProfile && (
-        <>
-          <LinkWalletModal
-            isOpen={showLinkWallet}
-            onClose={() => setShowLinkWallet(false)}
-          />
-          <EditProfileModal
-            isOpen={showEditProfile}
-            onClose={() => setShowEditProfile(false)}
-            currentName={profile.displayName || ''}
-            onSave={(name) => {
-              profile.updateProfile(name, profile.encryptionPubkey || new Uint8Array(32))
-                .then(() => toast.success('Profile updated'))
-                .catch((err) => toast.error(err.message))
-            }}
-          />
-        </>
+        <LinkWalletModal
+          isOpen={showLinkWallet}
+          onClose={() => setShowLinkWallet(false)}
+        />
       )}
     </div>
   )

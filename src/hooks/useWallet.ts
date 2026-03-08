@@ -47,6 +47,8 @@ export function useWallet() {
 
   const disconnect = useCallback(() => {
     storeDisconnect()
+    // Clear QNS skip flag so user sees registration prompt on next connect
+    localStorage.removeItem('qns-skipped')
     addToast('info', 'Wallet disconnected')
   }, [storeDisconnect, addToast])
 

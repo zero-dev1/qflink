@@ -2,6 +2,7 @@ import React from 'react'
 import { useNavigate } from 'react-router-dom'
 import { Avatar } from '@/components/ui/Avatar'
 import { truncateAddress, cn } from '@/lib/utils'
+import { useQFName } from '@/hooks/useQFName'
 import type { Conversation } from '@/types'
 
 function relativeTime(timestamp: number): string {
@@ -24,11 +25,15 @@ export const ConversationItem: React.FC<ConversationItemProps> = ({
   onClick,
 }) => {
   const navigate = useNavigate()
+  const qfName = useQFName(conversation.address)
 
   const handleAvatarClick = (e: React.MouseEvent) => {
     e.stopPropagation()
     navigate(`/profile/${conversation.address}`)
   }
+
+  // Display name priority: .qf name > profile displayName > truncated address
+  const displayName = qfName || conversation.displayName
 
   return (
     <button
@@ -45,7 +50,11 @@ export const ConversationItem: React.FC<ConversationItemProps> = ({
       </div>
       <div className="flex-1 min-w-0">
         <p className="text-sm font-semibold truncate text-qx-text-primary">
-          {conversation.displayName || <span className="font-mono">{truncateAddress(conversation.address)}</span>}
+          {displayName ? (
+            <span className={qfName ? 'text-cyan-600' : ''}>{displayName}</span>
+          ) : (
+            <span className="font-mono">{truncateAddress(conversation.address)}</span>
+          )}
         </p>
         {conversation.lastMessage && (
           <p className="text-xs text-qx-text-secondary truncate mt-0.5">

@@ -1,6 +1,23 @@
 import React from 'react'
 import { Avatar } from '@/components/ui/Avatar'
 import { truncateAddress } from '@/lib/utils'
+import { useQFName } from '@/hooks/useQFName'
+
+interface MemberListItemProps {
+  addr: string
+}
+
+const MemberListItem: React.FC<MemberListItemProps> = ({ addr }) => {
+  const qfName = useQFName(addr)
+  return (
+    <div key={addr} className="flex items-center gap-2 rounded-md p-2 hover:bg-qx-elevated">
+      <Avatar address={addr} size="sm" />
+      <span className="text-xs text-qx-text-secondary truncate">
+        {qfName ? <span className="text-cyan-600">{qfName}</span> : truncateAddress(addr)}
+      </span>
+    </div>
+  )
+}
 
 interface MemberListProps {
   members: string[]
@@ -21,10 +38,7 @@ export const MemberList: React.FC<MemberListProps> = ({ members, isOpen, onToggl
       </div>
       <div className="overflow-y-auto p-2">
         {members.map((addr) => (
-          <div key={addr} className="flex items-center gap-2 rounded-md p-2 hover:bg-qx-elevated">
-            <Avatar address={addr} size="sm" />
-            <span className="text-xs text-qx-text-secondary truncate">{truncateAddress(addr)}</span>
-          </div>
+          <MemberListItem key={addr} addr={addr} />
         ))}
       </div>
     </div>

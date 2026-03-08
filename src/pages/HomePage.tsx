@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react'
+import React, { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useWallet } from '@/hooks/useWallet'
 import { usePodsStore } from '@/stores/pods'
@@ -7,8 +7,8 @@ import { useUIStore } from '@/stores/ui'
 import { useWalletStore } from '@/stores/wallet'
 import { Avatar } from '@/components/ui/Avatar'
 import { TokenGateBar } from '@/components/pods/TokenGateBar'
-import { truncateAddress, formatTimestamp, formatCompactBalance } from '@/lib/utils'
-import { getProfile } from '@/lib/contractCalls'
+import { truncateAddress, formatTimestamp, formatCompactBalance, cn } from '@/lib/utils'
+import { reverseResolve } from '@/lib/qns'
 import type { DefaultPod, Pod } from '@/types'
 
 const formatHolderLabel = (minBal: bigint): string => `${formatCompactBalance(minBal)} QF`
@@ -31,6 +31,8 @@ const HomePage: React.FC = () => {
   const fetchConversations = useMessagesStore((s) => s.fetchConversations)
   const evmAddress = useWalletStore((s) => s.evmAddress)
   const navigate = useNavigate()
+  const [qfNames, setQfNames] = useState<Map<string, string>>(new Map())
+  const qfNamesFetchedRef = React.useRef<Set<string>>(new Set())
   
   // Load conversations when connected
   useEffect(() => {
@@ -47,36 +49,29 @@ const HomePage: React.FC = () => {
     }, 10000)
     return () => clearInterval(interval)
   }, [isConnected, evmAddress, fetchConversations])
-  
-  // Profile name cache for conversations
-  const [profileNames, setProfileNames] = useState<Map<string, string>>(new Map())
-  const profilesFetchedRef = useRef<Set<string>>(new Set())
-  
-  // Fetch profiles for conversation addresses
+
+  // Fetch QNS names for conversation addresses
   useEffect(() => {
-    const fetchProfiles = async () => {
-      const addressesToFetch = conversations
-        .map(c => c.address.toLowerCase())
-        .filter(addr => !profilesFetchedRef.current.has(addr))
+    const fetchQfNames = async () => {
+      const newQfNames = new Map(qfNames)
       
-      if (addressesToFetch.length === 0) return
-      
-      const newProfiles = new Map(profileNames)
-      
-      await Promise.all(addressesToFetch.map(async (addr) => {
-        profilesFetchedRef.current.add(addr)
+      await Promise.all(conversations.map(async (convo) => {
+        const lowerAddr = convo.address.toLowerCase()
+        if (qfNamesFetchedRef.current.has(lowerAddr)) return
+        
+        qfNamesFetchedRef.current.add(lowerAddr)
         try {
-          const profile = await getProfile(addr as `0x${string}`)
-          if (profile?.displayName) {
-            newProfiles.set(addr, profile.displayName)
+          const qfName = await reverseResolve(convo.address)
+          if (qfName) {
+            newQfNames.set(lowerAddr, qfName)
           }
         } catch {}
       }))
       
-      setProfileNames(newProfiles)
+      setQfNames(newQfNames)
     }
     
-    fetchProfiles()
+    fetchQfNames()
   }, [conversations])
 
   // Show user's joined pods + all default pods for discovery
@@ -162,8 +157,11 @@ const HomePage: React.FC = () => {
               >
                 <Avatar address={convo.address} size="md" />
                 <div className="flex-1 min-w-0">
-                  <p className="text-sm font-semibold text-qx-text-primary truncate">
-                    {profileNames.get(convo.address.toLowerCase()) || truncateAddress(convo.address)}
+                  <p className={cn(
+                    'text-sm font-semibold truncate',
+                    qfNames.get(convo.address.toLowerCase()) ? 'text-cyan-600' : 'text-qx-text-primary'
+                  )}>
+                    {qfNames.get(convo.address.toLowerCase()) || truncateAddress(convo.address)}
                   </p>
                   {(convo.lastMessage || convo.lastMessageTime) && (
                     <div className="flex items-center justify-between gap-2 mt-0.5">

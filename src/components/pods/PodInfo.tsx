@@ -4,6 +4,7 @@ import { Modal } from '@/components/ui/Modal'
 import { Avatar } from '@/components/ui/Avatar'
 import { ProgressBar } from '@/components/ui/ProgressBar'
 import { truncateAddress, formatBalance } from '@/lib/utils'
+import { useQFName } from '@/hooks/useQFName'
 import * as cc from '@/lib/contractCalls'
 import { useUIStore } from '@/stores/ui'
 import { useWalletStore } from '@/stores/wallet'
@@ -45,6 +46,7 @@ export const PodInfo: React.FC<PodInfoProps> = ({
   const [showMembersModal, setShowMembersModal] = useState(false)
   const [memberSearch, setMemberSearch] = useState('')
   const [memberProfiles, setMemberProfiles] = useState<Map<string, string>>(new Map())
+  const [memberQFNames, setMemberQFNames] = useState<Map<string, string>>(new Map())
   const [modalView, setModalView] = useState<ModalView>('list')
   const [selectedMember, setSelectedMember] = useState<string | null>(null)
   const [pendingAction, setPendingAction] = useState<ActionType | null>(null)
@@ -58,6 +60,7 @@ export const PodInfo: React.FC<PodInfoProps> = ({
   const isLoadingMods = React.useRef(false)
   const isLoadingStatus = React.useRef(false)
   const profilesFetchedRef = React.useRef<Set<string>>(new Set())
+  const qfNamesFetchedRef = React.useRef<Set<string>>(new Set())
 
   const isDefault = (pod as DefaultPod).isDefault === true
   const isCustom = !isDefault
@@ -72,7 +75,7 @@ export const PodInfo: React.FC<PodInfoProps> = ({
 
   const activeMemberCount = uniqueSenders.length
 
-  // Lookup profile names for unique senders
+  // Lookup profile names and QNS names for unique senders
   // Also refetch when modal opens to get fresh data
   useEffect(() => {
     let cancelled = false
@@ -81,14 +84,25 @@ export const PodInfo: React.FC<PodInfoProps> = ({
       if (toFetch.length === 0) return
       
       const profiles = new Map<string, string>(memberProfiles)
+      const qfNames = new Map<string, string>(memberQFNames)
+      
+      // Import QNS functions
+      const { reverseResolve } = await import('@/lib/qns')
       
       await Promise.all(
         toFetch.map(async (addr) => {
           profilesFetchedRef.current.add(addr)
+          qfNamesFetchedRef.current.add(addr)
           try {
+            // Fetch profile
             const profile = await cc.getProfile(addr as `0x${string}`)
             if (profile && profile.displayName) {
               profiles.set(addr, profile.displayName)
+            }
+            // Fetch QNS name
+            const qfName = await reverseResolve(addr)
+            if (qfName) {
+              qfNames.set(addr.toLowerCase(), qfName)
             }
           } catch {
             // Ignore lookup errors
@@ -96,20 +110,27 @@ export const PodInfo: React.FC<PodInfoProps> = ({
         })
       )
       
-      if (!cancelled) setMemberProfiles(profiles)
+      if (!cancelled) {
+        setMemberProfiles(profiles)
+        setMemberQFNames(qfNames)
+      }
     }
     
     lookupProfiles()
     return () => { cancelled = true }
   }, [uniqueSenders.length])
 
-  // FIX: Also fetch profiles when members modal opens to ensure fresh display names
+  // FIX: Also fetch profiles when members modal opens to avoid stale data after idle
   useEffect(() => {
     if (!showMembersModal || uniqueSenders.length === 0) return
     
     let cancelled = false
     const refreshProfiles = async () => {
       const profiles = new Map<string, string>(memberProfiles)
+      const qfNames = new Map<string, string>(memberQFNames)
+      
+      // Import QNS functions
+      const { reverseResolve } = await import('@/lib/qns')
       
       await Promise.all(
         uniqueSenders.map(async (addr) => {
@@ -118,13 +139,21 @@ export const PodInfo: React.FC<PodInfoProps> = ({
             if (profile && profile.displayName) {
               profiles.set(addr, profile.displayName)
             }
+            // Also refresh QNS name
+            const qfName = await reverseResolve(addr)
+            if (qfName) {
+              qfNames.set(addr.toLowerCase(), qfName)
+            }
           } catch {
             // Ignore lookup errors
           }
         })
       )
       
-      if (!cancelled) setMemberProfiles(profiles)
+      if (!cancelled) {
+        setMemberProfiles(profiles)
+        setMemberQFNames(qfNames)
+      }
     }
     
     refreshProfiles()
@@ -430,7 +459,7 @@ export const PodInfo: React.FC<PodInfoProps> = ({
             <div>
               <h4 className="text-sm font-semibold text-qx-text-primary mb-1">Creator</h4>
               <p className="text-xs text-qx-text-secondary">
-                {memberProfiles.get(customPod.creator.toLowerCase()) || truncateAddress(customPod.creator, 'evm', 6)}
+                {memberQFNames.get(customPod.creator.toLowerCase()) || memberProfiles.get(customPod.creator.toLowerCase()) || truncateAddress(customPod.creator, 'evm', 6)}
               </p>
             </div>
           )}
@@ -446,10 +475,11 @@ export const PodInfo: React.FC<PodInfoProps> = ({
                   {moderators
                     .filter(m => m.toLowerCase() !== customPod?.creator?.toLowerCase())
                     .map((modAddr) => {
+                      const qfName = memberQFNames.get(modAddr.toLowerCase())
                       const profileName = memberProfiles.get(modAddr)
                       return (
                         <p key={modAddr} className="text-xs text-qx-text-secondary">
-                          {profileName || truncateAddress(modAddr, 'evm', 6)}
+                          {qfName || profileName || truncateAddress(modAddr, 'evm', 6)}
                         </p>
                       )
                     })}
@@ -469,11 +499,12 @@ export const PodInfo: React.FC<PodInfoProps> = ({
                   {Array.from(bannedStatus.entries())
                     .filter(([_, isBanned]) => isBanned)
                     .map(([addr, _]) => {
+                      const qfName = memberQFNames.get(addr)
                       const profileName = memberProfiles.get(addr)
                       return (
                         <div key={addr} className="flex items-center justify-between">
                           <p className="text-xs text-qx-text-secondary">
-                            {profileName || truncateAddress(addr, 'evm', 6)}
+                            {qfName || profileName || truncateAddress(addr, 'evm', 6)}
                           </p>
                           <button
                             onClick={async () => {
@@ -594,6 +625,7 @@ export const PodInfo: React.FC<PodInfoProps> = ({
                   </div>
                 ) : (
                   filteredMembers.map((addr) => {
+                    const qfName = memberQFNames.get(addr.toLowerCase())
                     const profileName = memberProfiles.get(addr)
                     // ISSUE 1 FIX: Compare H160 addresses for "You" indicator
                     const isCurrentUser = addr.toLowerCase() === currentUserH160?.toLowerCase()
@@ -601,9 +633,9 @@ export const PodInfo: React.FC<PodInfoProps> = ({
                       <div key={addr} className="flex items-center gap-3 px-3 py-2.5 hover:bg-qx-elevated">
                         <Avatar address={addr} size="sm" />
                         <div className="flex-1 min-w-0">
-                          {profileName ? (
-                            <p className="text-sm font-medium text-qx-text-primary truncate">
-                              {profileName}
+                          {qfName || profileName ? (
+                            <p className={`text-sm font-medium truncate ${qfName ? 'text-cyan-600' : 'text-qx-text-primary'}`}>
+                              {qfName || profileName}
                             </p>
                           ) : (
                             <p className="text-sm font-medium text-qx-text-primary font-mono">
@@ -665,7 +697,7 @@ export const PodInfo: React.FC<PodInfoProps> = ({
               <Avatar address={selectedMember} size="lg" />
               <div className="text-center">
                 <p className="text-sm font-medium text-qx-text-primary">
-                  {memberProfiles.get(selectedMember) || truncateAddress(selectedMember, 'evm', 8)}
+                  {memberQFNames.get(selectedMember.toLowerCase()) || memberProfiles.get(selectedMember) || truncateAddress(selectedMember, 'evm', 8)}
                 </p>
                 <p className="text-xs text-qx-text-muted font-mono">{truncateAddress(selectedMember, 'evm', 6)}</p>
               </div>
@@ -711,10 +743,17 @@ export const PodInfo: React.FC<PodInfoProps> = ({
           <div className="space-y-4">
             <div className="text-center py-4">
               <p className="text-sm text-qx-text-primary mb-2">
-                {pendingAction === 'ban' && `Ban ${memberProfiles.get(selectedMember) || truncateAddress(selectedMember, 'evm', 6)} from ${pod.name}?`}
-                {pendingAction === 'unban' && `Unban ${memberProfiles.get(selectedMember) || truncateAddress(selectedMember, 'evm', 6)} from ${pod.name}?`}
-                {pendingAction === 'addMod' && `Make ${memberProfiles.get(selectedMember) || truncateAddress(selectedMember, 'evm', 6)} a moderator of ${pod.name}?`}
-                {pendingAction === 'removeMod' && `Remove ${memberProfiles.get(selectedMember) || truncateAddress(selectedMember, 'evm', 6)} as moderator of ${pod.name}?`}
+                {(() => {
+                  const displayName = memberQFNames.get(selectedMember.toLowerCase()) || memberProfiles.get(selectedMember) || truncateAddress(selectedMember, 'evm', 6)
+                  return (
+                    <>
+                      {pendingAction === 'ban' && `Ban ${displayName} from ${pod.name}?`}
+                      {pendingAction === 'unban' && `Unban ${displayName} from ${pod.name}?`}
+                      {pendingAction === 'addMod' && `Make ${displayName} a moderator of ${pod.name}?`}
+                      {pendingAction === 'removeMod' && `Remove ${displayName} as moderator of ${pod.name}?`}
+                    </>
+                  )
+                })()}
               </p>
             </div>
 
