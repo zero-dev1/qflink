@@ -7,3 +7,5 @@ dist/
 target/
 contracts/*/target/
 .vite/
+.env.production
+.env.local
