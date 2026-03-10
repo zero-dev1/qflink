@@ -11,11 +11,43 @@ const CONTRACTS_DIR = path.join(ROOT, 'contracts');
 const BUILD_DIR = path.join(ROOT, 'build');
 
 // ── Config ──
-const RPC_URL = 'http://localhost:8545';
+const RPC_URL = process.env.VITE_WALLET_RPC_URL || 'http://localhost:8545';
 const CHAIN_ID = 42;
 
-// Alith dev account (standard Substrate dev account for EVM)
-const DEPLOYER_KEY = '0x5fb92d6e98884f76de468fa3f6278f8807c48bebc13595d45af5bdc4da702133';
+// Deployer key from environment (must be set in .env.development or .env.production)
+const DEPLOYER_KEY = process.env.DEPLOYER_PRIVATE_KEY;
+if (!DEPLOYER_KEY) {
+  console.error('❌ DEPLOYER_PRIVATE_KEY environment variable is required');
+  process.exit(1);
+}
+
+// ── Load QNS Addresses ──
+// Auto-load QNS addresses from QNS deployment (deployments.json)
+const qnsDeploymentPath = path.resolve(__dirname, '..', '..', 'qns', 'deployments.json');
+let qnsAddresses = {};
+
+if (existsSync(qnsDeploymentPath)) {
+  try {
+    const qnsDeployment = JSON.parse(readFileSync(qnsDeploymentPath, 'utf8'));
+    qnsAddresses = qnsDeployment.contracts;
+    console.log('✅ QNS addresses loaded from', qnsDeploymentPath);
+    console.log('   Registry:', qnsAddresses.QNSRegistry);
+    console.log('   Registrar:', qnsAddresses.QNSRegistrar);
+    console.log('   Resolver:', qnsAddresses.QNSResolver);
+  } catch (e) {
+    console.log('⚠️  Failed to parse QNS deployments.json:', e.message);
+    console.log('   QNS addresses will use values from .env or fallback to empty');
+  }
+} else {
+  console.log('⚠️  QNS deployments.json not found at', qnsDeploymentPath);
+  console.log('   QNS addresses will use values from .env.development');
+  // Fall back to env values
+  qnsAddresses = {
+    QNSRegistry: process.env.VITE_QNS_REGISTRY_ADDRESS || '',
+    QNSRegistrar: process.env.VITE_QNS_REGISTRAR_ADDRESS || '',
+    QNSResolver: process.env.VITE_QNS_RESOLVER_ADDRESS || ''
+  };
+}
 
 const chain = {
   id: CHAIN_ID,
@@ -197,7 +229,7 @@ async function main() {
   // ════════════════════════════════════════════
   console.log('═══ TIER 0: Base contracts ═══');
 
-  const registry = await deploy('QFLinkRegistry', 'solidity/QFLinkRegistry.sol', []);
+  const registry = await deploy('QFLinkRegistry', 'QFLinkRegistry.sol', []);
 
   // PodsStorage needs an auth address in constructor. Use deployer as placeholder.
   // We'll authorize the real contracts after they're deployed.
@@ -210,13 +242,13 @@ async function main() {
 
   // Payments: constructor(address pods, address treasury)
   // _pods gets set later via setPods, use deployer as placeholder
-  const payments = await deploy('QFLinkPayments', 'solidity/QFLinkPayments.sol', [account.address, podsStorage]);
+  const payments = await deploy('QFLinkPayments', 'QFLinkPayments.sol', [account.address, podsStorage]);
 
   // ContentStore: constructor(address _auth) — auth set later
-  const contentStore = await deploy('QFLinkContentStore', 'solidity/QFLinkContentStore.sol', [account.address]);
+  const contentStore = await deploy('QFLinkContentStore', 'QFLinkContentStore.sol', [account.address]);
 
   // MessageIndex: constructor(address _auth) — auth set later
-  const messageIndex = await deploy('QFLinkMessageIndex', 'solidity/QFLinkMessageIndex.sol', [account.address]);
+  const messageIndex = await deploy('QFLinkMessageIndex', 'QFLinkMessageIndex.sol', [account.address]);
 
   // ════════════════════════════════════════════
   // TIER 2: Depends on PodsStorage (and Payments)
@@ -230,7 +262,7 @@ async function main() {
   const podsBan = await deploy('QFLinkPodsBanSimple', 'QFLinkPodsBanSimple.sol', [podsStorage]);
   const podsAddMod = await deploy('QFLinkPodsAddMod', 'QFLinkPodsAddMod.sol', [podsStorage]);
   const podsRemoveMod = await deploy('QFLinkPodsRemoveMod', 'QFLinkPodsRemoveMod.sol', [podsStorage]);
-  const podsAdmin = await deploy('QFLinkPodsAdmin', 'QFLinkPodsAdmin.sol', [podsStorage]);
+  const podsAdmin = await deploy('QFLinkPodsAdmin', 'QFLinkPodsAdmin.sol', [podsStorage, payments]);
   const podsReader = await deploy('QFLinkPodsReader', 'QFLinkPodsReader.sol', [podsStorage]);
   const podsGetPod = await deploy('QFLinkPodsGetPod', 'QFLinkPodsGetPod.sol', [podsStorage]);
 
@@ -239,8 +271,16 @@ async function main() {
   // ════════════════════════════════════════════
   console.log('\n═══ TIER 3: Message contracts ═══');
 
-  const messageWriter = await deploy('QFLinkMessageWriter', 'solidity/QFLinkMessageWriter.sol', [contentStore, messageIndex, podsReader]);
-  const messageReader = await deploy('QFLinkMessageReader', 'solidity/QFLinkMessageReader.sol', [contentStore, messageIndex]);
+  const messageWriter = await deploy('QFLinkMessageWriter', 'QFLinkMessageWriter.sol', [contentStore, messageIndex, podsReader]);
+  const messageReader = await deploy('QFLinkMessageReader', 'QFLinkMessageReader.sol', [contentStore, messageIndex]);
+
+  // ════════════════════════════════════════════
+  // TIER 4: Session Keys + MessageWriterV2
+  // ════════════════════════════════════════════
+  console.log('\n═══ TIER 4: Session keys ═══');
+
+  const sessionKeys = await deploy('QFLinkSessionKeys', 'QFLinkSessionKeys.sol', []);
+  const messageWriterV2 = await deploy('QFLinkMessageWriterV2', 'QFLinkMessageWriterV2.sol', [contentStore, messageIndex, podsReader, sessionKeys]);
 
   // ════════════════════════════════════════════
   // WIRING: Authorization calls
@@ -260,14 +300,15 @@ async function main() {
   const paymentsAuthAbi = parseAbi(['function setAuthorized(address auth, bool status) external']);
   await writeContract(payments, paymentsAuthAbi, 'setAuthorized', [podsCreatePaid, true]);
   await writeContract(payments, paymentsAuthAbi, 'setAuthorized', [podsJoin, true]);
+  await writeContract(payments, paymentsAuthAbi, 'setAuthorized', [podsAdmin, true]);
 
-  // ContentStore.setAuthorized → MessageWriter
+  // ContentStore.setAuthorized → MessageWriterV2 (replaces V1 as authorized writer)
   const contentStoreAbi = parseAbi(['function setAuthorized(address _auth) external']);
-  await writeContract(contentStore, contentStoreAbi, 'setAuthorized', [messageWriter]);
+  await writeContract(contentStore, contentStoreAbi, 'setAuthorized', [messageWriterV2]);
 
-  // MessageIndex.setAuthorized → MessageWriter
+  // MessageIndex.setAuthorized → MessageWriterV2 (replaces V1 as authorized writer)
   const messageIndexAbi = parseAbi(['function setAuthorized(address _auth) external']);
-  await writeContract(messageIndex, messageIndexAbi, 'setAuthorized', [messageWriter]);
+  await writeContract(messageIndex, messageIndexAbi, 'setAuthorized', [messageWriterV2]);
 
   // ════════════════════════════════════════════
   // OUTPUT: Write .env.development
@@ -291,51 +332,30 @@ VITE_PODS_GETPOD_ADDRESS=${podsGetPod}
 VITE_PAYMENTS_ADDRESS=${payments}
 VITE_CONTENT_STORE_ADDRESS=${contentStore}
 VITE_MESSAGE_INDEX_ADDRESS=${messageIndex}
-VITE_MESSAGE_WRITER_ADDRESS=${messageWriter}
+VITE_MESSAGE_WRITER_ADDRESS=${messageWriterV2}
 VITE_MESSAGE_READER_ADDRESS=${messageReader}
 VITE_PODS_CREATE_PAID_ADDRESS=${podsCreatePaid}
+VITE_SESSION_KEYS_ADDRESS=${sessionKeys}
+VITE_MESSAGE_WRITER_V2_ADDRESS=${messageWriterV2}
+
+# QNS Contract Addresses (from qns/deployments.json)
+VITE_QNS_REGISTRY_ADDRESS=${qnsAddresses.QNSRegistry || ''}
+VITE_QNS_REGISTRAR_ADDRESS=${qnsAddresses.QNSRegistrar || ''}
+VITE_QNS_RESOLVER_ADDRESS=${qnsAddresses.QNSResolver || ''}
 `;
 
   const envPath = path.join(ROOT, '.env.development');
   writeFileSync(envPath, envContent);
   console.log(`  ✅ Written to ${envPath}`);
 
-  // ════════════════════════════════════════════
-  // APPEND QNS ADDRESSES from sister project
-  // ════════════════════════════════════════════
-  console.log('\n═══ Appending QNS addresses ═══');
-
-  // Append QNS addresses from sister project (local dev only)
-  if (process.env.NODE_ENV !== 'production') {
-    try {
-      const qnsEnvPath = path.resolve(__dirname, '../../qns/.env.development');
-      const qnsEnv = readFileSync(qnsEnvPath, 'utf8');
-      const qnsLines = qnsEnv.split('\n').filter(l => l.startsWith('VITE_QNS_'));
-      
-      if (qnsLines.length > 0) {
-        // Check which lines are already present
-        const currentEnv = readFileSync(envPath, 'utf8');
-        const newLines = qnsLines.filter(l => !currentEnv.includes(l.split('=')[0]));
-        
-        if (newLines.length > 0) {
-          const appendContent = '\n# QNS Contract Addresses (from qns/.env.development)\n' + newLines.join('\n') + '\n';
-          writeFileSync(envPath, appendContent, { flag: 'a' });
-          console.log(`  ✅ Appended ${newLines.length} QNS address(es)`);
-          for (const line of newLines) {
-            console.log(`     ${line}`);
-          }
-        } else {
-          console.log('  ℹ️  All QNS addresses already present');
-        }
-      } else {
-        console.log('  ⚠️  No VITE_QNS_ addresses found in QNS .env');
-      }
-    } catch (e) {
-      console.log('  ⚠️  QNS .env not found - skipping QNS address import');
-      console.log(`     Expected at: ${path.resolve(__dirname, '../../qns/.env.development')}`);
-    }
+  // Log QNS address status
+  if (qnsAddresses.QNSRegistry) {
+    console.log('\n═══ QNS Addresses Included ═══');
+    console.log('   Registry:', qnsAddresses.QNSRegistry);
+    console.log('   Registrar:', qnsAddresses.QNSRegistrar);
+    console.log('   Resolver:', qnsAddresses.QNSResolver);
   } else {
-    console.log('  ℹ️  Production mode - QNS addresses should be set manually in .env.production');
+    console.log('\n⚠️  QNS addresses not available - populate manually in .env.development');
   }
 
   // ════════════════════════════════════════════
@@ -359,7 +379,9 @@ VITE_PODS_CREATE_PAID_ADDRESS=${podsCreatePaid}
   console.log(`ContentStore:    ${contentStore}`);
   console.log(`MessageIndex:    ${messageIndex}`);
   console.log(`MessageWriter:   ${messageWriter}`);
+  console.log(`MessageWriterV2: ${messageWriterV2}`);
   console.log(`MessageReader:   ${messageReader}`);
+  console.log(`SessionKeys:     ${sessionKeys}`);
   console.log(`PodsCreatePaid:  ${podsCreatePaid}`);
   console.log('═══════════════════════════════════════\n');
 }

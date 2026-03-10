@@ -12,12 +12,16 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = path.resolve(__dirname, '..');
 
 // ── Config ──
-const RPC_URL = 'http://localhost:8545';
+const RPC_URL = process.env.VITE_WALLET_RPC_URL || 'http://localhost:8545';
 const CHAIN_ID = 42;
 // NOTE: PolkaVM doesn't handle explicit gas limits well, let the node estimate
 
-// Alith dev account
-const DEPLOYER_KEY = '0x5fb92d6e98884f76de468fa3f6278f8807c48bebc13595d45af5bdc4da702133';
+// Deployer key from environment (must be set in .env.development or .env.production)
+const DEPLOYER_KEY = process.env.DEPLOYER_PRIVATE_KEY;
+if (!DEPLOYER_KEY) {
+  console.error('❌ DEPLOYER_PRIVATE_KEY environment variable is required');
+  process.exit(1);
+}
 
 const chain = {
   id: CHAIN_ID,
