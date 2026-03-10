@@ -26,6 +26,10 @@ contract QFLinkPodsCreate {
     uint256 constant BURN_SHARE = 5;
     uint256 constant SHARE_DENOMINATOR = 100;
     
+    // ============ Events ============
+    
+    event OwnershipTransferred(address indexed previousOwner, address indexed newOwner);
+    
     // ============ Modifiers ============
     
     modifier onlyOwner() {
@@ -45,6 +49,12 @@ contract QFLinkPodsCreate {
     
     function setTreasury(address _treasury) external onlyOwner {
         treasury = _treasury;
+    }
+    
+    function transferOwnership(address newOwner) external onlyOwner {
+        require(newOwner != address(0), "Invalid address");
+        emit OwnershipTransferred(owner, newOwner);
+        owner = newOwner;
     }
     
     // ============ Create Function ============

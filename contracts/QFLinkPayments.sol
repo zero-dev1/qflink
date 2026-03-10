@@ -1,13 +1,14 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.20;
 
+import {IPodsStorage} from "./IPodsStorage.sol";
+
 // QFLinkPayments — Handles entry fees and payment tracking
-// Updated: uses authorized mapping instead of single pods address
+// Distributes: 95% to pod creator, 5% to treasury
 
 // Custom errors
 error NotAuthorized();
 error NotOwner();
-error InvalidFee();
 error PaymentNotRequired();
 error AlreadyPaid();
 error InsufficientPayment();
@@ -15,23 +16,21 @@ error InsufficientPayment();
 contract QFLinkPayments {
     // ============ State ============
     
-    // Entry fee per pod (0 = free)
     mapping(uint64 => uint256) internal entryFees;
-    
-    // Payment tracking: podId => user => paid
     mapping(uint64 => mapping(address => bool)) internal payments;
     
-    // Access control
     address public owner;
     mapping(address => bool) public authorized;
-    
-    // Treasury for fee collection
     address public treasury;
+    IPodsStorage public immutable storage_;
     
-    // Fee split: 95% to creator, 5% to treasury
     uint256 constant CREATOR_SHARE = 95;
     uint256 constant TREASURY_SHARE = 5;
     uint256 constant SHARE_DENOMINATOR = 100;
+    
+    // ============ Events ============
+    
+    event OwnershipTransferred(address indexed previousOwner, address indexed newOwner);
     
     // ============ Modifiers ============
     
@@ -47,9 +46,10 @@ contract QFLinkPayments {
     
     // ============ Constructor ============
     
-    constructor(address _treasury) {
+    constructor(address _treasury, address _storage) {
         owner = msg.sender;
         treasury = _treasury;
+        storage_ = IPodsStorage(_storage);
     }
     
     // ============ Admin Functions ============
@@ -62,32 +62,56 @@ contract QFLinkPayments {
         treasury = _treasury;
     }
     
+    function transferOwnership(address newOwner) external onlyOwner {
+        require(newOwner != address(0), "Invalid address");
+        emit OwnershipTransferred(owner, newOwner);
+        owner = newOwner;
+    }
+    
     function setEntryFee(uint64 podId, uint256 fee) external onlyAuthorized {
         entryFees[podId] = fee;
+    }
+    
+    // ============ Internal Distribution ============
+    
+    function _distribute(uint64 podId, uint256 amount) internal {
+        if (amount == 0) return;
+        
+        address creator = storage_.getCreator(podId);
+        uint256 creatorAmount = (amount * CREATOR_SHARE) / SHARE_DENOMINATOR;
+        uint256 treasuryAmount = amount - creatorAmount;
+        
+        if (creatorAmount > 0 && creator != address(0)) {
+            (bool sent, ) = payable(creator).call{value: creatorAmount}("");
+            require(sent, "Creator transfer failed");
+        }
+        
+        if (treasuryAmount > 0 && treasury != address(0)) {
+            (bool sent, ) = payable(treasury).call{value: treasuryAmount}("");
+            require(sent, "Treasury transfer failed");
+        }
     }
     
     // ============ Payment Functions ============
     
     function payEntryFee(uint64 podId) external payable {
         uint256 fee = entryFees[podId];
-        
         if (fee == 0) revert PaymentNotRequired();
         if (payments[podId][msg.sender]) revert AlreadyPaid();
         if (msg.value < fee) revert InsufficientPayment();
         
-        // Mark as paid
         payments[podId][msg.sender] = true;
+        _distribute(podId, msg.value);
     }
     
     function processPayment(uint64 podId, address user) external payable onlyAuthorized {
         uint256 fee = entryFees[podId];
-        
         if (fee == 0) return;
         if (payments[podId][user]) return;
         if (msg.value < fee) revert InsufficientPayment();
         
-        // Mark as paid
         payments[podId][user] = true;
+        _distribute(podId, msg.value);
     }
     
     // ============ Withdrawal Functions ============

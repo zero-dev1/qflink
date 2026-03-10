@@ -4,18 +4,11 @@ pragma solidity ^0.8.20;
 // Interface for QFLinkPodsStorage
 interface IPodsStorage {
     // Write functions (authorized only)
-    function createPod(bytes32 name, address creator, bool isPublic, uint256 threshold, bytes32 category, bytes calldata description) external returns (uint64);
+    function createPod(bytes32 name, address creator, bool isPublic, uint256 threshold) external returns (uint64);
     function setPodTier(uint64 podId, uint8 tier) external;
     function addMember(uint64 podId, address user) external;
     function removeMember(uint64 podId, address user) external;
     function setBanned(uint64 podId, address user, bool status) external;
-    function banAndRemove(uint64 podId, address user, address caller) external;
-    function unbanUser(uint64 podId, address user, address caller) external;
-    function addModInternal(uint64 podId, address user, address caller) external;
-    function removeModInternal(uint64 podId, address user, address caller) external;
-    function joinInternal(uint64 podId, address user, uint64 freeCap) external;
-    function leaveInternal(uint64 podId, address user) external;
-    function createPodFull(bytes32 name, address creator, bool isPublic, uint256 threshold, uint8 tier, bytes32 category, bytes calldata description) external returns (uint64);
     function setMod(uint64 podId, address user, bool status) external;
     function incrementModCount(uint64 podId) external;
     function decrementModCount(uint64 podId) external;
@@ -28,9 +21,7 @@ interface IPodsStorage {
         uint8 tier,
         uint64 memberCount,
         uint64 modCount,
-        uint256 threshold,
-        bytes32 category,
-        bytes memory description
+        uint256 threshold
     );
     function isMember(uint64 podId, address user) external view returns (bool);
     function isBanned(uint64 podId, address user) external view returns (bool);

@@ -36,6 +36,10 @@ contract QFLinkPodsStorage {
     address public owner;
     mapping(address => bool) internal authorized;
     
+    // ============ Events ============
+    
+    event OwnershipTransferred(address indexed previousOwner, address indexed newOwner);
+    
     // ============ Modifiers ============
     
     modifier onlyAuthorized() {
@@ -60,6 +64,12 @@ contract QFLinkPodsStorage {
     
     function setAuthorized(address _auth, bool _status) external onlyOwner {
         authorized[_auth] = _status;
+    }
+    
+    function transferOwnership(address newOwner) external onlyOwner {
+        require(newOwner != address(0), "Invalid address");
+        emit OwnershipTransferred(owner, newOwner);
+        owner = newOwner;
     }
     
     // ============ Write Functions (Authorized Only) ============

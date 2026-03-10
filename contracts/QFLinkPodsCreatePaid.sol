@@ -10,6 +10,7 @@ import {IPayments} from "./IPayments.sol";
 // Custom errors
 error InvalidName();
 error InsufficientCreationFee();
+error DescriptionTooLong();
 
 contract QFLinkPodsCreatePaid {
     // ============ Immutable References ============
@@ -27,6 +28,10 @@ contract QFLinkPodsCreatePaid {
     uint256 constant TREASURY_SHARE = 95;
     uint256 constant BURN_SHARE = 5;
     uint256 constant SHARE_DENOMINATOR = 100;
+    
+    // ============ Events ============
+    
+    event OwnershipTransferred(address indexed previousOwner, address indexed newOwner);
     
     // ============ Modifiers ============
     
@@ -55,6 +60,12 @@ contract QFLinkPodsCreatePaid {
         treasury = _treasury;
     }
     
+    function transferOwnership(address newOwner) external onlyOwner {
+        require(newOwner != address(0), "Invalid address");
+        emit OwnershipTransferred(owner, newOwner);
+        owner = newOwner;
+    }
+    
     // ============ Create Paid Pod ============
     
     function createPaidPod(
@@ -67,16 +78,25 @@ contract QFLinkPodsCreatePaid {
     ) external payable returns (uint64) {
         if (name == bytes32(0)) revert InvalidName();
         if (msg.value < creationFee) revert InsufficientCreationFee();
+        if (description.length > 256) revert DescriptionTooLong();
         
-        // Single call to create pod with creator as member and mod, tier set to Pro
-        uint64 podId = storage_.createPodFull(name, msg.sender, isPublic, threshold, 1, category, description);
+        // 1. Create pod in storage
+        uint64 podId = storage_.createPod(name, msg.sender, isPublic, threshold, category, description);
         
-        // Set entry fee on Payments contract
+        // 2. Auto-add creator as member and mod
+        storage_.addMember(podId, msg.sender);
+        storage_.setMod(podId, msg.sender, true);
+        storage_.incrementModCount(podId);
+        
+        // 3. Set tier to Pro
+        storage_.setPodTier(podId, 1);
+        
+        // 4. Set entry fee on Payments contract
         if (entryFee > 0) {
             payments.setEntryFee(podId, entryFee);
         }
         
-        // Distribute creation fee
+        // 5. Distribute creation fee
         if (msg.value > 0) {
             uint256 treasuryAmount = (msg.value * TREASURY_SHARE) / SHARE_DENOMINATOR;
             uint256 burnAmount = msg.value - treasuryAmount;
