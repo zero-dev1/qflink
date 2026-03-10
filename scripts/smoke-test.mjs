@@ -391,16 +391,20 @@ async function test3_JoinFreePod() {
 async function test4_JoinPaidPod() {
   if (!paidPodId) throw new Error('Paid pod not created');
   
-  // Get creator and treasury balances before
+  // Get creator and treasury addresses
   const creator = await readContract(ADDRESSES.podsReader, podsReaderAbi, 'getCreator', [paidPodId]);
   const treasury = await readContract(ADDRESSES.payments, paymentsAbi, 'treasury');
   
-  const creatorBalanceBefore = await publicClient.getBalance({ address: creator });
-  const treasuryBalanceBefore = await publicClient.getBalance({ address: treasury });
+  // Check if creator and treasury are the same address
+  const creatorIsTreasury = creator.toLowerCase() === treasury.toLowerCase();
   
   const entryFee = parseEther('500');
   const expectedCreatorShare = (entryFee * 95n) / 100n; // 95%
   const expectedTreasuryShare = entryFee - expectedCreatorShare; // 5%
+  
+  // Get balances before
+  const creatorBalanceBefore = await publicClient.getBalance({ address: creator });
+  const treasuryBalanceBefore = await publicClient.getBalance({ address: treasury });
   
   // Test user joins paid pod with entry fee
   await writeContract(
@@ -416,16 +420,27 @@ async function test4_JoinPaidPod() {
   const creatorBalanceAfter = await publicClient.getBalance({ address: creator });
   const treasuryBalanceAfter = await publicClient.getBalance({ address: treasury });
   
-  // Verify creator received 95%
-  const creatorGain = creatorBalanceAfter - creatorBalanceBefore;
-  if (creatorGain < expectedCreatorShare - parseEther('0.01') || creatorGain > expectedCreatorShare + parseEther('0.01')) {
-    throw new Error(`Creator share mismatch: expected ~${formatEther(expectedCreatorShare)} QF, got ${formatEther(creatorGain)} QF`);
-  }
-  
-  // Verify treasury received 5%
-  const treasuryGain = treasuryBalanceAfter - treasuryBalanceBefore;
-  if (treasuryGain < expectedTreasuryShare - parseEther('0.01') || treasuryGain > expectedTreasuryShare + parseEther('0.01')) {
-    throw new Error(`Treasury share mismatch: expected ~${formatEther(expectedTreasuryShare)} QF, got ${formatEther(treasuryGain)} QF`);
+  if (creatorIsTreasury) {
+    // Creator and treasury are the same address - should receive 100% total
+    const totalGain = creatorBalanceAfter - creatorBalanceBefore;
+    const expectedTotal = entryFee; // 95% + 5% = 100%
+    if (totalGain < expectedTotal - parseEther('0.01') || totalGain > expectedTotal + parseEther('0.01')) {
+      throw new Error(`Total share mismatch: expected ~${formatEther(expectedTotal)} QF, got ${formatEther(totalGain)} QF`);
+    }
+    console.log('   Note: Creator = Treasury (same wallet), receiving 95% + 5% = 100%');
+  } else {
+    // Normal case: creator and treasury are different addresses
+    // Verify creator received 95%
+    const creatorGain = creatorBalanceAfter - creatorBalanceBefore;
+    if (creatorGain < expectedCreatorShare - parseEther('0.01') || creatorGain > expectedCreatorShare + parseEther('0.01')) {
+      throw new Error(`Creator share mismatch: expected ~${formatEther(expectedCreatorShare)} QF, got ${formatEther(creatorGain)} QF`);
+    }
+    
+    // Verify treasury received 5%
+    const treasuryGain = treasuryBalanceAfter - treasuryBalanceBefore;
+    if (treasuryGain < expectedTreasuryShare - parseEther('0.01') || treasuryGain > expectedTreasuryShare + parseEther('0.01')) {
+      throw new Error(`Treasury share mismatch: expected ~${formatEther(expectedTreasuryShare)} QF, got ${formatEther(treasuryGain)} QF`);
+    }
   }
   
   // Verify membership

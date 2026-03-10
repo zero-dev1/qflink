@@ -78,7 +78,7 @@ contract QFLinkPodsLogic {
         if (name == bytes32(0)) revert InvalidName();
         
         // Create pod in storage
-        uint64 podId = storage_.createPod(name, msg.sender, isPublic, threshold);
+        uint64 podId = storage_.createPod(name, msg.sender, isPublic, threshold, bytes32(0), "");
         
         // Auto-add creator as member and mod
         storage_.addMember(podId, msg.sender);
@@ -251,7 +251,7 @@ contract QFLinkPodsLogic {
         uint64 modCount,
         uint256 threshold
     ) {
-        return storage_.getPod(podId);
+        (name, creator, isPublic, tier, memberCount, modCount, threshold,,) = storage_.getPod(podId);
     }
     
     function isMember(uint64 podId, address user) external view returns (bool) {
