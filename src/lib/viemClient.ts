@@ -59,6 +59,10 @@ export const CONTRACT_ADDRESSES = {
   messageIndex: (import.meta.env.VITE_MESSAGE_INDEX_ADDRESS || '0x0000000000000000000000000000000000000000') as `0x${string}`,
   messageWriter: (import.meta.env.VITE_MESSAGE_WRITER_ADDRESS || '0x0000000000000000000000000000000000000000') as `0x${string}`,
   messageReader: (import.meta.env.VITE_MESSAGE_READER_ADDRESS || '0x0000000000000000000000000000000000000000') as `0x${string}`,
+
+  // Session keys
+  sessionKeys: (import.meta.env.VITE_SESSION_KEYS_ADDRESS || '0x0000000000000000000000000000000000000000') as `0x${string}`,
+  messageWriterV2: (import.meta.env.VITE_MESSAGE_WRITER_V2_ADDRESS || '0x0000000000000000000000000000000000000000') as `0x${string}`,
 } as const
 
 // ── Public Client (reads) ──

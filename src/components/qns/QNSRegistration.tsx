@@ -13,6 +13,7 @@ import { formatEther } from 'viem'
 
 interface QNSRegistrationProps {
   onComplete: () => void
+  onSuccess?: () => void  // Called after successful registration to refresh name
 }
 
 type RegistrationType = 'annual' | 'permanent'
@@ -28,7 +29,7 @@ function formatPrice(price: bigint): string {
   return parseFloat(ether).toString()
 }
 
-export const QNSRegistration: React.FC<QNSRegistrationProps> = ({ onComplete }) => {
+export const QNSRegistration: React.FC<QNSRegistrationProps> = ({ onComplete, onSuccess }) => {
   const { address, balance } = useWallet()
   const [name, setName] = useState('')
   const [registrationType, setRegistrationType] = useState<RegistrationType>('annual')
@@ -117,6 +118,8 @@ export const QNSRegistration: React.FC<QNSRegistrationProps> = ({ onComplete }) 
       await registerQFName(name, duration, registrationType === 'permanent')
       setRegisteredName(`${name}.qf`)
       setStatus('success')
+      // Notify parent to refresh QNS name
+      onSuccess?.()
     } catch (err) {
       setStatus('available')
       setError(err instanceof Error ? err.message : 'Registration failed')
@@ -137,7 +140,7 @@ export const QNSRegistration: React.FC<QNSRegistrationProps> = ({ onComplete }) 
   if (status === 'success' && registeredName) {
     return (
       <div className="min-h-screen bg-[#0D0D0D] flex items-center justify-center p-4">
-        <div className="w-full max-w-[480px] bg-[#1A1A1A] border border-gray-800 rounded-lg p-8 text-center">
+        <div className="w-full max-w-[480px] bg-[#0D0D0D] border border-gray-800 rounded-none p-8 text-center">
           <div className="w-16 h-16 bg-cyan-600/20 rounded-full flex items-center justify-center mx-auto mb-6">
             <svg className="w-8 h-8 text-cyan-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
@@ -147,7 +150,7 @@ export const QNSRegistration: React.FC<QNSRegistrationProps> = ({ onComplete }) 
           <p className="text-gray-400 mb-8">Your .qf name is now active across the QF ecosystem.</p>
           <button
             onClick={onComplete}
-            className="w-full bg-cyan-600 hover:bg-cyan-500 text-white font-semibold py-3 px-4 rounded transition-colors"
+            className="w-full bg-[#0991B2] hover:bg-[#077a96] text-white font-semibold py-3 px-4 rounded-none transition-colors"
           >
             Continue to QFLink
           </button>
@@ -158,7 +161,7 @@ export const QNSRegistration: React.FC<QNSRegistrationProps> = ({ onComplete }) 
 
   return (
     <div className="min-h-screen bg-[#0D0D0D] flex items-center justify-center p-4">
-      <div className="w-full max-w-[480px] bg-[#1A1A1A] border border-gray-800 rounded-lg p-8">
+      <div className="w-full max-w-[480px] bg-[#0D0D0D] border border-gray-800 rounded-none p-8">
         {/* Header */}
         <div className="text-center mb-8">
           <h1 className="text-2xl font-bold text-white mb-2">Claim your .qf name</h1>
@@ -179,7 +182,7 @@ export const QNSRegistration: React.FC<QNSRegistrationProps> = ({ onComplete }) 
               onChange={(e) => setName(e.target.value.toLowerCase())}
               placeholder="yourname"
               disabled={isLoading}
-              className="w-full bg-[#0D0D0D] border border-gray-700 rounded-lg py-3 px-4 pr-16 text-white placeholder-gray-600 focus:outline-none focus:border-cyan-600 transition-colors disabled:opacity-50"
+              className="w-full bg-[#0D0D0D] border border-gray-700 rounded-none py-3 px-4 pr-16 text-white placeholder-gray-600 focus:outline-none focus:border-[#0991B2] transition-colors disabled:opacity-50"
             />
             <span className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-500 font-medium">
               .qf
@@ -223,12 +226,12 @@ export const QNSRegistration: React.FC<QNSRegistrationProps> = ({ onComplete }) 
 
         {/* Registration Type Tabs */}
         <div className="mb-6">
-          <div className="flex rounded-lg bg-[#0D0D0D] p-1">
+          <div className="flex rounded-lg bg-transparent p-1">
             <button
               onClick={() => setRegistrationType('annual')}
-              className={`flex-1 py-2 px-4 text-sm font-medium rounded-md transition-colors ${
+              className={`flex-1 py-2 px-4 text-sm font-medium rounded-none transition-colors ${
                 registrationType === 'annual'
-                  ? 'bg-cyan-600 text-white'
+                  ? 'bg-[#0991B2] text-white'
                   : 'text-gray-400 hover:text-white'
               }`}
             >
@@ -236,9 +239,9 @@ export const QNSRegistration: React.FC<QNSRegistrationProps> = ({ onComplete }) 
             </button>
             <button
               onClick={() => setRegistrationType('permanent')}
-              className={`flex-1 py-2 px-4 text-sm font-medium rounded-md transition-colors ${
+              className={`flex-1 py-2 px-4 text-sm font-medium rounded-none transition-colors ${
                 registrationType === 'permanent'
-                  ? 'bg-cyan-600 text-white'
+                  ? 'bg-[#0991B2] text-white'
                   : 'text-gray-400 hover:text-white'
               }`}
             >
@@ -258,10 +261,10 @@ export const QNSRegistration: React.FC<QNSRegistrationProps> = ({ onComplete }) 
                 <button
                   key={years}
                   onClick={() => setDuration(years)}
-                  className={`flex-1 py-2 px-3 rounded-lg text-sm font-medium transition-colors ${
+                  className={`flex-1 py-2 px-3 rounded-none text-sm font-medium transition-colors ${
                     duration === years
-                      ? 'bg-cyan-600/20 text-cyan-500 border border-cyan-600'
-                      : 'bg-[#0D0D0D] text-gray-400 border border-gray-700 hover:border-gray-600'
+                      ? 'bg-[#0991B2] text-white border border-[#0991B2]'
+                      : 'bg-transparent text-gray-400 border border-gray-700 hover:border-gray-500'
                   }`}
                 >
                   {years} {years === 1 ? 'year' : 'years'}
@@ -318,7 +321,7 @@ export const QNSRegistration: React.FC<QNSRegistrationProps> = ({ onComplete }) 
         <button
           onClick={handleRegister}
           disabled={status !== 'available' || isLoading || !canAfford}
-          className="w-full bg-cyan-600 hover:bg-cyan-500 disabled:bg-gray-700 disabled:text-gray-500 disabled:cursor-not-allowed text-white font-semibold py-3 px-4 rounded-lg transition-colors mb-4"
+          className="w-full bg-[#0991B2] hover:bg-[#077a96] disabled:bg-gray-700 disabled:text-gray-500 disabled:cursor-not-allowed text-white font-semibold py-3 px-4 rounded-none transition-colors mb-4"
         >
           {isLoading ? (
             <span className="flex items-center justify-center gap-2">

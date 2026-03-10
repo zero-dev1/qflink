@@ -20,6 +20,8 @@ const CreatePodPage = lazy(() => import('@/pages/CreatePodPage'))
 const WhitepaperPage = lazy(() => import('@/pages/WhitepaperPage'))
 const CreatorsPage = lazy(() => import('@/pages/CreatorsPage'))
 const CommunitiesPage = lazy(() => import('@/pages/CommunitiesPage'))
+const CreatorDashboardPage = lazy(() => import('@/pages/CreatorDashboardPage'))
+const AdminPage = lazy(() => import('@/pages/AdminPage'))
 
 const PageLoader: React.FC = () => (
   <div className="flex h-screen items-center justify-center">
@@ -63,6 +65,9 @@ const App: React.FC = () => {
           <Route path="/creators" element={<CreatorsPage />} />
           <Route path="/communities" element={<CommunitiesPage />} />
           
+          {/* Admin - public (handles auth internally) */}
+          <Route path="/admin" element={<AdminPage />} />
+          
           {/* App routes - protected with AuthGuard and wrapped with Layout */}
           <Route element={<ProtectedLayout />}>
             <Route path="/home" element={<HomePage />} />
@@ -76,6 +81,7 @@ const App: React.FC = () => {
             <Route path="/profile/:address" element={<ProfilePage />} />
             <Route path="/settings" element={<SettingsPage />} />
             <Route path="/create-pod" element={<CreatePodPage />} />
+            <Route path="/creator" element={<CreatorDashboardPage />} />
           </Route>
           
           <Route path="*" element={<Navigate to="/" replace />} />

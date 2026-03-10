@@ -41,7 +41,7 @@ export const ChatView: React.FC<ChatViewProps> = ({
   const senderQFNamesFetchedRef = useRef<Set<string>>(new Set())
 
   // Use QNS hook for peer's .qf name
-  const peerQFName = useQFName(address)
+  const { name: peerQFName } = useQFName(address)
 
   const handleScroll = () => {
     const el = chatContainerRef.current

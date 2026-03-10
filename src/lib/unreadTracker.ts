@@ -1,6 +1,9 @@
 /**
- * Unread message tracker - stores last-read message counts in localStorage
+ * Unread message tracker - stores last-read timestamps in localStorage
+ * Only counts messages from OTHER users as unread (never your own)
  */
+
+import { useWalletStore } from '@/stores/wallet'
 
 const STORAGE_KEY_PREFIX = 'qflink_lastread_'
 const DM_STORAGE_KEY_PREFIX = 'qflink_dm_lastread_'
@@ -10,20 +13,20 @@ const DM_STORAGE_KEY_PREFIX = 'qflink_dm_lastread_'
 // ============================================================
 
 /**
- * Mark a pod as read by storing its current message count
+ * Mark a pod as read by storing the current timestamp
  */
-export function markPodAsRead(podId: number, messageCount: number): void {
+export function markPodAsRead(podId: number): void {
   try {
-    localStorage.setItem(`${STORAGE_KEY_PREFIX}${podId}`, String(messageCount))
+    localStorage.setItem(`${STORAGE_KEY_PREFIX}${podId}`, String(Date.now()))
   } catch {
     // Ignore localStorage errors (e.g., quota exceeded)
   }
 }
 
 /**
- * Get the stored last-read message count for a pod
+ * Get the stored last-read timestamp for a pod
  */
-export function getLastReadCount(podId: number): number {
+export function getLastReadTimestamp(podId: number): number {
   try {
     const stored = localStorage.getItem(`${STORAGE_KEY_PREFIX}${podId}`)
     return stored ? Number(stored) : 0
@@ -32,22 +35,34 @@ export function getLastReadCount(podId: number): number {
   }
 }
 
+interface Message {
+  sender: string
+  timestamp: number
+}
+
 /**
  * Calculate unread count for a pod
+ * Only counts messages from OTHER users (not your own)
  * @param podId - The pod ID
- * @param currentMessageCount - Current total message count for the pod
- * @returns Number of unread messages (0 if none or negative)
+ * @param messages - Array of messages with sender and timestamp
+ * @returns Number of unread messages from other users
  */
-export function getUnreadCount(podId: number, currentMessageCount: number): number {
-  const lastRead = getLastReadCount(podId)
+export function getUnreadCount(podId: number, messages: Message[]): number {
+  const { evmAddress } = useWalletStore.getState()
+  if (!evmAddress) return 0
+
+  const myAddress = evmAddress.toLowerCase()
+  const lastRead = getLastReadTimestamp(podId)
   
-  // If no stored value, treat all messages as unread on first visit
+  // If no stored value, treat all messages from others as unread on first visit
   if (lastRead === 0) {
-    return currentMessageCount
+    return messages.filter(m => m.sender.toLowerCase() !== myAddress).length
   }
   
-  const unread = currentMessageCount - lastRead
-  return Math.max(0, unread)
+  // Count messages from OTHER users that arrived after last read
+  return messages.filter(
+    m => m.sender.toLowerCase() !== myAddress && m.timestamp > lastRead
+  ).length
 }
 
 // ============================================================
@@ -55,20 +70,20 @@ export function getUnreadCount(podId: number, currentMessageCount: number): numb
 // ============================================================
 
 /**
- * Mark a DM conversation as read by storing its current message count
+ * Mark a DM conversation as read by storing the current timestamp
  */
-export function markConversationAsRead(conversationId: string, messageCount: number): void {
+export function markConversationAsRead(conversationId: string): void {
   try {
-    localStorage.setItem(`${DM_STORAGE_KEY_PREFIX}${conversationId.toLowerCase()}`, String(messageCount))
+    localStorage.setItem(`${DM_STORAGE_KEY_PREFIX}${conversationId.toLowerCase()}`, String(Date.now()))
   } catch {
     // Ignore localStorage errors
   }
 }
 
 /**
- * Get the stored last-read message count for a DM conversation
+ * Get the stored last-read timestamp for a DM conversation
  */
-export function getDMLastReadCount(conversationId: string): number {
+export function getDMLastReadTimestamp(conversationId: string): number {
   try {
     const stored = localStorage.getItem(`${DM_STORAGE_KEY_PREFIX}${conversationId.toLowerCase()}`)
     return stored ? Number(stored) : 0
@@ -79,20 +94,27 @@ export function getDMLastReadCount(conversationId: string): number {
 
 /**
  * Calculate unread count for a DM conversation
+ * Only counts messages from OTHER users (not your own)
  * @param conversationId - The other user's address
- * @param currentMessageCount - Current total message count for the conversation
- * @returns Number of unread messages (0 if none or negative)
+ * @param messages - Array of messages with sender and timestamp
+ * @returns Number of unread messages from other users
  */
-export function getDMUnreadCount(conversationId: string, currentMessageCount: number): number {
-  const lastRead = getDMLastReadCount(conversationId)
+export function getDMUnreadCount(conversationId: string, messages: Message[]): number {
+  const { evmAddress } = useWalletStore.getState()
+  if (!evmAddress) return 0
+
+  const myAddress = evmAddress.toLowerCase()
+  const lastRead = getDMLastReadTimestamp(conversationId)
   
-  // If no stored value, treat all messages as unread on first visit
+  // If no stored value, treat all messages from others as unread on first visit
   if (lastRead === 0) {
-    return currentMessageCount
+    return messages.filter(m => m.sender.toLowerCase() !== myAddress).length
   }
   
-  const unread = currentMessageCount - lastRead
-  return Math.max(0, unread)
+  // Count messages from OTHER users that arrived after last read
+  return messages.filter(
+    m => m.sender.toLowerCase() !== myAddress && m.timestamp > lastRead
+  ).length
 }
 
 // ============================================================

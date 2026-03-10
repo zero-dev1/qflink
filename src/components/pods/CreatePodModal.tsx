@@ -244,6 +244,7 @@ export const CreatePodModal: React.FC<CreatePodModalProps> = ({ isOpen, onClose,
                 type="number"
                 value={entryFee}
                 onChange={(e) => { setEntryFee(e.target.value); setError('') }}
+                onWheel={(e) => (e.target as HTMLInputElement).blur()}
                 error={error && error.includes('entry') ? error : undefined}
               />
               <p className="text-xs text-qx-text-muted -mt-2">

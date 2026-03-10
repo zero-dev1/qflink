@@ -1,0 +1,1 @@
+[{"inputs":[{"internalType":"address","name":"sessionKey","type":"address"}],"name":"getOwner","outputs":[{"internalType":"address","name":"","type":"address"}],"stateMutability":"view","type":"function"}]

@@ -21,7 +21,7 @@ const WhyBlock: React.FC<WhyBlockProps> = ({ icon, title, text, delay }) => {
       style={{ transitionDelay: `${delay}ms` }}
     >
       <div className="text-cyan-600 mb-4">{icon}</div>
-      <h3 className="text-lg font-bold text-gray-900 dark:text-white mb-3">{title}</h3>
+      <h3 className="text-xl font-bold text-gray-900 dark:text-white mb-3">{title}</h3>
       <p className="text-gray-600 dark:text-gray-400 text-sm leading-relaxed">{text}</p>
     </div>
   )
@@ -34,9 +34,10 @@ interface PodTypeCardProps {
   badgeColor: string
   description: string
   detail: string
+  example?: string
   delay: number
 }
-const PodTypeCard: React.FC<PodTypeCardProps> = ({ name, badge, badgeColor, description, detail, delay }) => {
+const PodTypeCard: React.FC<PodTypeCardProps> = ({ name, badge, badgeColor, description, detail, example, delay }) => {
   const [ref, inView] = useInView<HTMLDivElement>(0.1)
   return (
     <div
@@ -51,7 +52,8 @@ const PodTypeCard: React.FC<PodTypeCardProps> = ({ name, badge, badgeColor, desc
         <span className={`text-xs font-bold px-2.5 py-1 border ${badgeColor}`}>{badge}</span>
       </div>
       <p className="text-gray-600 dark:text-gray-400 text-sm mb-3">{description}</p>
-      <p className="text-xs text-gray-400 dark:text-gray-600 font-mono">{detail}</p>
+      <p className="text-xs text-gray-400 dark:text-gray-600 font-mono mb-2">{detail}</p>
+      {example && <p className="text-gray-600 dark:text-gray-600 text-xs italic">{example}</p>}
     </div>
   )
 }
@@ -120,8 +122,11 @@ const CommunitiesPage: React.FC = () => {
             A community that<br />
             <span className="text-cyan-600">can't be shut down.</span>
           </h1>
-          <p className="text-lg md:text-xl text-gray-600 dark:text-gray-400 max-w-2xl mx-auto leading-relaxed mb-10">
-            Discord bans servers without warning. Telegram has no real moderation. QFLink gives you permanent, token-gated communities with real on-chain enforcement.
+          <p className="text-lg md:text-xl text-gray-400 max-w-2xl mx-auto leading-relaxed mb-2">
+            Discord and Telegram can delete your community overnight.
+          </p>
+          <p className="text-lg md:text-xl text-white max-w-2xl mx-auto leading-relaxed mb-10">
+            QFLink can't — because no one controls it but you.
           </p>
           <Link
             to="/connect"
@@ -208,9 +213,9 @@ const CommunitiesPage: React.FC = () => {
                   { feature: 'Moderation', qf: 'On-chain ban/unban', discord: 'Server tools', telegram: 'Admin tools', hl: false },
                   { feature: 'Works without servers', qf: 'Yes', discord: 'No', telegram: 'No', hl: true },
                 ].map((row) => (
-                  <tr key={row.feature} className={row.hl ? 'bg-cyan-600/5' : ''}>
+                  <tr key={row.feature} className={row.hl ? 'bg-[#0991B2]/10' : ''}>
                     <td className="py-3 px-5 font-medium text-gray-700 dark:text-gray-300 border-b border-gray-200 dark:border-gray-800">{row.feature}</td>
-                    <td className="py-3 px-5 font-bold text-cyan-600 border-b border-gray-200 dark:border-gray-800">{row.qf}</td>
+                    <td className={`py-3 px-5 font-bold border-b border-gray-200 dark:border-gray-800 ${row.feature === 'Can be banned / shut down' ? 'text-[#0991B2]' : 'text-cyan-600'}`}>{row.qf}</td>
                     <td className="py-3 px-5 text-gray-500 border-b border-gray-200 dark:border-gray-800">{row.discord}</td>
                     <td className="py-3 px-5 text-gray-500 border-b border-gray-200 dark:border-gray-800">{row.telegram}</td>
                   </tr>
@@ -240,16 +245,18 @@ const CommunitiesPage: React.FC = () => {
               name="Open Pod"
               badge="Free to join"
               badgeColor="border-gray-300 dark:border-gray-700 text-gray-500"
-              description="Free to create, free to join. Like a public Discord channel — open to anyone with a wallet."
+              description="Free to join. Like a public Discord channel — open to anyone with a wallet."
               detail="No token gate. No entry fee. Public on the Explore page."
+              example='e.g., "Solana Builders", "QF General Chat"'
               delay={0}
             />
             <PodTypeCard
               name="Token-Gated Pod"
               badge="Holders only"
               badgeColor="border-cyan-600/50 text-cyan-600"
-              description="Only wallets with a minimum QF balance can join. Verified by smart contract at join time. No bots."
-              detail="e.g. min 10,000 QF balance required. Contract-enforced."
+              description="Only wallets holding a minimum token balance can join. Works with QF and any token on the network. Verified by smart contract at join time. No bots."
+              detail="e.g. min 10,000 QF or any token. Contract-enforced."
+              example='e.g., "Diamond Hands Club", "NFT Holders Only"'
               delay={100}
             />
             <PodTypeCard
@@ -258,6 +265,7 @@ const CommunitiesPage: React.FC = () => {
               badgeColor="border-cyan-600/50 text-cyan-600"
               description="Set an entry fee in QF. Premium content, alpha groups, exclusive access. 95% goes to you instantly."
               detail="e.g. 500 QF entry. 95% to creator, 5% to treasury."
+              example='e.g., "Alpha Trading Group", "DeFi Masterclass"'
               delay={200}
             />
             <PodTypeCard
@@ -266,6 +274,7 @@ const CommunitiesPage: React.FC = () => {
               badgeColor="border-yellow-500/50 text-yellow-600 dark:text-yellow-400"
               description="High token-gate threshold for inner-circle access. The most exclusive tier. Enforced on-chain."
               detail="e.g. 1,000,000 QF required. The inner circle."
+              example='e.g., "Core Team", "Founders Circle"'
               delay={300}
             />
           </div>
@@ -281,12 +290,13 @@ const CommunitiesPage: React.FC = () => {
           </h2>
           <div className="flex flex-wrap justify-center gap-3">
             {['Trading', 'Tokens', 'NFTs', 'DeFi', 'Gaming', 'Builders', 'Social', 'Alpha'].map((cat) => (
-              <span
+              <Link
                 key={cat}
-                className="border border-gray-200 dark:border-gray-700 bg-white dark:bg-[#0D0D0D] px-5 py-2.5 text-sm font-semibold text-gray-600 dark:text-gray-400 hover:border-cyan-600 hover:text-cyan-600 transition-colors cursor-default"
+                to={`/explore?category=${cat}`}
+                className="border border-gray-200 dark:border-gray-700 bg-white dark:bg-[#0D0D0D] px-5 py-2.5 text-sm font-semibold text-gray-600 dark:text-gray-400 hover:border-cyan-600 hover:text-cyan-600 transition-colors"
               >
                 {cat}
-              </span>
+              </Link>
             ))}
           </div>
           <p className="text-sm text-gray-400 dark:text-gray-600 mt-8">
@@ -302,9 +312,12 @@ const CommunitiesPage: React.FC = () => {
         <div className="absolute inset-0 pointer-events-none dark:hidden"
           style={{ background: 'radial-gradient(ellipse at center, rgba(8,145,178,0.05) 0%, #FFFFFF 70%)' }} />
         <div className="relative z-10 max-w-4xl mx-auto">
-          <h2 className="font-display text-4xl md:text-6xl font-bold text-gray-900 dark:text-white mb-10">
+          <h2 className="font-display text-4xl md:text-6xl font-bold text-gray-900 dark:text-white mb-6">
             Your community deserves better.
           </h2>
+          <p className="text-gray-400 text-base mb-10 text-center max-w-2xl mx-auto">
+            On-chain communities with permanent messages, encrypted DMs, and zero platform risk.
+          </p>
           <Link
             to="/connect"
             className="inline-block bg-cyan-600 text-white font-bold text-lg px-8 py-3 rounded-none hover:bg-cyan-700 transition-colors duration-200"

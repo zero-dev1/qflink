@@ -166,6 +166,7 @@ const CreatePodPage: React.FC = () => {
             type="number"
             value={entryFee}
             onChange={(e) => { setEntryFee(e.target.value); setError('') }}
+            onWheel={(e) => (e.target as HTMLInputElement).blur()}
           />
           <p className="text-xs text-qx-text-muted -mt-2">
             One-time fee for members to join. 95% goes to your payout wallet, 5% to treasury.

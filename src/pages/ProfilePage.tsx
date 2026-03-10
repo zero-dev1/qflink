@@ -24,7 +24,7 @@ const ProfilePage: React.FC = () => {
   const isOwnProfile = !routeAddress || routeAddress.toLowerCase() === (evmAddress || address || '').toLowerCase()
 
   // Get QNS name for display
-  const qnsName = useQFName(targetAddress)
+  const { name: qnsName } = useQFName(targetAddress)
 
   const totalBalance = linkedWallets.reduce((sum, w) => sum + w.balance, balance)
   const podsJoined = myPods.length

@@ -176,7 +176,7 @@ const SettingsPage: React.FC = () => {
   const notifStatusInfo = getNotificationStatusText()
   const isDev = import.meta.env.DEV
   const evmAddress = useWalletStore((s) => s.evmAddress)
-  const userQNSName = useQFName(evmAddress || undefined)
+  const { name: userQNSName, refresh: refreshUserQNS } = useQFName(evmAddress || undefined)
 
   return (
     <div className="max-w-2xl mx-auto p-6 space-y-6">
@@ -478,7 +478,10 @@ const SettingsPage: React.FC = () => {
       {/* QNS Registration Modal */}
       {qnsRegistrationOpen && (
         <div className="fixed inset-0 z-50">
-          <QNSRegistration onComplete={() => setQnsRegistrationOpen(false)} />
+          <QNSRegistration 
+            onComplete={() => setQnsRegistrationOpen(false)} 
+            onSuccess={refreshUserQNS}
+          />
         </div>
       )}
     </div>

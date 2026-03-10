@@ -233,9 +233,8 @@ const PodsPage: React.FC = () => {
   }, [podMembers, selectedPodId])
 
   const handlePodSelect = (podId: number) => {
-    // Mark pod as read with current message count before opening
-    const currentCount = podMessageCounts[podId] || 0
-    markPodAsRead(podId, currentCount)
+    // Mark pod as read before opening
+    markPodAsRead(podId)
     
     setSelectedPodId(podId)
     // Update URL without full navigation
@@ -289,9 +288,8 @@ const PodsPage: React.FC = () => {
           onSend={async (content) => {
             try {
               await sendPodMessage(selectedPodId, content)
-              // BUG 2 FIX: Mark pod as read after sending to prevent unread dot on own message
-              const currentCount = podMessageCounts[selectedPodId] || currentMessages.length
-              markPodAsRead(selectedPodId, currentCount + 1)
+              // Mark pod as read after sending (own messages never count as unread)
+              markPodAsRead(selectedPodId)
             } catch (err) {
               // If access denied (banned), navigate back to pods list
               if (err instanceof Error && err.message === 'ACCESS_DENIED') {
@@ -353,9 +351,9 @@ const PodsPage: React.FC = () => {
               const lastMsg = getPodLastMessage(pod.id)
               const isActive = selectedPodId === pod.id
               
-              // Calculate unread count
-              const currentMsgCount = podMessageCounts[pod.id] || 0
-              const unreadCount = getUnreadCount(pod.id, currentMsgCount)
+              // Calculate unread count (only messages from other users)
+              const podMsgs = podMessages[pod.id] || []
+              const unreadCount = getUnreadCount(pod.id, podMsgs)
               const hasUnread = unreadCount > 0 && !isActive
               
               // Better subtitle: use category for custom pods instead of just 'Open'

@@ -26,7 +26,7 @@ export const WalletButton: React.FC = () => {
   const network = NETWORKS[currentNetwork]
   
   // Get QNS name for connected address
-  const qfName = useQFName(address || undefined)
+  const { name: qfName } = useQFName(address || undefined)
 
   const handleConnect = async () => {
     try {
@@ -68,7 +68,7 @@ export const WalletButton: React.FC = () => {
         </div>
         <div className={`h-2 w-2 rounded-full ${STATUS_DOT[connectionStatus] || 'bg-gray-400'}`} />
       </div>
-      <p className={`text-sm font-mono font-medium ${qfName ? 'text-cyan-600' : 'text-qx-text-primary'}`}>{displayAddress}</p>
+      <p className={`text-sm font-mono font-medium ${qfName ? 'text-cyan-400' : 'text-qx-text-primary'}`}>{displayAddress}</p>
       <p className="text-xs text-qx-text-secondary">{formatBalance(balance)} QF</p>
       <Button variant="ghost" size="sm" onClick={disconnect} className="mt-1">
         Disconnect

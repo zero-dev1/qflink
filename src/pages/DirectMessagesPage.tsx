@@ -115,9 +115,8 @@ const DirectMessagesPage: React.FC = () => {
   const conversationsWithUnread = useMemo<Conversation[]>(() => {
     const enriched = conversations.map(convo => {
       const msgs = messages[convo.address] || []
-      const msgCount = msgs.length
-      const lastRead = parseInt(localStorage.getItem(`qflink_dm_lastread_${convo.address.toLowerCase()}`) || '0')
-      const unreadCount = getDMUnreadCount(convo.address, msgCount)
+      // Only count messages from other users as unread
+      const unreadCount = getDMUnreadCount(convo.address, msgs)
       // Get the timestamp of the last message for sorting
       const lastMessageTime = msgs.length > 0 ? msgs[msgs.length - 1].timestamp : (convo.lastMessageTime || 0)
       return {
@@ -142,8 +141,7 @@ const DirectMessagesPage: React.FC = () => {
 
   const handleSelect = (address: string) => {
     // Mark conversation as read before opening
-    const currentMsgs = messages[address] || []
-    markConversationAsRead(address, currentMsgs.length)
+    markConversationAsRead(address)
     
     // On mobile, use state-based navigation
     // On desktop, we could navigate but for now just use state for consistency
@@ -162,10 +160,8 @@ const DirectMessagesPage: React.FC = () => {
     }
     await sendMessage(evmRecipient, content)
     // Mark as read so sender doesn't see their own message as unread
-    // Get fresh state from store to ensure correct count after addMessage
-    const freshMessages = useMessagesStore.getState().messages
-    const newCount = freshMessages[evmRecipient]?.length || 0
-    markConversationAsRead(evmRecipient, newCount)
+    // (own messages are now filtered out in unread count anyway)
+    markConversationAsRead(evmRecipient)
     setSelectedChatId(evmRecipient)
   }
 
@@ -173,10 +169,8 @@ const DirectMessagesPage: React.FC = () => {
     if (selectedChatId) {
       await sendMessage(selectedChatId, content)
       // Mark as read so sender doesn't see their own message as unread
-      // Get fresh state from store to ensure correct count after addMessage
-      const freshMessages = useMessagesStore.getState().messages
-      const newCount = freshMessages[selectedChatId]?.length || 0
-      markConversationAsRead(selectedChatId, newCount)
+      // (own messages are now filtered out in unread count anyway)
+      markConversationAsRead(selectedChatId)
     }
   }
 

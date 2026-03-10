@@ -4,6 +4,9 @@ import { NetworkIndicator } from '@/components/ui/NetworkIndicator'
 import { useUIStore } from '@/stores/ui'
 import { cn } from '@/lib/utils'
 import { QFLinkWordmark } from '@/components/QFLinkWordmark'
+import { usePodsStore } from '@/stores/pods'
+import { useWalletStore } from '@/stores/wallet'
+import type { CustomPod } from '@/types'
 
 const sidebarItems = [
   {
@@ -71,42 +74,96 @@ const sidebarItems = [
 
 const mobileItems = sidebarItems.filter((i) => i.label !== 'Settings')
 
-const SidebarContent: React.FC<{ onClose?: () => void }> = ({ onClose }) => (
-  <>
-    <div className="flex h-14 items-center px-5 border-b border-gray-200 dark:border-gray-800">
-      <QFLinkWordmark size={28} variant="auto" />
-    </div>
-
-    <nav className="flex-1 px-2 py-4">
-      <ul className="flex flex-col gap-0.5">
-        {sidebarItems.map((item) => (
-          <li key={item.to}>
-            <NavLink
-              to={item.to}
-              end={item.to === '/home'}
-              onClick={onClose}
-              className={({ isActive }) =>
-                cn(
-                  'flex items-center gap-3 px-3 py-2.5 text-sm font-medium transition-colors duration-150',
-                  isActive
-                    ? 'text-cyan-600 bg-cyan-600/10 font-semibold'
-                    : 'text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800'
-                )
-              }
-            >
-              {item.icon}
-              {item.label}
-            </NavLink>
-          </li>
-        ))}
-      </ul>
-    </nav>
-
-    <div className="border-t border-gray-200 dark:border-gray-800 p-4">
-      <NetworkIndicator />
-    </div>
-  </>
+const CreatorDashboardIcon = () => (
+  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <polyline points="22 12 18 12 15 21 9 3 6 12 2 12" />
+  </svg>
 )
+
+const SidebarContent: React.FC<{ onClose?: () => void }> = ({ onClose }) => {
+  const pods = usePodsStore((s) => s.pods)
+  const evmAddress = useWalletStore((s) => s.evmAddress)
+
+  const hasCreatedPods = evmAddress
+    ? pods.some((p) => !p.isDefault && (p as CustomPod).creator?.toLowerCase() === evmAddress.toLowerCase())
+    : false
+
+  return (
+    <>
+      <div className="flex h-14 items-center px-5 border-b border-gray-200 dark:border-gray-800">
+        <QFLinkWordmark size={28} variant="auto" />
+      </div>
+
+      <nav className="flex-1 px-2 py-4">
+        <ul className="flex flex-col gap-0.5">
+          {sidebarItems.slice(0, 3).map((item) => (
+            <li key={item.to}>
+              <NavLink
+                to={item.to}
+                end={item.to === '/home'}
+                onClick={onClose}
+                className={({ isActive }) =>
+                  cn(
+                    'flex items-center gap-3 px-3 py-2.5 text-sm font-medium transition-colors duration-150',
+                    isActive
+                      ? 'bg-[#0991B2] text-white font-semibold'
+                      : 'text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800'
+                  )
+                }
+              >
+                {item.icon}
+                {item.label}
+              </NavLink>
+            </li>
+          ))}
+          {hasCreatedPods && (
+            <li>
+              <NavLink
+                to="/creator"
+                onClick={onClose}
+                className={({ isActive }) =>
+                  cn(
+                    'flex items-center gap-3 px-3 py-2.5 text-sm font-medium transition-colors duration-150',
+                    isActive
+                      ? 'bg-[#0991B2] text-white font-semibold'
+                      : 'text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800'
+                  )
+                }
+              >
+                <CreatorDashboardIcon />
+                Creator
+              </NavLink>
+            </li>
+          )}
+          {sidebarItems.slice(3).map((item) => (
+            <li key={item.to}>
+              <NavLink
+                to={item.to}
+                end={item.to === '/home'}
+                onClick={onClose}
+                className={({ isActive }) =>
+                  cn(
+                    'flex items-center gap-3 px-3 py-2.5 text-sm font-medium transition-colors duration-150',
+                    isActive
+                      ? 'bg-[#0991B2] text-white font-semibold'
+                      : 'text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800'
+                  )
+                }
+              >
+                {item.icon}
+                {item.label}
+              </NavLink>
+            </li>
+          ))}
+        </ul>
+      </nav>
+
+      <div className="border-t border-gray-200 dark:border-gray-800 p-4">
+        <NetworkIndicator />
+      </div>
+    </>
+  )
+}
 
 export const Sidebar: React.FC = () => {
   const isSidebarOpen = useUIStore((s) => s.isSidebarOpen)

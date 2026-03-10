@@ -25,7 +25,7 @@ export const ConversationItem: React.FC<ConversationItemProps> = ({
   onClick,
 }) => {
   const navigate = useNavigate()
-  const qfName = useQFName(conversation.address)
+  const { name: qfName } = useQFName(conversation.address)
 
   const handleAvatarClick = (e: React.MouseEvent) => {
     e.stopPropagation()

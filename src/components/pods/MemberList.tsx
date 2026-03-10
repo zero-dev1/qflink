@@ -8,7 +8,7 @@ interface MemberListItemProps {
 }
 
 const MemberListItem: React.FC<MemberListItemProps> = ({ addr }) => {
-  const qfName = useQFName(addr)
+  const { name: qfName } = useQFName(addr)
   return (
     <div key={addr} className="flex items-center gap-2 rounded-md p-2 hover:bg-qx-elevated">
       <Avatar address={addr} size="sm" />

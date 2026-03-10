@@ -115,9 +115,19 @@ const HomePage: React.FC = () => {
           </div>
         ) : allDisplayPods.length === 0 ? (
           <div className="border border-gray-200 dark:border-gray-800 bg-transparent p-8 text-center">
-            <p className="text-sm text-qx-text-secondary">
-              You don't have enough QF to join any pods. Get more QF to unlock exclusive communities.
+            <p className="text-sm text-qx-text-secondary mb-4">
+              Welcome to QFLink — your on-chain messaging hub. Browse and join pods to start chatting with communities.
             </p>
+            <button
+              onClick={() => navigate('/explore')}
+              className="inline-flex items-center gap-2 px-4 py-2 bg-cyan-600 hover:bg-cyan-500 text-white text-sm font-medium rounded-lg transition-colors"
+            >
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <circle cx="11" cy="11" r="8" />
+                <path d="m21 21-4.35-4.35" />
+              </svg>
+              Explore Pods
+            </button>
           </div>
         ) : (
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">

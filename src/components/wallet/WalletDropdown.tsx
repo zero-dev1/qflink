@@ -1,13 +1,23 @@
-import React, { useState, useRef, useEffect } from 'react'
+import React, { useState, useRef, useEffect, useCallback } from 'react'
 import { useWallet } from '@/hooks/useWallet'
-import { truncateAddress, formatBalance } from '@/lib/utils'
+import { truncateAddress, formatBalance, copyToClipboard } from '@/lib/utils'
 import { Avatar } from '@/components/ui/Avatar'
 import { cn } from '@/lib/utils'
+import { useQFName } from '@/hooks/useQFName'
 
 export const WalletDropdown: React.FC = () => {
   const { address, balance, disconnect, walletType } = useWallet()
   const [isOpen, setIsOpen] = useState(false)
+  const [copied, setCopied] = useState(false)
   const dropdownRef = useRef<HTMLDivElement>(null)
+  const { name: qfName, refresh: refreshQFName } = useQFName(address || undefined)
+
+  const handleCopy = useCallback(async () => {
+    if (!address) return
+    await copyToClipboard(address)
+    setCopied(true)
+    setTimeout(() => setCopied(false), 1500)
+  }, [address])
 
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
@@ -32,10 +42,11 @@ export const WalletDropdown: React.FC = () => {
 
   if (!address) return null
 
-  // Display address based on wallet type
-  const displayAddress = walletType === 'evm'
+  // Display address based on wallet type, prefer QNS name
+  const truncated = walletType === 'evm'
     ? truncateAddress(address, 'evm')
     : truncateAddress(address, 'substrate')
+  const displayAddress = qfName || truncated
 
   return (
     <div className="relative" ref={dropdownRef}>
@@ -65,7 +76,7 @@ export const WalletDropdown: React.FC = () => {
           size={24} 
           className="rounded-full border-0"
         />
-        <span className="text-sm font-medium text-qx-text-primary">
+        <span className={cn("text-sm font-medium", qfName ? 'text-cyan-400' : 'text-qx-text-primary')}>
           {displayAddress}
         </span>
         <span className="text-xs text-qx-text-muted">
@@ -96,20 +107,49 @@ export const WalletDropdown: React.FC = () => {
           "bg-white dark:bg-[#0D0D0D] border border-gray-200 dark:border-gray-800"
         )}>
           <div className="p-4 space-y-3">
+            {/* QNS Name */}
+            {qfName && (
+              <div>
+                <p className="text-xs text-qx-text-muted mb-1">QNS Name</p>
+                <p className="text-sm font-semibold text-cyan-400">
+                  {qfName}
+                  <span className="text-cyan-400/70 ml-1">.qf</span>
+                </p>
+              </div>
+            )}
+
             {/* Address */}
             <div>
               <p className="text-xs text-qx-text-muted mb-1">
                 Address {walletType === 'evm' ? '(EVM)' : '(Substrate)'}
               </p>
-              <p className="text-sm font-mono break-all text-qx-text-secondary">
-                {address}
-              </p>
+              <div className="flex items-start gap-2">
+                <p className="text-sm font-mono break-all text-qx-text-secondary flex-1">
+                  {address}
+                </p>
+                <button
+                  onClick={handleCopy}
+                  className="flex-shrink-0 mt-0.5 p-1 text-qx-text-muted hover:text-cyan-400 transition-colors"
+                  title="Copy address"
+                >
+                  {copied ? (
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-qx-success">
+                      <polyline points="20 6 9 17 4 12" />
+                    </svg>
+                  ) : (
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                      <rect x="9" y="9" width="13" height="13" rx="2" ry="2" />
+                      <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" />
+                    </svg>
+                  )}
+                </button>
+              </div>
             </div>
 
             {/* Balance */}
             <div>
               <p className="text-xs text-qx-text-muted mb-1">Balance</p>
-              <p className="text-lg font-semibold text-cyan-600">
+              <p className="text-lg font-semibold text-cyan-400">
                 {formatBalance(balance)} QF
               </p>
             </div>

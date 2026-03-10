@@ -483,7 +483,7 @@ const PaidPodModal: React.FC<{
         {/* Your Balance */}
         <div className="mb-6">
           <p className="text-gray-400 text-sm">
-            Your Balance: <span className="text-white font-medium">{formatBal(balance)} QF</span>
+            Your Balance: <span className="text-white font-medium">{formatExact(balance)} QF</span>
           </p>
         </div>
         

@@ -76,12 +76,28 @@ export function usePods() {
         return
       }
       try {
-        // Single path: all pods cost 500 QF to create
-        const receipt = await cc.createPod(
-          name, description, minBalance, entryFee,
-          payoutWallet ? payoutWallet as `0x${string}` : undefined,
-          category
-        )
+        const CREATION_FEE = 500000000000000000000n // 500 QF
+        let receipt
+        if (entryFee > 0n) {
+          receipt = await cc.createPaidPod(
+            name,
+            isPublic,
+            minBalance,
+            entryFee,
+            CREATION_FEE,
+            category,
+            description
+          )
+        } else {
+          receipt = await cc.createPod(
+            name,
+            description,
+            minBalance,
+            entryFee,
+            payoutWallet ? payoutWallet as `0x${string}` : undefined,
+            category
+          )
+        }
         addToast('success', `Pod "${name}" created successfully`)
 
         await cc.waitForBlockSync(receipt.blockNumber)

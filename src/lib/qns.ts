@@ -37,6 +37,11 @@ const CACHE_TTL = 5 * 60 * 1000; // 5 minutes
 
 const ZERO_ADDRESS = '0x0000000000000000000000000000000000000000' as const;
 
+// Clear cache for a specific address (used after name registration)
+export function clearNameCache(address: string): void {
+  nameCache.delete(address.toLowerCase());
+}
+
 // Resolve .qf name → address
 export async function resolveQFName(name: string): Promise<string | null> {
   if (!name.endsWith('.qf')) return null;
