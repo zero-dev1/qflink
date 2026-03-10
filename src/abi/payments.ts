@@ -42,6 +42,16 @@ export const paymentsAbi = [
   },
   {
     type: 'function',
+    name: 'setAuthorized',
+    inputs: [
+      { name: '_auth', type: 'address', internalType: 'address' },
+      { name: '_status', type: 'bool', internalType: 'bool' },
+    ],
+    outputs: [],
+    stateMutability: 'nonpayable',
+  },
+  {
+    type: 'function',
     name: 'withdraw',
     inputs: [
       { name: 'amount', type: 'uint256', internalType: 'uint256' },
@@ -54,6 +64,15 @@ export const paymentsAbi = [
     name: 'withdrawToTreasury',
     inputs: [
       { name: 'amount', type: 'uint256', internalType: 'uint256' },
+    ],
+    outputs: [],
+    stateMutability: 'nonpayable',
+  },
+  {
+    type: 'function',
+    name: 'transferOwnership',
+    inputs: [
+      { name: 'newOwner', type: 'address', internalType: 'address' },
     ],
     outputs: [],
     stateMutability: 'nonpayable',
@@ -118,6 +137,17 @@ export const paymentsAbi = [
       { name: '', type: 'address', internalType: 'address' },
     ],
     stateMutability: 'view',
+  },
+
+  // Events
+  {
+    type: 'event',
+    name: 'OwnershipTransferred',
+    inputs: [
+      { name: 'previousOwner', type: 'address', indexed: true, internalType: 'address' },
+      { name: 'newOwner', type: 'address', indexed: true, internalType: 'address' },
+    ],
+    anonymous: false,
   },
 
   // Custom errors

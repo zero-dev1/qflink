@@ -27,6 +27,7 @@ import {
 
 import { getPublicClient, getWalletClient, CONTRACT_ADDRESSES, qfChain } from './viemClient'
 import { decodeContractError, getContractErrorMessage } from './contractErrors'
+import { getActiveLocalSession, getSessionWalletClient } from './sessionKeys'
 import { registryAbi } from '@/abi/registry'
 import { podsCreateAbi } from '@/abi/podsCreate'
 import { podsJoinAbi } from '@/abi/podsJoin'
@@ -40,6 +41,7 @@ import { podsGetPodAbi } from '@/abi/podsGetPod'
 import { podsCreatePaidAbi } from '@/abi/podsCreatePaid'
 import { paymentsAbi } from '@/abi/payments'
 import { messagesWriterAbi } from '@/abi/messagesWriter'
+import { messagesWriterV2Abi } from '@/abi/messagesWriterV2'
 import { messagesReaderAbi } from '@/abi/messagesReader'
 
 /** Convert a UTF-8 string to a right-padded bytes32 hex */
@@ -603,8 +605,8 @@ export async function setEntryFee(podId: number, fee: bigint) {
     const hash = await walletClient.writeContract({
       account,
       chain: qfChain,
-      address: CONTRACT_ADDRESSES.payments,
-      abi: paymentsAbi,
+      address: CONTRACT_ADDRESSES.podsAdmin,
+      abi: podsAdminAbi,
       functionName: 'setEntryFee',
       args: [BigInt(podId), fee],
     })
@@ -804,7 +806,7 @@ export async function createPaidPod(
   }
 }
 
-export async function joinPod(podId: number, fee: bigint = 0n) {
+export async function joinPod(podId: number, _fee: bigint = 0n) {
   const walletClient = await getWalletClient()
   const [account] = await walletClient.getAddresses()
   if (!account) throw new Error('No EVM account available. Please enable Ethereum accounts in your wallet.')
@@ -819,6 +821,8 @@ export async function joinPod(podId: number, fee: bigint = 0n) {
       functionName: 'hasPaid',
       args: [BigInt(podId), account],
     })
+    // Always fetch fresh fee from chain before joining (creator may have changed it)
+    const freshFee = await getEntryFee(podId)
     const hash = await walletClient.writeContract({
       account,
       chain: qfChain,
@@ -826,7 +830,7 @@ export async function joinPod(podId: number, fee: bigint = 0n) {
       abi: podsJoinAbi,
       functionName: 'joinPod',
       args: [BigInt(podId)],
-      value: alreadyPaid ? 0n : fee,
+      value: alreadyPaid ? 0n : freshFee,
     })
     return waitReceipt(hash, 'joinPod')
   } catch (err) {
@@ -860,10 +864,32 @@ export async function leavePod(podId: number) {
 }
 
 export async function sendPodMessage(podId: number, content: string) {
+  // Try session key first (no MetaMask popup)
+  const session = getActiveLocalSession()
+  if (session) {
+    const sessionClient = getSessionWalletClient()
+    if (sessionClient) {
+      try {
+        const hash = await sessionClient.writeContract({
+          chain: qfChain,
+          address: CONTRACT_ADDRESSES.messageWriterV2,
+          abi: messagesWriterV2Abi,
+          functionName: 'sendPodMessage',
+          args: [BigInt(podId), content],
+        })
+        return waitReceipt(hash, 'sendPodMessage')
+      } catch (err) {
+        const raw = decodeContractError(err)
+        console.error('[sendPodMessage:session] Raw contract error:', raw, err)
+        throw new Error(getContractErrorMessage(err))
+      }
+    }
+  }
+
+  // Fallback: MetaMask popup
   const walletClient = await getWalletClient()
   const [account] = await walletClient.getAddresses()
   if (!account) throw new Error('No EVM account available. Please enable Ethereum accounts in your wallet.')
-
 
   try {
     const hash = await walletClient.writeContract({
@@ -1004,6 +1030,164 @@ export async function setProFee(_amount: bigint) { throw new Error('Not availabl
 export async function setTreasury(_addr: `0x${string}`) { throw new Error('Not available in v1') }
 
 // ============================================================
+//  ADMIN — Payments contract
+// ============================================================
+
+export async function getPaymentsOwner(): Promise<string | null> {
+  try {
+    const client = getPublicClient()
+    const owner = await client.readContract({
+      address: CONTRACT_ADDRESSES.payments,
+      abi: paymentsAbi,
+      functionName: 'owner',
+    })
+    return (owner as string).toLowerCase()
+  } catch (err) {
+    console.error('[contractCalls.getPaymentsOwner] Full error:', err)
+    return null
+  }
+}
+
+export async function getPaymentsTreasury(): Promise<string | null> {
+  try {
+    const client = getPublicClient()
+    const treasury = await client.readContract({
+      address: CONTRACT_ADDRESSES.payments,
+      abi: paymentsAbi,
+      functionName: 'treasury',
+    })
+    return (treasury as string).toLowerCase()
+  } catch (err) {
+    console.error('[contractCalls.getPaymentsTreasury] Full error:', err)
+    return null
+  }
+}
+
+export async function getPaymentsBalance(): Promise<bigint> {
+  try {
+    const client = getPublicClient()
+    return await client.readContract({
+      address: CONTRACT_ADDRESSES.payments,
+      abi: paymentsAbi,
+      functionName: 'getContractBalance',
+    })
+  } catch (err) {
+    console.error('[contractCalls.getPaymentsBalance] Full error:', err)
+    return 0n
+  }
+}
+
+export async function setPaymentsTreasury(treasury: `0x${string}`) {
+  const walletClient = await getWalletClient()
+  const [account] = await walletClient.getAddresses()
+  if (!account) throw new Error('No EVM account available. Please enable Ethereum accounts in your wallet.')
+
+  try {
+    const hash = await walletClient.writeContract({
+      account,
+      chain: qfChain,
+      address: CONTRACT_ADDRESSES.payments,
+      abi: paymentsAbi,
+      functionName: 'setTreasury',
+      args: [treasury],
+    })
+    return waitReceipt(hash, 'setPaymentsTreasury')
+  } catch (err) {
+    const raw = decodeContractError(err)
+    console.error('[setPaymentsTreasury] Raw contract error:', raw, err)
+    throw new Error(getContractErrorMessage(err))
+  }
+}
+
+export async function setPaymentsAuthorized(auth: `0x${string}`, status: boolean) {
+  const walletClient = await getWalletClient()
+  const [account] = await walletClient.getAddresses()
+  if (!account) throw new Error('No EVM account available. Please enable Ethereum accounts in your wallet.')
+
+  try {
+    const hash = await walletClient.writeContract({
+      account,
+      chain: qfChain,
+      address: CONTRACT_ADDRESSES.payments,
+      abi: paymentsAbi,
+      functionName: 'setAuthorized',
+      args: [auth, status],
+    })
+    return waitReceipt(hash, 'setPaymentsAuthorized')
+  } catch (err) {
+    const raw = decodeContractError(err)
+    console.error('[setPaymentsAuthorized] Raw contract error:', raw, err)
+    throw new Error(getContractErrorMessage(err))
+  }
+}
+
+export async function withdrawPayments(amount: bigint) {
+  const walletClient = await getWalletClient()
+  const [account] = await walletClient.getAddresses()
+  if (!account) throw new Error('No EVM account available. Please enable Ethereum accounts in your wallet.')
+
+  try {
+    const hash = await walletClient.writeContract({
+      account,
+      chain: qfChain,
+      address: CONTRACT_ADDRESSES.payments,
+      abi: paymentsAbi,
+      functionName: 'withdraw',
+      args: [amount],
+    })
+    return waitReceipt(hash, 'withdrawPayments')
+  } catch (err) {
+    const raw = decodeContractError(err)
+    console.error('[withdrawPayments] Raw contract error:', raw, err)
+    throw new Error(getContractErrorMessage(err))
+  }
+}
+
+export async function withdrawPaymentsToTreasury(amount: bigint) {
+  const walletClient = await getWalletClient()
+  const [account] = await walletClient.getAddresses()
+  if (!account) throw new Error('No EVM account available. Please enable Ethereum accounts in your wallet.')
+
+  try {
+    const hash = await walletClient.writeContract({
+      account,
+      chain: qfChain,
+      address: CONTRACT_ADDRESSES.payments,
+      abi: paymentsAbi,
+      functionName: 'withdrawToTreasury',
+      args: [amount],
+    })
+    return waitReceipt(hash, 'withdrawPaymentsToTreasury')
+  } catch (err) {
+    const raw = decodeContractError(err)
+    console.error('[withdrawPaymentsToTreasury] Raw contract error:', raw, err)
+    throw new Error(getContractErrorMessage(err))
+  }
+}
+
+export async function transferPaymentsOwnership(newOwner: `0x${string}`) {
+  const walletClient = await getWalletClient()
+  const [account] = await walletClient.getAddresses()
+  if (!account) throw new Error('No EVM account available. Please enable Ethereum accounts in your wallet.')
+
+  try {
+    const hash = await walletClient.writeContract({
+      account,
+      chain: qfChain,
+      address: CONTRACT_ADDRESSES.payments,
+      abi: paymentsAbi,
+      functionName: 'transferOwnership',
+      args: [newOwner],
+    })
+    return waitReceipt(hash, 'transferPaymentsOwnership')
+  } catch (err) {
+    const raw = decodeContractError(err)
+    console.error('[transferPaymentsOwnership] Raw contract error:', raw, err)
+    throw new Error(getContractErrorMessage(err))
+  }
+}
+
+// ============================================================
 //  MESSAGES — reads
 // ============================================================
 
@@ -1088,10 +1272,32 @@ export async function sendMessage(
   recipient: `0x${string}`,
   content: string
 ) {
+  // Try session key first (no MetaMask popup)
+  const session = getActiveLocalSession()
+  if (session) {
+    const sessionClient = getSessionWalletClient()
+    if (sessionClient) {
+      try {
+        const hash = await sessionClient.writeContract({
+          chain: qfChain,
+          address: CONTRACT_ADDRESSES.messageWriterV2,
+          abi: messagesWriterV2Abi,
+          functionName: 'sendMessage',
+          args: [recipient, content],
+        })
+        return waitReceipt(hash, 'sendMessage')
+      } catch (err) {
+        const raw = decodeContractError(err)
+        console.error('[sendMessage:session] Raw contract error:', raw, err)
+        throw new Error(getContractErrorMessage(err))
+      }
+    }
+  }
+
+  // Fallback: MetaMask popup
   const walletClient = await getWalletClient()
   const [account] = await walletClient.getAddresses()
   if (!account) throw new Error('No EVM account available. Please enable Ethereum accounts in your wallet.')
-
 
   try {
     const hash = await walletClient.writeContract({
@@ -1115,32 +1321,50 @@ export async function sendMessage(
 // ============================================================
 
 export async function sendPodMessageChunked(podId: number, content: string) {
-  const walletClient = await getWalletClient()
-  const [account] = await walletClient.getAddresses()
-  if (!account) throw new Error('No EVM account available. Please enable Ethereum accounts in your wallet.')
+  // Resolve sender address: use session owner if active, otherwise wallet
+  const session = getActiveLocalSession()
+  let senderAddress: string
+
+  if (session) {
+    senderAddress = session.ownerAddress.toLowerCase()
+  } else {
+    const walletClient = await getWalletClient()
+    const [account] = await walletClient.getAddresses()
+    if (!account) throw new Error('No EVM account available. Please enable Ethereum accounts in your wallet.')
+    senderAddress = account.toLowerCase()
+  }
 
   await sendPodMessage(podId, content)
 
   return {
     id: `${podId}-${Date.now()}`,
     podId,
-    sender: account.toLowerCase(),
+    sender: senderAddress,
     content,
     timestamp: Date.now(),
   }
 }
 
 export async function sendDirectMessageChunked(recipient: `0x${string}`, content: Uint8Array) {
-  const walletClient = await getWalletClient()
-  const [account] = await walletClient.getAddresses()
-  if (!account) throw new Error('No EVM account available. Please enable Ethereum accounts in your wallet.')
+  // Resolve sender address: use session owner if active, otherwise wallet
+  const session = getActiveLocalSession()
+  let senderAddress: string
+
+  if (session) {
+    senderAddress = session.ownerAddress.toLowerCase()
+  } else {
+    const walletClient = await getWalletClient()
+    const [account] = await walletClient.getAddresses()
+    if (!account) throw new Error('No EVM account available. Please enable Ethereum accounts in your wallet.')
+    senderAddress = account.toLowerCase()
+  }
 
   const textContent = new TextDecoder().decode(content)
   await sendMessage(recipient, textContent)
 
   return {
-    id: `${account}-${Date.now()}`,
-    sender: account.toLowerCase(),
+    id: `${senderAddress}-${Date.now()}`,
+    sender: senderAddress,
     recipient: recipient.toLowerCase(),
     encryptedContent: content,
     decryptedContent: textContent,
