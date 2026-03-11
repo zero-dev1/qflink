@@ -3,7 +3,7 @@ import { Modal } from '@/components/ui/Modal'
 import { Input, Textarea } from '@/components/ui/Input'
 import { Button } from '@/components/ui/Button'
 import { isValidAddress } from '@/lib/utils'
-import { resolveQFName, isQFName } from '@/lib/qns'
+import { resolveQFName, isQFName, normalizeQFName } from '@/lib/qns'
 import { truncateAddress } from '@/lib/utils'
 
 interface NewMessageModalProps {
@@ -35,36 +35,42 @@ export const NewMessageModal: React.FC<NewMessageModalProps> = ({ isOpen, onClos
     const trimmed = recipient.trim()
     if (!trimmed) return
 
-    // Check if it's a .qf name
-    if (isQFName(trimmed)) {
-      setResolutionStatus('resolving')
-      
-      // Debounce the resolution
-      debounceTimerRef.current = setTimeout(async () => {
-        try {
-          const addr = await resolveQFName(trimmed)
-          if (addr) {
-            setResolvedAddress(addr)
-            setResolutionStatus('success')
-            setResolutionError('')
-          } else {
-            setResolvedAddress(null)
-            setResolutionStatus('error')
-            setResolutionError('Name not found')
-          }
-        } catch {
+    // Already a valid address - no resolution needed
+    if (isValidAddress(trimmed)) {
+      setResolvedAddress(trimmed)
+      setResolutionStatus('success')
+      return
+    }
+
+    // Use shared helper to normalize QF name (auto-append .qf if needed)
+    const nameToResolve = normalizeQFName(trimmed)
+    if (!nameToResolve) {
+      setResolutionStatus('error')
+      setResolutionError('Invalid input')
+      return
+    }
+    
+    setResolutionStatus('resolving')
+    
+    // Debounce the resolution
+    debounceTimerRef.current = setTimeout(async () => {
+      try {
+        const addr = await resolveQFName(nameToResolve)
+        if (addr) {
+          setResolvedAddress(addr)
+          setResolutionStatus('success')
+          setResolutionError('')
+        } else {
           setResolvedAddress(null)
           setResolutionStatus('error')
           setResolutionError('Name not found')
         }
-      }, 500)
-    } else {
-      // Not a .qf name, check if valid address
-      if (isValidAddress(trimmed)) {
-        setResolvedAddress(trimmed)
-        setResolutionStatus('success')
+      } catch {
+        setResolvedAddress(null)
+        setResolutionStatus('error')
+        setResolutionError('Name not found')
       }
-    }
+    }, 500)
 
     return () => {
       if (debounceTimerRef.current) {
@@ -81,15 +87,12 @@ export const NewMessageModal: React.FC<NewMessageModalProps> = ({ isOpen, onClos
     }
 
     // Determine the actual address to send to
-    let finalAddress = trimmedRecipient
-    if (isQFName(trimmedRecipient)) {
-      if (!resolvedAddress) {
-        setError('Please resolve the .qf name first')
-        return
-      }
-      finalAddress = resolvedAddress
-    } else if (!isValidAddress(trimmedRecipient)) {
-      setError('Invalid address format')
+    const finalAddress = trimmedRecipient.startsWith('0x')
+      ? trimmedRecipient
+      : resolvedAddress
+
+    if (!finalAddress || !finalAddress.startsWith('0x')) {
+      setError('Please enter a valid address or .qf name')
       return
     }
 
@@ -136,13 +139,13 @@ export const NewMessageModal: React.FC<NewMessageModalProps> = ({ isOpen, onClos
         {resolutionStatus === 'resolving' && (
           <p className="text-xs text-qx-text-muted">Resolving...</p>
         )}
-        {resolutionStatus === 'success' && resolvedAddress && isQFName(recipient.trim()) && (
-          <p className="text-xs text-green-600">
-            {recipient.trim()} → {truncateAddress(resolvedAddress, 'evm')}
+        {!recipient.trim().startsWith('0x') && resolvedAddress && (
+          <p className="text-sm text-[#0991B2]">
+            {recipient.trim()} → {resolvedAddress.slice(0, 6)}...{resolvedAddress.slice(-4)}
           </p>
         )}
         {resolutionStatus === 'error' && (
-          <p className="text-xs text-red-500">{resolutionError}</p>
+          <p className="text-xs text-red-500">Could not resolve name</p>
         )}
         <Textarea
           label="Message"

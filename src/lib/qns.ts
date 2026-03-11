@@ -1,8 +1,13 @@
 import { namehash } from 'viem/ens';
 import { getPublicClient } from './viemClient';
 
-// QNS Resolver address — update after each deploy
-const QNS_RESOLVER_ADDRESS = (import.meta.env.VITE_QNS_RESOLVER_ADDRESS || '0x0000000000000000000000000000000000000000') as `0x${string}`;
+// QNS Resolver address — from .env.development (VITE_QNS_RESOLVER_ADDRESS)
+const QNS_RESOLVER_ADDRESS = (import.meta.env.VITE_QNS_RESOLVER_ADDRESS || '') as `0x${string}`;
+
+// Warn if resolver address is not set
+if (!QNS_RESOLVER_ADDRESS) {
+  console.warn('[qns] QNS_RESOLVER_ADDRESS not set — .qf name resolution will not work');
+}
 
 const resolverABI = [
   {
@@ -88,6 +93,15 @@ export async function reverseResolve(address: string): Promise<string | null> {
 // Check if input is a .qf name
 export function isQFName(input: string): boolean {
   return input.endsWith('.qf') && input.length > 3;
+}
+
+// Normalize QF name input: auto-append .qf if needed
+// Returns the normalized name, or null if input is a raw address
+export function normalizeQFName(input: string): string | null {
+  const trimmed = input.trim().toLowerCase();
+  if (trimmed.startsWith('0x')) return null; // raw address, no resolution needed
+  if (trimmed.endsWith('.qf')) return trimmed;   // already has .qf
+  return `${trimmed}.qf`;                        // auto-append .qf
 }
 
 // Format display: show .qf name if available, otherwise truncated address

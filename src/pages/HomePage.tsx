@@ -7,6 +7,7 @@ import { useUIStore } from '@/stores/ui'
 import { useWalletStore } from '@/stores/wallet'
 import { Avatar } from '@/components/ui/Avatar'
 import { TokenGateBar } from '@/components/pods/TokenGateBar'
+import { GettingStartedBanner } from '@/components/ui/GettingStartedBanner'
 import { truncateAddress, formatTimestamp, formatCompactBalance, cn } from '@/lib/utils'
 import { reverseResolve } from '@/lib/qns'
 import type { DefaultPod, Pod } from '@/types'
@@ -83,19 +84,14 @@ const HomePage: React.FC = () => {
 
   if (!isConnected) {
     return (
-      <div className="flex flex-col items-center justify-center h-[calc(100vh-3.5rem)] text-center px-6">
-        <div className="mx-auto mb-6 flex h-20 w-20 items-center justify-center rounded-full bg-cyan-600/10">
-          <svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" className="text-cyan-600">
-            <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" strokeLinecap="round" strokeLinejoin="round" />
-          </svg>
-        </div>
-        <h2 className="font-display text-2xl font-bold text-qx-text-primary mb-2">Welcome to QFLink</h2>
-        <p className="text-sm text-qx-text-secondary mb-6 max-w-md">
-          Decentralized, wallet-gated messaging for QF holders. Connect your wallet to join exclusive Pods based on your holdings.
+      <div className="flex flex-col items-center justify-center py-20 text-center px-6">
+        <h3 className="text-xl font-semibold text-gray-900 dark:text-white mb-2">Welcome to QFLink</h3>
+        <p className="text-gray-600 dark:text-gray-400 mb-6 max-w-md">
+          On-chain communities with permanent messages, encrypted DMs, and zero platform risk.
         </p>
         <button
           onClick={() => setShowConnectWallet(true)}
-          className="bg-cyan-600 px-6 py-3 text-sm font-semibold text-white hover:bg-cyan-700 transition-colors"
+          className="bg-[#0991B2] text-white font-semibold px-6 py-3 hover:bg-[#0880A0] transition-colors"
         >
           Connect Wallet
         </button>
@@ -105,6 +101,9 @@ const HomePage: React.FC = () => {
 
   return (
     <div className="p-6 md:p-8 space-y-8 max-w-5xl mx-auto">
+      {/* Getting Started Banner - only shows when user has no pods */}
+      <GettingStartedBanner />
+
       {/* Your Pods */}
       <section>
         <h2 className="font-display text-xl font-semibold text-qx-text-primary mb-4">Your Pods</h2>
@@ -114,20 +113,10 @@ const HomePage: React.FC = () => {
             <p className="text-sm text-qx-text-secondary">Loading pods...</p>
           </div>
         ) : allDisplayPods.length === 0 ? (
-          <div className="border border-gray-200 dark:border-gray-800 bg-transparent p-8 text-center">
-            <p className="text-sm text-qx-text-secondary mb-4">
-              Welcome to QFLink — your on-chain messaging hub. Browse and join pods to start chatting with communities.
+          <div className="border border-gray-200 dark:border-gray-800 bg-transparent p-8">
+            <p className="text-sm text-qx-text-secondary">
+              No pods yet. Join a community from Explore or create your own.
             </p>
-            <button
-              onClick={() => navigate('/explore')}
-              className="inline-flex items-center gap-2 px-4 py-2 bg-cyan-600 hover:bg-cyan-500 text-white text-sm font-medium rounded-lg transition-colors"
-            >
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                <circle cx="11" cy="11" r="8" />
-                <path d="m21 21-4.35-4.35" />
-              </svg>
-              Explore Pods
-            </button>
           </div>
         ) : (
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
@@ -152,9 +141,9 @@ const HomePage: React.FC = () => {
         <h2 className="font-display text-xl font-semibold text-qx-text-primary mb-4">Direct</h2>
 
         {conversations.length === 0 ? (
-          <div className="border border-gray-200 dark:border-gray-800 bg-transparent p-8 text-center">
+          <div className="border border-gray-200 dark:border-gray-800 bg-transparent p-8">
             <p className="text-sm text-qx-text-secondary">
-              No conversations yet. Find someone in a pod and start chatting!
+              No conversations yet. Tap + in Direct to start chatting.
             </p>
           </div>
         ) : (

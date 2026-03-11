@@ -5,6 +5,7 @@ import { usePods } from '@/hooks/usePods'
 import { CategoryPills } from '@/components/ui/CategoryPills'
 import { SkeletonCard } from '@/components/ui/Skeleton'
 import { Button } from '@/components/ui/Button'
+
 import { POD_CATEGORIES } from '@/types'
 import type { Pod, DefaultPod, CustomPod } from '@/types'
 import { cn, formatCompactBalance, formatExactAmount } from '@/lib/utils'
@@ -178,7 +179,7 @@ const ExplorePage: React.FC = () => {
 
   return (
     <div className="p-6 md:p-8 max-w-5xl mx-auto space-y-6">
-      <div className="flex items-start justify-between gap-4">
+      <div className="flex items-start justify-between gap-4" id="explore-pods">
         <div>
           <h1 className="font-display text-2xl font-semibold text-qx-text-primary">Explore Pods</h1>
           <p className="text-sm text-qx-text-secondary mt-1">

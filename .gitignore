@@ -9,3 +9,5 @@ contracts/*/target/
 .vite/
 .env.production
 .env.local
+.env.development
+vercel-env.txt

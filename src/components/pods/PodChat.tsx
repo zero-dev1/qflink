@@ -3,12 +3,15 @@ import { useNavigate } from 'react-router-dom'
 import { PodInfo } from './PodInfo'
 import { MessageInput } from '@/components/messages/MessageInput'
 import { ProgressBar } from '@/components/ui/ProgressBar'
+import { Modal } from '@/components/ui/Modal'
+import { Avatar } from '@/components/ui/Avatar'
 import { truncateAddress, formatMessageTime, formatBalance } from '@/lib/utils'
 import { TokenGateBar } from './TokenGateBar'
-import { getProfile } from '@/lib/contractCalls'
+import * as cc from '@/lib/contractCalls'
 import { reverseResolve } from '@/lib/qns'
 import { usePodsStore } from '@/stores/pods'
 import { useWalletStore } from '@/stores/wallet'
+import { useUIStore } from '@/stores/ui'
 import type { Pod, PodMessage, DefaultPod, CustomPod } from '@/types'
 import { cn } from '@/lib/utils'
 
@@ -32,6 +35,13 @@ const formatHolderReq = (minBal: bigint): string => {
   return `${whole}+ Holders`
 }
 
+// Type for dropdown menu state
+interface DropdownState {
+  isOpen: boolean
+  selectedMember: string | null
+  position: { top: number; left: number } | null
+}
+
 export const PodChat: React.FC<PodChatProps> = ({
   pod,
   messages,
@@ -48,11 +58,31 @@ export const PodChat: React.FC<PodChatProps> = ({
   const chatContainerRef = useRef<HTMLDivElement>(null)
   const isNearBottom = useRef(true)
   const navigate = useNavigate()
+  const addToast = useUIStore((s) => s.addToast)
   const [senderProfiles, setSenderProfiles] = useState<Map<string, string>>(new Map())
   const [senderQFNames, setSenderQFNames] = useState<Map<string, string>>(new Map())
   const profilesFetchedRef = useRef<Set<string>>(new Set())
   const qfNamesFetchedRef = useRef<Set<string>>(new Set())
   const [showPodInfo, setShowPodInfo] = useState(false)
+  const [showMembersModal, setShowMembersModal] = useState(false)
+  
+  // Member info for mobile pod info (creator, mods, banned)
+  const [memberProfiles, setMemberProfiles] = useState<Map<string, string>>(new Map())
+  const [memberQFNames, setMemberQFNames] = useState<Map<string, string>>(new Map())
+  const [moderators, setModerators] = useState<string[]>([])
+  const [bannedStatus, setBannedStatus] = useState<Map<string, boolean>>(new Map())
+  const [modStatus, setModStatus] = useState<Map<string, boolean>>(new Map())
+  const [creatorQFName, setCreatorQFName] = useState<string | null>(null)
+  const [memberSearch, setMemberSearch] = useState('')
+  
+  // Dropdown menu state for mobile member actions
+  const [dropdown, setDropdown] = useState<DropdownState>({
+    isOpen: false,
+    selectedMember: null,
+    position: null,
+  })
+  const dropdownRef = useRef<HTMLDivElement>(null)
+  const dropdownButtonRef = useRef<HTMLButtonElement>(null)
   
   const myPods = usePodsStore((s) => s.myPods)
   const evmAddress = useWalletStore((s) => s.evmAddress)
@@ -104,7 +134,7 @@ export const PodChat: React.FC<PodChatProps> = ({
         
         // Fetch both profile and QNS name in parallel
         try {
-          const profile = await getProfile(addr as `0x${string}`)
+          const profile = await cc.getProfile(addr as `0x${string}`)
           if (profile?.displayName) {
             newProfiles.set(lowerAddr, profile.displayName)
           }
@@ -152,6 +182,245 @@ export const PodChat: React.FC<PodChatProps> = ({
   }, [messages])
 
   const activeMemberCount = uniqueSenders.length
+
+  // Resolve creator's QNS name for mobile pod info
+  useEffect(() => {
+    if (!isCustom || !customPod?.creator) return
+    
+    let cancelled = false
+    const resolveCreator = async () => {
+      try {
+        const qfName = await reverseResolve(customPod.creator!)
+        if (!cancelled && qfName) {
+          setCreatorQFName(qfName)
+        }
+      } catch {}
+    }
+    
+    resolveCreator()
+    return () => { cancelled = true }
+  }, [isCustom, customPod?.creator])
+
+  // Fetch moderators and banned status for mobile pod info
+  useEffect(() => {
+    if (!isCustom || !customPod || !evmAddress) return
+    if (uniqueSenders.length === 0) return
+    
+    let cancelled = false
+    
+    const fetchStatus = async () => {
+      const banned = new Map<string, boolean>()
+      const mods = new Map<string, boolean>()
+      
+      // Check first 20 members to avoid overwhelming RPC
+      const sendersToCheck = uniqueSenders.slice(0, 20)
+      
+      await Promise.all(
+        sendersToCheck.map(async (addr) => {
+          try {
+            const [isBannedStatus, isModStatus] = await Promise.all([
+              cc.isBanned(pod.id, addr as `0x${string}`),
+              cc.isMod(pod.id, addr as `0x${string}`)
+            ])
+            banned.set(addr.toLowerCase(), isBannedStatus)
+            mods.set(addr.toLowerCase(), isModStatus)
+          } catch {
+            banned.set(addr.toLowerCase(), false)
+            mods.set(addr.toLowerCase(), false)
+          }
+        })
+      )
+      
+      if (!cancelled) {
+        setBannedStatus(banned)
+        setModStatus(mods)
+        const modsFromStatus = Array.from(mods.entries())
+          .filter(([_, isMod]) => isMod)
+          .map(([addr, _]) => addr.toLowerCase())
+        setModerators(modsFromStatus)
+      }
+    }
+    
+    fetchStatus()
+    return () => { cancelled = true }
+  }, [pod.id, isCustom, customPod, uniqueSenders.length, evmAddress])
+
+  // Resolve QNS names and profiles for ALL unique senders (not just mods)
+  useEffect(() => {
+    if (uniqueSenders.length === 0) return
+    
+    let cancelled = false
+    
+    const resolveMemberNames = async () => {
+      const qfNames = new Map<string, string>(memberQFNames)
+      const profiles = new Map<string, string>(memberProfiles)
+      
+      // Resolve names for all unique senders (up to 50 to avoid overwhelming RPC)
+      const sendersToResolve = uniqueSenders.slice(0, 50)
+      
+      await Promise.all(
+        sendersToResolve.map(async (addr) => {
+          const lowerAddr = addr.toLowerCase()
+          
+          // Skip if already resolved
+          if (qfNames.has(lowerAddr) && profiles.has(lowerAddr)) return
+          
+          try {
+            // Fetch QNS name
+            const qfName = await reverseResolve(addr)
+            if (qfName) {
+              qfNames.set(lowerAddr, qfName)
+            }
+          } catch {}
+          
+          try {
+            // Fetch profile
+            const profile = await cc.getProfile(addr as `0x${string}`)
+            if (profile?.displayName) {
+              profiles.set(lowerAddr, profile.displayName)
+            }
+          } catch {}
+        })
+      )
+      
+      if (!cancelled) {
+        setMemberQFNames(qfNames)
+        setMemberProfiles(profiles)
+      }
+    }
+    
+    resolveMemberNames()
+    return () => { cancelled = true }
+  }, [uniqueSenders])
+
+  // Click outside to close dropdown
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (
+        dropdownRef.current &&
+        !dropdownRef.current.contains(event.target as Node) &&
+        dropdownButtonRef.current &&
+        !dropdownButtonRef.current.contains(event.target as Node)
+      ) {
+        setDropdown({ isOpen: false, selectedMember: null, position: null })
+      }
+    }
+
+    if (dropdown.isOpen) {
+      document.addEventListener('mousedown', handleClickOutside)
+    }
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside)
+    }
+  }, [dropdown.isOpen])
+
+  // Check if current user is creator
+  const isCreator = isCustom && customPod?.creator?.toLowerCase() === evmAddress?.toLowerCase()
+  
+  // Check if current user is a mod
+  const isCurrentUserMod = evmAddress ? modStatus.get(evmAddress.toLowerCase()) || false : false
+
+  // Handle opening dropdown
+  const handleOpenDropdown = (addr: string, event: React.MouseEvent<HTMLButtonElement>) => {
+    const rect = event.currentTarget.getBoundingClientRect()
+    setDropdown({
+      isOpen: true,
+      selectedMember: addr,
+      position: {
+        top: rect.bottom + window.scrollY,
+        left: rect.left + window.scrollX - 120, // Align to left of button, dropdown width is ~120px
+      },
+    })
+  }
+
+  // Handle close dropdown
+  const handleCloseDropdown = () => {
+    setDropdown({ isOpen: false, selectedMember: null, position: null })
+  }
+
+  // Handle send message action
+  const handleSendMessage = (addr: string) => {
+    navigate(`/direct/${addr}`)
+    setShowMembersModal(false)
+    handleCloseDropdown()
+  }
+
+  // Handle add mod action
+  const handleAddMod = async (addr: string) => {
+    if (!isCustom) return
+    
+    // Check if pod is free
+    const isFreePod = (customPod?.tier === 'free' || (pod as CustomPod).entryFee === 0n)
+    
+    if (isFreePod) {
+      addToast('error', "Free pods don't support additional moderators. Create a Pro pod for up to 3 mods.")
+      handleCloseDropdown()
+      return
+    }
+    
+    try {
+      await cc.addMod(Number(pod.id), addr as `0x${string}`)
+      addToast('success', 'Moderator added')
+      
+      // Refresh status
+      const isModStatus = await cc.isMod(Number(pod.id), addr as `0x${string}`)
+      setModStatus(prev => new Map(prev).set(addr.toLowerCase(), isModStatus))
+      
+      if (onRefreshMembers) {
+        onRefreshMembers()
+      }
+    } catch (err) {
+      addToast('error', err instanceof Error ? err.message : 'Failed to add moderator')
+    }
+    handleCloseDropdown()
+  }
+
+  // Handle remove mod action
+  const handleRemoveMod = async (addr: string) => {
+    if (!isCustom) return
+    
+    try {
+      await cc.removeMod(Number(pod.id), addr as `0x${string}`)
+      addToast('success', 'Moderator removed')
+      
+      // Refresh status
+      const isModStatus = await cc.isMod(Number(pod.id), addr as `0x${string}`)
+      setModStatus(prev => new Map(prev).set(addr.toLowerCase(), isModStatus))
+      
+      if (onRefreshMembers) {
+        onRefreshMembers()
+      }
+    } catch (err) {
+      addToast('error', err instanceof Error ? err.message : 'Failed to remove moderator')
+    }
+    handleCloseDropdown()
+  }
+
+  // Handle ban action
+  const handleBan = async (addr: string) => {
+    const isBanned = bannedStatus.get(addr.toLowerCase())
+    
+    try {
+      if (isBanned) {
+        await cc.unbanMember(Number(pod.id), addr as `0x${string}`)
+        addToast('success', 'Member unbanned')
+      } else {
+        await cc.banMember(Number(pod.id), addr as `0x${string}`)
+        addToast('success', 'Member banned')
+      }
+      
+      // Refresh status
+      const isBannedStatus = await cc.isBanned(Number(pod.id), addr as `0x${string}`)
+      setBannedStatus(prev => new Map(prev).set(addr.toLowerCase(), isBannedStatus))
+      
+      if (onRefreshMembers) {
+        onRefreshMembers()
+      }
+    } catch (err) {
+      addToast('error', err instanceof Error ? err.message : 'Failed to ban/unban member')
+    }
+    handleCloseDropdown()
+  }
 
   // Mobile pod info overlay
   if (showPodInfo) {
@@ -213,16 +482,89 @@ export const PodChat: React.FC<PodChatProps> = ({
             )}
           </div>
 
-          {/* Members */}
+          {/* Members with View Members button */}
           <div>
             <h4 className="text-sm font-semibold text-qx-text-primary mb-2">Members</h4>
-            <p className="text-sm text-qx-text-secondary">
+            <p className="text-sm text-qx-text-secondary mb-3">
               Open to qualified holders
               {activeMemberCount > 0 && (
                 <span className="ml-1 text-cyan-600">({activeMemberCount} active)</span>
               )}
             </p>
+            <button
+              onClick={() => {
+                setShowPodInfo(false)
+                setShowMembersModal(true)
+              }}
+              className="flex w-full items-center justify-center gap-2 rounded-lg border border-qx-border-prominent px-3 py-2.5 text-sm font-medium text-qx-text-primary transition-colors hover:bg-qx-elevated"
+            >
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" />
+                <circle cx="9" cy="7" r="4" />
+                <path d="M23 21v-2a4 4 0 0 0-3-3.87" />
+                <path d="M16 3.13a4 4 0 0 1 0 7.75" />
+              </svg>
+              View Members
+            </button>
           </div>
+
+          {/* Creator with QNS name */}
+          {isCustom && customPod?.creator && (
+            <div>
+              <h4 className="text-sm font-semibold text-qx-text-primary mb-2">Creator</h4>
+              <p className="text-sm text-qx-text-secondary">
+                {creatorQFName || truncateAddress(customPod.creator, 'evm', 6)}
+              </p>
+            </div>
+          )}
+
+          {/* Moderators */}
+          {isCustom && (
+            <div>
+              <h4 className="text-sm font-semibold text-qx-text-primary mb-2">Moderators</h4>
+              {moderators.filter(m => m.toLowerCase() !== customPod?.creator?.toLowerCase()).length === 0 ? (
+                <p className="text-sm text-qx-text-muted">No moderators</p>
+              ) : (
+                <div className="space-y-1">
+                  {moderators
+                    .filter(m => m.toLowerCase() !== customPod?.creator?.toLowerCase())
+                    .map((modAddr) => {
+                      const qfName = memberQFNames.get(modAddr.toLowerCase())
+                      const profileName = memberProfiles.get(modAddr)
+                      return (
+                        <p key={modAddr} className="text-sm text-qx-text-secondary">
+                          {qfName || profileName || truncateAddress(modAddr, 'evm', 6)}
+                        </p>
+                      )
+                    })}
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* Banned Users */}
+          {isCustom && (
+            <div>
+              <h4 className="text-sm font-semibold text-qx-text-primary mb-2">Banned Users</h4>
+              {Array.from(bannedStatus.entries()).filter(([_, isBanned]) => isBanned).length === 0 ? (
+                <p className="text-sm text-qx-text-muted">No banned users</p>
+              ) : (
+                <div className="space-y-1">
+                  {Array.from(bannedStatus.entries())
+                    .filter(([_, isBanned]) => isBanned)
+                    .map(([addr, _]) => {
+                      const qfName = memberQFNames.get(addr)
+                      const profileName = memberProfiles.get(addr)
+                      return (
+                        <p key={addr} className="text-sm text-qx-text-secondary">
+                          {qfName || profileName || truncateAddress(addr, 'evm', 6)}
+                        </p>
+                      )
+                    })}
+                </div>
+              )}
+            </div>
+          )}
         </div>
 
         {/* Actions */}
@@ -430,6 +772,159 @@ export const PodChat: React.FC<PodChatProps> = ({
           onRefreshMembers={onRefreshMembers}
         />
       </div>
+
+      {/* View Members Modal (mobile) */}
+      <Modal
+        isOpen={showMembersModal}
+        onClose={() => {
+          setShowMembersModal(false)
+          setMemberSearch('')
+          handleCloseDropdown()
+        }}
+        title={`${pod.name} Members (${activeMemberCount} active)`}
+      >
+        <div className="space-y-3">
+          <div className="relative">
+            <svg
+              width="14" height="14"
+              viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"
+              strokeLinecap="round" strokeLinejoin="round"
+              className="absolute left-3 top-1/2 -translate-y-1/2 text-qx-text-muted"
+            >
+              <circle cx="11" cy="11" r="8" />
+              <line x1="21" y1="21" x2="16.65" y2="16.65" />
+            </svg>
+            <input
+              type="text"
+              placeholder="Search members..."
+              value={memberSearch}
+              onChange={(e) => setMemberSearch(e.target.value)}
+              className="w-full border border-qx-border-prominent bg-qx-elevated pl-8 pr-3 py-2 text-sm text-qx-text-primary placeholder:text-qx-text-muted focus:border-cyan-600 focus:outline-none focus:ring-1 focus:ring-cyan-600"
+            />
+          </div>
+
+          <div className="max-h-72 overflow-y-auto divide-y divide-gray-200 dark:divide-gray-800 border border-gray-200 dark:border-gray-800">
+            {uniqueSenders
+              .filter((addr) => addr.toLowerCase().includes(memberSearch.toLowerCase()))
+              .length === 0 ? (
+              <div className="flex items-center justify-center py-8">
+                <p className="text-sm text-qx-text-muted">No members found.</p>
+              </div>
+            ) : (
+              uniqueSenders
+                .filter((addr) => addr.toLowerCase().includes(memberSearch.toLowerCase()))
+                .map((addr) => {
+                  const qfName = memberQFNames.get(addr.toLowerCase())
+                  const profileName = memberProfiles.get(addr)
+                  const isCurrentUser = addr.toLowerCase() === evmAddress?.toLowerCase()
+                  const isMod = modStatus.get(addr.toLowerCase()) || false
+                  const isBanned = bannedStatus.get(addr.toLowerCase()) || false
+                  
+                  // Determine which actions are available
+                  const canShowActions = !isCurrentUser
+                  const canAddMod = isCreator && !isMod
+                  const canBan = (isCreator || isCurrentUserMod) && !isCurrentUser
+                  
+                  return (
+                    <div key={addr} className="flex items-center gap-3 px-3 py-2.5 hover:bg-qx-elevated relative">
+                      <Avatar address={addr} size="sm" />
+                      <div className="flex-1 min-w-0">
+                        {qfName || profileName ? (
+                          <p className={`text-sm font-medium truncate ${qfName ? 'text-cyan-600' : 'text-qx-text-primary'}`}>
+                            {qfName || profileName}
+                          </p>
+                        ) : (
+                          <p className="text-sm font-medium text-qx-text-primary font-mono">
+                            {truncateAddress(addr, 'evm', 8)}
+                          </p>
+                        )}
+                        {isCurrentUser && (
+                          <p className="text-xs text-cyan-600">You</p>
+                        )}
+                        {isMod && !isCurrentUser && (
+                          <p className="text-xs text-qx-text-muted">Moderator</p>
+                        )}
+                        {isBanned && (
+                          <p className="text-xs text-red-500">Banned</p>
+                        )}
+                      </div>
+                      
+                      {/* Three-dot menu button */}
+                      {canShowActions && (
+                        <button
+                          ref={dropdown.selectedMember === addr ? dropdownButtonRef : undefined}
+                          onClick={(e) => handleOpenDropdown(addr, e)}
+                          className="flex h-8 w-8 items-center justify-center text-gray-400 hover:text-white transition-colors"
+                          aria-label="Member actions"
+                        >
+                          <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+                            <circle cx="12" cy="5" r="2" />
+                            <circle cx="12" cy="12" r="2" />
+                            <circle cx="12" cy="19" r="2" />
+                          </svg>
+                        </button>
+                      )}
+                    </div>
+                  )
+                })
+            )}
+          </div>
+
+          <p className="text-xs text-qx-text-muted text-center">
+            Showing {uniqueSenders.filter((addr) => addr.toLowerCase().includes(memberSearch.toLowerCase())).length} of {activeMemberCount} active members
+          </p>
+        </div>
+      </Modal>
+
+      {/* Dropdown Menu - Portal to body to avoid clipping */}
+      {dropdown.isOpen && dropdown.selectedMember && dropdown.position && (
+        <div
+          ref={dropdownRef}
+          className="fixed z-[100] bg-[#0d0d14] border border-gray-800 py-1"
+          style={{
+            top: dropdown.position.top,
+            left: Math.max(8, dropdown.position.left), // Prevent going off-screen on left
+          }}
+        >
+          {/* Send Message - always shown for other users */}
+          <button
+            onClick={() => handleSendMessage(dropdown.selectedMember!)}
+            className="w-full text-left px-4 py-2 text-sm text-white hover:bg-[#0991B2]/10 transition-colors"
+          >
+            Send Message
+          </button>
+          
+          {/* Add Mod - only for creator, only if target is not already mod */}
+          {isCreator && !modStatus.get(dropdown.selectedMember!.toLowerCase()) && (
+            <button
+              onClick={() => handleAddMod(dropdown.selectedMember!)}
+              className="w-full text-left px-4 py-2 text-sm text-white hover:bg-[#0991B2]/10 transition-colors"
+            >
+              Add Mod
+            </button>
+          )}
+          
+          {/* Remove Mod - only for creator, only if target is mod */}
+          {isCreator && modStatus.get(dropdown.selectedMember!.toLowerCase()) && (
+            <button
+              onClick={() => handleRemoveMod(dropdown.selectedMember!)}
+              className="w-full text-left px-4 py-2 text-sm text-orange-500 hover:bg-[#0991B2]/10 transition-colors"
+            >
+              Remove Mod
+            </button>
+          )}
+          
+          {/* Ban/Unban - for creator or mod */}
+          {(isCreator || isCurrentUserMod) && (
+            <button
+              onClick={() => handleBan(dropdown.selectedMember!)}
+              className="w-full text-left px-4 py-2 text-sm text-red-500 hover:bg-[#0991B2]/10 transition-colors"
+            >
+              {bannedStatus.get(dropdown.selectedMember!.toLowerCase()) ? 'Unban Member' : 'Ban Member'}
+            </button>
+          )}
+        </div>
+      )}
     </div>
   )
 }

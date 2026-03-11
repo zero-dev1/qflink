@@ -70,14 +70,10 @@ contract QFLinkPodsCreate {
         if (msg.value != CREATION_FEE) revert InsufficientCreationFee();
         
         // 1. Create pod in storage (tier 1 = Pro equivalent, supports 3 mods)
+        // createPodFull already adds creator as member and mod, sets counts to 1
         uint64 podId = storage_.createPodFull(name, msg.sender, isPublic, threshold, 1, category, description);
         
-        // 2. Auto-add creator as member and mod
-        storage_.addMember(podId, msg.sender);
-        storage_.setMod(podId, msg.sender, true);
-        storage_.incrementModCount(podId);
-        
-        // 3. Distribute creation fee: 95% to treasury, 5% to burn address
+        // 2. Distribute creation fee: 95% to treasury, 5% to burn address
         uint256 treasuryAmount = (msg.value * TREASURY_SHARE) / SHARE_DENOMINATOR;
         uint256 burnAmount = msg.value - treasuryAmount;
         

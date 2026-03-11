@@ -160,6 +160,53 @@ export const PodInfo: React.FC<PodInfoProps> = ({
     return () => { cancelled = true }
   }, [showMembersModal])
 
+  // FIX: Resolve creator's QNS name on mount (creator may not be in uniqueSenders)
+  useEffect(() => {
+    if (!isCustom || !customPod?.creator) return
+    
+    let cancelled = false
+    const resolveCreatorName = async () => {
+      const creatorLower = customPod.creator!.toLowerCase()
+      
+      // Skip if already resolved
+      if (memberQFNames.has(creatorLower) || memberProfiles.has(creatorLower)) {
+        return
+      }
+      
+      try {
+        const { reverseResolve } = await import('@/lib/qns')
+        const [profile, qfName] = await Promise.all([
+          cc.getProfile(customPod.creator as `0x${string}`),
+          reverseResolve(customPod.creator!)
+        ])
+        
+        if (!cancelled) {
+          setMemberProfiles(prev => {
+            if (profile?.displayName) {
+              const next = new Map(prev)
+              next.set(customPod.creator!, profile.displayName)
+              return next
+            }
+            return prev
+          })
+          setMemberQFNames(prev => {
+            if (qfName) {
+              const next = new Map(prev)
+              next.set(creatorLower, qfName)
+              return next
+            }
+            return prev
+          })
+        }
+      } catch {
+        // Ignore lookup errors
+      }
+    }
+    
+    resolveCreatorName()
+    return () => { cancelled = true }
+  }, [isCustom, customPod?.creator])
+
   const filteredMembers = uniqueSenders
     .filter((addr) => addr.toLowerCase().includes(memberSearch.toLowerCase()))
     .slice(0, visibleCount)

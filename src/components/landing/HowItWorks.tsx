@@ -33,7 +33,7 @@ export const HowItWorks: React.FC = () => {
     {
       number: '01',
       title: 'Connect Wallet',
-      description: 'Link your Talisman or SubWallet. Your Substrate address is your identity. No email, no password, no account creation.'
+      description: 'Connect your MetaMask wallet. Your EVM address is your identity. No email, no password, no account creation.'
     },
     {
       number: '02',

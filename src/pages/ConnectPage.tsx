@@ -5,22 +5,15 @@ import { useProfileStore } from '@/stores/profile'
 import { useUIStore } from '@/stores/ui'
 import { truncateAddress } from '@/lib/utils'
 import { deriveEncryptionKeypair } from '@/lib/encryption'
-import { ensureAccountMapped, getApi } from '@/lib/chain'
+import { ensureAccountMapped } from '@/lib/chain'
 import { getProfile } from '@/lib/contractCalls'
 import { Spinner } from '@/components/ui/Spinner'
 import { QFLinkWordmark } from '@/components/QFLinkWordmark'
-import type { InjectedAccountWithMeta } from '@/lib/chain'
+
 
 type Step = 1 | 2 | 3
 
-// Extension wallet options
-const SUBSTRATE_WALLETS = [
-  { id: 'talisman', name: 'Talisman', icon: '🦊', url: 'https://talisman.xyz' },
-  { id: 'polkadot-js', name: 'Polkadot.js', icon: '🔴', url: 'https://polkadot.js.org/extension/' },
-  { id: 'subwallet', name: 'SubWallet', icon: '📱', url: 'https://subwallet.app' },
-] as const
-
-type WalletId = typeof SUBSTRATE_WALLETS[number]['id'] | 'metamask'
+type WalletId = 'metamask' | null
 
 const ConnectPage: React.FC = () => {
   const navigate = useNavigate()
@@ -29,7 +22,7 @@ const ConnectPage: React.FC = () => {
   const [isRegistering, setIsRegistering] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [loadingWallet, setLoadingWallet] = useState<WalletId | null>(null)
-  const [showWalletOptions, setShowWalletOptions] = useState(false)
+  const [metaMaskNotInstalled, setMetaMaskNotInstalled] = useState(false)
 
   const isConnected = useWalletStore((s) => s.isConnected)
   const address = useWalletStore((s) => s.address)
@@ -101,10 +94,17 @@ const ConnectPage: React.FC = () => {
     }
   }, [profile.isRegistered, isConnected, navigate, location])
 
-  // Handle wallet selection (show options)
-  const handleConnectClick = () => {
-    setShowWalletOptions(true)
+  // Handle wallet connection (direct MetaMask)
+  const handleConnectClick = async () => {
     setError(null)
+    
+    // Check if MetaMask is installed
+    if (!window.ethereum) {
+      setMetaMaskNotInstalled(true)
+      return
+    }
+    
+    await handleMetaMaskConnect()
   }
 
   // Handle MetaMask connection
@@ -122,41 +122,7 @@ const ConnectPage: React.FC = () => {
     }
   }
 
-  // Handle Substrate wallet connection
-  const handleExtensionConnect = async (wallet: typeof SUBSTRATE_WALLETS[number]) => {
-    setLoadingWallet(wallet.id)
-    setError(null)
-    try {
-      const { web3Enable, web3Accounts } = await import('@polkadot/extension-dapp')
-      const extensions = await web3Enable('QFLink')
-      if (extensions.length === 0) {
-        setError(`No wallet extension found. Please install ${wallet.name}.`)
-        return
-      }
 
-      const accounts = await web3Accounts()
-      if (accounts.length === 0) {
-        setError(`No accounts found. Please create an account in ${wallet.name}.`)
-        return
-      }
-
-      // Use first account for simplicity in onboarding
-      const account = accounts[0]
-      await connectStore(account as InjectedAccountWithMeta)
-      addToast('success', 'Wallet connected successfully')
-    } catch (err: any) {
-      const msg: string = err?.message || String(err) || ''
-      if (msg === 'INSUFFICIENT_BALANCE_FOR_MAPPING' || msg.includes('1010') || msg.includes('Inability to pay') || msg.includes('insufficient')) {
-        setError('Your wallet needs QF tokens to get started. Please fund your wallet and try again.')
-      } else if (msg.toLowerCase().includes('accountunmapped') || msg.toLowerCase().includes('unmapped')) {
-        setError('Account setup failed. Please try again.')
-      } else {
-        setError(msg || 'Failed to connect wallet')
-      }
-    } finally {
-      setLoadingWallet(null)
-    }
-  }
 
   // Handle auto-registration (no display name input required)
   const handleAutoRegister = async () => {
@@ -229,46 +195,8 @@ const ConnectPage: React.FC = () => {
       console.error('Registration failed:', err)
       const msg: string = err?.message || String(err) || ''
 
-      // FIX 2: AccountUnmapped auto-recovery
-      if (msg.toLowerCase().includes('accountunmapped') || msg.toLowerCase().includes('account_unmapped') || msg.toLowerCase().includes('unmapped')) {
-        addToast('info', 'Setting up your account...')
-        setError(null)
-        try {
-          // Re-acquire the injector and build account object for mapAccount
-          if (walletType === 'substrate' && address && walletSource) {
-            const { web3Enable, web3FromSource } = await import('@polkadot/extension-dapp')
-            await web3Enable('QFLink')
-            const injector = await web3FromSource(walletSource)
-            const accountForMapping: InjectedAccountWithMeta = {
-              address,
-              meta: { source: walletSource },
-              signer: injector.signer,
-            }
-            const newEvmAddr = await ensureAccountMapped(accountForMapping)
-            useWalletStore.setState({ evmAddress: newEvmAddr.toLowerCase(), accountMapped: true })
-            // Wait 2 seconds for the mapping to be indexed on-chain, then retry
-            await new Promise(resolve => setTimeout(resolve, 2000))
-            const placeholderName = newEvmAddr ? truncateAddress(newEvmAddr, 'evm') : truncateAddress(address, 'substrate')
-            await profile.register(placeholderName, keyPair!.publicKey)
-            addToast('success', 'Welcome to QFLink! Redirecting...')
-            return
-          }
-        } catch (recoveryErr: any) {
-          const recoveryMsg: string = recoveryErr?.message || String(recoveryErr) || ''
-          let recoveryUserMsg: string
-          if (recoveryMsg === 'INSUFFICIENT_BALANCE_FOR_MAPPING' || recoveryMsg.includes('1010') || recoveryMsg.includes('Inability to pay')) {
-            recoveryUserMsg = 'You need QF tokens to set up your account. Please fund your wallet first.'
-          } else {
-            recoveryUserMsg = 'Account setup failed. Please try again.'
-          }
-          setError(recoveryUserMsg)
-          addToast('error', recoveryUserMsg)
-          return
-        } finally {
-          setIsRegistering(false)
-        }
-        return
-      }
+      // For MetaMask (EVM), account mapping is handled automatically
+      // No manual recovery needed - just show appropriate error
 
       let userMessage: string
       if (msg === 'INSUFFICIENT_BALANCE_FOR_MAPPING' || msg.includes('1010') || msg.includes('Inability to pay') || msg.includes('insufficient')) {
@@ -291,81 +219,34 @@ const ConnectPage: React.FC = () => {
     }
   }
 
-  // Render wallet options within the card
-  const renderWalletOptions = () => (
-    <div className="space-y-4 animate-fade-in">
-      {/* MetaMask */}
-      <div>
-        <p className="text-sm text-gray-400 mb-3">EVM Wallets:</p>
-        <button
-          onClick={handleMetaMaskConnect}
-          disabled={loadingWallet !== null}
-          className="flex w-full items-center gap-3 border border-gray-800 bg-white/5 p-4 text-left transition-colors hover:bg-white/10 hover:border-gray-700 disabled:opacity-50"
-        >
-          <span className="text-2xl">🦊</span>
-          <span className="flex-1 text-sm font-medium text-white">MetaMask</span>
-          {loadingWallet === 'metamask' ? (
-            <Spinner size="sm" />
-          ) : (
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-gray-500">
-              <polyline points="9 18 15 12 9 6" />
-            </svg>
-          )}
-        </button>
-      </div>
-
-      {/* Divider */}
-      <div className="relative">
-        <div className="absolute inset-0 flex items-center">
-          <div className="w-full border-t border-gray-800"></div>
-        </div>
-        <div className="relative flex justify-center text-xs">
-          <span className="px-2 bg-[#0D0D0D] text-gray-500">or</span>
-        </div>
-      </div>
-
-      {/* Substrate Wallets */}
-      <div>
-        <p className="text-sm text-gray-400 mb-3">Substrate Wallets:</p>
-        <div className="space-y-2">
-          {SUBSTRATE_WALLETS.map((wallet) => (
-            <button
-              key={wallet.id}
-              onClick={() => handleExtensionConnect(wallet)}
-              disabled={loadingWallet !== null}
-              className="flex w-full items-center gap-3 border border-gray-800 bg-white/5 p-4 text-left transition-colors hover:bg-white/10 hover:border-gray-700 disabled:opacity-50"
-            >
-              <span className="text-2xl">{wallet.icon}</span>
-              <span className="flex-1 text-sm font-medium text-white">{wallet.name}</span>
-              {loadingWallet === wallet.id ? (
-                <Spinner size="sm" />
-              ) : (
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-gray-500">
-                  <polyline points="9 18 15 12 9 6" />
-                </svg>
-              )}
-            </button>
-          ))}
-        </div>
-      </div>
-
-      <p className="text-xs text-gray-500 text-center pt-2">
-        Don't have a wallet?{' '}
-        <a href="https://talisman.xyz" target="_blank" rel="noopener noreferrer" className="text-cyan-600 hover:underline">
-          Get Talisman
-        </a>
-        {' · '}
-        <a href="https://subwallet.app" target="_blank" rel="noopener noreferrer" className="text-cyan-600 hover:underline">
-          Get SubWallet
-        </a>
+  // Render MetaMask not installed prompt
+  const renderMetaMaskPrompt = () => (
+    <div className="space-y-4 animate-fade-in text-center">
+      <div className="text-4xl mb-4">🦊</div>
+      <p className="text-gray-300">
+        MetaMask is required to use QFLink.
       </p>
+      <a
+        href="https://metamask.io/download/"
+        target="_blank"
+        rel="noopener noreferrer"
+        className="inline-block w-full bg-orange-500 text-white hover:bg-orange-600 py-3.5 px-6 rounded-md font-medium text-sm uppercase tracking-wider transition-colors"
+      >
+        INSTALL METAMASK
+      </a>
+      <button
+        onClick={() => setMetaMaskNotInstalled(false)}
+        className="text-gray-500 text-sm hover:text-gray-400"
+      >
+        Go back
+      </button>
     </div>
   )
 
   return (
     <div className="h-dvh overflow-hidden bg-[#0D0D0D] flex flex-col items-center justify-center px-4">
-      {/* QFLink Wordmark — hidden only on Screen B (wallet selection list) */}
-      {!(step === 1 && showWalletOptions) && <QFLinkWordmark size={56} variant="dark" className="mb-10" />}
+      {/* QFLink Wordmark — always visible on connect page */}
+      <QFLinkWordmark size={56} variant="dark" className="mb-10" />
 
       {/* Card */}
       <div className="border border-gray-800 rounded-none px-10 py-12 w-full max-w-sm bg-[#0D0D0D]">
@@ -384,7 +265,7 @@ const ConnectPage: React.FC = () => {
 
             {/* Subtitle */}
             <p className="text-gray-400 text-sm text-center mb-10">
-              Connect your Substrate wallet to get started.
+              Connect your MetaMask wallet to get started.
             </p>
 
             {/* During mapAccount transaction: replace UI with status message */}
@@ -392,30 +273,38 @@ const ConnectPage: React.FC = () => {
               <div className="flex flex-col items-center gap-3 py-6">
                 <Spinner size="md" />
                 <p className="text-sm text-gray-300 text-center font-medium">Connecting and setting up your account...</p>
-                <p className="text-xs text-gray-500 text-center">Please approve the transaction in your wallet.</p>
+                <p className="text-xs text-gray-500 text-center">Please approve the transaction in MetaMask.</p>
               </div>
-            ) : showWalletOptions ? (
-              renderWalletOptions()
+            ) : metaMaskNotInstalled ? (
+              renderMetaMaskPrompt()
             ) : (
               <>
                 {/* Connect Button */}
                 <button
                   onClick={handleConnectClick}
-                  className="w-full bg-cyan-600 text-white hover:bg-cyan-700 py-3.5 px-6 rounded-md font-medium text-sm uppercase tracking-wider transition-colors mb-6"
+                  disabled={loadingWallet !== null}
+                  className="w-full bg-cyan-600 text-white hover:bg-cyan-700 disabled:opacity-50 py-3.5 px-6 rounded-md font-medium text-sm uppercase tracking-wider transition-colors mb-6"
                 >
-                  CONNECT WALLET
+                  {loadingWallet === 'metamask' ? (
+                    <span className="flex items-center justify-center gap-2">
+                      <Spinner size="sm" />
+                      CONNECTING...
+                    </span>
+                  ) : (
+                    'CONNECT METAMASK'
+                  )}
                 </button>
 
                 {/* Learn More Link */}
                 <p className="text-gray-500 text-sm text-center">
-                  Don't have a wallet?{' '}
+                  Don't have MetaMask?{' '}
                   <a 
-                    href="https://polkadot.js.org/extension/" 
+                    href="https://metamask.io/download/" 
                     target="_blank" 
                     rel="noopener noreferrer"
                     className="text-cyan-600 hover:text-cyan-500"
                   >
-                    Learn more
+                    Install here
                   </a>
                 </p>
               </>

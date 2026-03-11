@@ -3,12 +3,13 @@ import { useWallet } from '@/hooks/useWallet'
 import { useUIStore } from '@/stores/ui'
 import { Spinner } from '@/components/ui/Spinner'
 import * as cc from '@/lib/contractCalls'
-import { resolveQFName } from '@/lib/qns'
+import { resolveQFName, normalizeQFName } from '@/lib/qns'
 import { getPublicClient, CONTRACT_ADDRESSES } from '@/lib/viemClient'
 import { formatExactAmount } from '@/lib/utils'
 
-// Owner address from environment (must be set in .env file)
+// Owner address from environment (used as fallback while loading)
 const OWNER_ADDRESS = (import.meta.env.VITE_OWNER_ADDRESS || '').toLowerCase()
+const PAYMENTS_ADDRESS = CONTRACT_ADDRESSES.payments as `0x${string}`
 
 // Platform fee is 5% (hardcoded in contract)
 const PLATFORM_FEE_PCT = 5
@@ -38,22 +39,18 @@ const CONTRACTS_LIST = [
 
 // Helper to resolve QNS name or address to address
 const resolveToAddress = async (input: string): Promise<`0x${string}` | null> => {
-  const trimmed = input.trim()
-  
   // Already a valid address
+  const trimmed = input.trim()
   if (trimmed.startsWith('0x') && trimmed.length === 42) {
     return trimmed as `0x${string}`
   }
   
-  // Try QNS resolution — handle both "name" and "name.qf"
-  let qnsName = trimmed
-  if (!qnsName.endsWith('.qf')) {
-    qnsName = qnsName + '.qf'
-  }
-  const nameOnly = qnsName.replace(/\.qf$/, '')
+  // Use shared helper to normalize QF name (auto-append .qf if needed)
+  const normalized = normalizeQFName(trimmed)
+  if (!normalized) return null // Input was a raw address but invalid format
   
   try {
-    const resolved = await resolveQFName(nameOnly)
+    const resolved = await resolveQFName(normalized)
     if (resolved && resolved !== '0x0000000000000000000000000000000000000000') {
       return resolved as `0x${string}`
     }
@@ -136,8 +133,29 @@ const AdminPage: React.FC = () => {
   const setShowConnectWallet = useUIStore((s) => s.setShowConnectWallet)
   const addToast = useUIStore((s) => s.addToast)
   
-  // Auth check
-  const isOwner = evmAddress?.toLowerCase() === OWNER_ADDRESS
+  // Contract owner state (fetched live from chain)
+  const [contractOwner, setContractOwner] = useState<string | null>(null)
+  
+  // Fetch owner from contract
+  useEffect(() => {
+    async function fetchOwner() {
+      try {
+        const publicClient = getPublicClient()
+        const owner = await publicClient.readContract({
+          address: PAYMENTS_ADDRESS,
+          abi: [{ name: 'owner', type: 'function', inputs: [], outputs: [{ type: 'address' }], stateMutability: 'view' }],
+          functionName: 'owner',
+        })
+        setContractOwner(owner as string)
+      } catch (err) {
+        console.error('[AdminPage] Failed to fetch contract owner:', err)
+      }
+    }
+    fetchOwner()
+  }, [])
+  
+  // Auth check - use live contract owner with env fallback while loading
+  const isOwner = evmAddress?.toLowerCase() === (contractOwner?.toLowerCase() || OWNER_ADDRESS)
   
   // Data states
   const [currentTreasury, setCurrentTreasury] = useState<string | null>(null)
@@ -517,7 +535,7 @@ const AdminPage: React.FC = () => {
         {/* Footer */}
         <div className="pt-8 border-t border-gray-800">
           <p className="text-xs text-gray-600">
-            Owner Address: <code className="font-mono">{OWNER_ADDRESS}</code>
+            Owner Address: <code className="font-mono">{contractOwner || OWNER_ADDRESS || 'Loading...'}</code>
           </p>
         </div>
       </div>

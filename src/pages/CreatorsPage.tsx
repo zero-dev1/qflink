@@ -450,20 +450,20 @@ const CreatorsPage: React.FC = () => {
       </section>
 
       {/* ── CREATOR DASHBOARD ── */}
-      <section className="py-24 px-6 border-t border-gray-100 dark:border-gray-900">
-        <div className="max-w-5xl mx-auto">
-          <div className="text-center mb-12">
-            <div className="text-cyan-600 text-xs font-mono uppercase tracking-[0.2em] mb-4">Creator Dashboard</div>
-            <h2 className="text-3xl md:text-5xl font-bold text-gray-900 dark:text-white mb-4">
-              Your command center.
-            </h2>
-            <p className="text-gray-500 dark:text-gray-400 max-w-2xl mx-auto">
-              Track revenue, manage members, moderate your pods — all from one dashboard. No spreadsheets, no third-party analytics. Everything on-chain, everything real-time.
-            </p>
-          </div>
-          <div className="bg-gray-900 border border-gray-800 rounded-lg w-full max-w-3xl mx-auto aspect-video flex items-center justify-center">
-            <span className="text-gray-500">Dashboard preview coming soon</span>
-          </div>
+      <section className="py-16 px-4 max-w-6xl mx-auto">
+        <h2 className="text-2xl md:text-3xl font-bold text-white text-center mb-4">
+          Your command center
+        </h2>
+        <p className="text-gray-400 text-center mb-10 max-w-2xl mx-auto">
+          Create pods, manage members, set fees, track revenue — all from one dashboard.
+        </p>
+        <div className="border border-gray-800 overflow-hidden">
+          <img 
+            src="/creator-dashboard.png" 
+            alt="QFLink Creator Dashboard" 
+            className="w-full h-auto"
+            loading="lazy"
+          />
         </div>
       </section>
 

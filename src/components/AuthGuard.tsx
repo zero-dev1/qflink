@@ -5,6 +5,7 @@ import { useProfileStore } from '@/stores/profile'
 import { Spinner } from '@/components/ui/Spinner'
 import { QNSRegistration } from '@/components/qns/QNSRegistration'
 import { hasRegisteredName } from '@/lib/qnsRegistrar'
+import { useQFName } from '@/hooks/useQFName'
 
 interface AuthGuardProps {
   children: React.ReactNode
@@ -30,6 +31,7 @@ export const AuthGuard: React.FC<AuthGuardProps> = ({ children }) => {
   const needsRegistration = useProfileStore((s) => s.needsRegistration)
   const isLoadingProfile = useProfileStore((s) => s.isLoading)
   const fetchProfile = useProfileStore((s) => s.fetchProfile)
+  const { refresh: refreshQFName } = useQFName(evmAddress || undefined)
 
   useEffect(() => {
     let cancelled = false
@@ -172,6 +174,7 @@ export const AuthGuard: React.FC<AuthGuardProps> = ({ children }) => {
           setShowQNSRegistration(false)
           qnsCheckedRef.current = true
         }}
+        onSuccess={refreshQFName}
       />
     )
   }

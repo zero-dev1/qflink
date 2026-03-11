@@ -18,6 +18,7 @@ contract QFLinkPayments {
     
     mapping(uint64 => uint256) internal entryFees;
     mapping(uint64 => mapping(address => bool)) internal payments;
+    mapping(uint64 => uint256) public creatorRevenue;
     
     address public owner;
     mapping(address => bool) public authorized;
@@ -31,6 +32,13 @@ contract QFLinkPayments {
     // ============ Events ============
     
     event OwnershipTransferred(address indexed previousOwner, address indexed newOwner);
+    event PaymentProcessed(
+        uint64 indexed podId,
+        address indexed user,
+        uint256 fee,
+        uint256 creatorAmount,
+        uint256 treasuryAmount
+    );
     
     // ============ Modifiers ============
     
@@ -74,12 +82,15 @@ contract QFLinkPayments {
     
     // ============ Internal Distribution ============
     
-    function _distribute(uint64 podId, uint256 amount) internal {
+    function _distribute(uint64 podId, address user, uint256 amount) internal {
         if (amount == 0) return;
         
         address creator = storage_.getCreator(podId);
         uint256 creatorAmount = (amount * CREATOR_SHARE) / SHARE_DENOMINATOR;
         uint256 treasuryAmount = amount - creatorAmount;
+        
+        // Accumulate creator revenue for tracking
+        creatorRevenue[podId] += creatorAmount;
         
         if (creatorAmount > 0 && creator != address(0)) {
             (bool sent, ) = payable(creator).call{value: creatorAmount}("");
@@ -90,6 +101,8 @@ contract QFLinkPayments {
             (bool sent, ) = payable(treasury).call{value: treasuryAmount}("");
             require(sent, "Treasury transfer failed");
         }
+        
+        emit PaymentProcessed(podId, user, amount, creatorAmount, treasuryAmount);
     }
     
     // ============ Payment Functions ============
@@ -101,7 +114,7 @@ contract QFLinkPayments {
         if (msg.value < fee) revert InsufficientPayment();
         
         payments[podId][msg.sender] = true;
-        _distribute(podId, msg.value);
+        _distribute(podId, msg.sender, msg.value);
     }
     
     function processPayment(uint64 podId, address user) external payable onlyAuthorized {
@@ -111,7 +124,7 @@ contract QFLinkPayments {
         if (msg.value < fee) revert InsufficientPayment();
         
         payments[podId][user] = true;
-        _distribute(podId, msg.value);
+        _distribute(podId, user, msg.value);
     }
     
     // ============ Withdrawal Functions ============
@@ -138,5 +151,9 @@ contract QFLinkPayments {
     
     function getContractBalance() external view returns (uint256) {
         return address(this).balance;
+    }
+    
+    function getCreatorRevenue(uint64 podId) external view returns (uint256) {
+        return creatorRevenue[podId];
     }
 }

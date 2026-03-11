@@ -339,9 +339,10 @@ const PodsPage: React.FC = () => {
               <Spinner size="md" />
             </div>
           ) : accessiblePods.length === 0 ? (
-            <div className="flex flex-col items-center justify-center py-12 text-center px-4">
-              <p className="text-sm text-gray-500">No pods yet</p>
-              <p className="text-xs text-gray-500 mt-1">Join a pod from Explore or create your own</p>
+            <div className="flex flex-col items-center justify-center py-20 text-center px-6">
+              <p className="text-gray-400 dark:text-gray-400 text-sm">
+                Tap <span className="text-[#0991B2] font-semibold">+</span> to explore and join a pod or create your own
+              </p>
             </div>
           ) : (
             accessiblePods.map((pod) => {

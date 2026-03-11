@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react'
+import { Link } from 'react-router-dom'
 import { getProfile } from '@/lib/contractCalls'
 import { ConversationItem } from './ConversationItem'
 import { Input } from '@/components/ui/Input'
@@ -54,7 +55,7 @@ export const ConversationList: React.FC<ConversationListProps> = ({
         <div className="flex items-center gap-1">
           <button
             onClick={onNewMessage}
-            className="flex h-7 w-7 items-center justify-center rounded-md text-qx-text-secondary hover:bg-qx-elevated hover:text-qx-text-primary transition-colors"
+            className="flex h-7 w-7 items-center justify-center text-qx-text-secondary hover:bg-qx-elevated hover:text-qx-text-primary transition-colors"
             title="New message"
           >
             <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -63,7 +64,7 @@ export const ConversationList: React.FC<ConversationListProps> = ({
             </svg>
           </button>
           <button
-            className="flex h-7 w-7 items-center justify-center rounded-md text-qx-text-secondary hover:bg-qx-elevated hover:text-qx-text-primary transition-colors md:hidden"
+            className="flex h-7 w-7 items-center justify-center text-qx-text-secondary hover:bg-qx-elevated hover:text-qx-text-primary transition-colors md:hidden"
             title="Back"
           >
             <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -75,9 +76,10 @@ export const ConversationList: React.FC<ConversationListProps> = ({
 
       <div className="flex-1 overflow-y-auto py-1">
         {conversations.length === 0 ? (
-          <div className="flex flex-col items-center justify-center py-12 text-center px-4">
-            <p className="text-sm text-qx-text-muted">No conversations yet</p>
-            <p className="text-xs text-qx-text-muted mt-1">Start a new message</p>
+          <div className="flex flex-col items-center justify-center py-20 text-center px-6">
+            <p className="text-gray-400 text-sm">
+              Tap <span className="text-[#0991B2] font-semibold">+</span> to start a conversation with any .qf name or wallet address
+            </p>
           </div>
         ) : (
           conversations.map((convo) => {

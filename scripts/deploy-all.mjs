@@ -315,9 +315,32 @@ async function main() {
   // ════════════════════════════════════════════
   console.log('\n═══ Writing .env.development ═══');
 
+  // Before writing new .env, preserve these keys from existing file
+  const preserveKeys = ['DEPLOYER_PRIVATE_KEY', 'TEST_USER_PRIVATE_KEY', 'TREASURY_ADDRESS', 'VITE_OWNER_ADDRESS'];
+  const preservedValues = {};
+  
+  const existingEnvPath = path.join(ROOT, '.env.development');
+  if (existsSync(existingEnvPath)) {
+    try {
+      const existingContent = readFileSync(existingEnvPath, 'utf8');
+      for (const key of preserveKeys) {
+        const regex = new RegExp(`^${key}=(.+)$`, 'm');
+        const match = existingContent.match(regex);
+        if (match && match[1].trim()) {
+          preservedValues[key] = match[1].trim();
+        }
+      }
+      console.log('  📋 Preserved existing values for:', Object.keys(preservedValues).join(', ') || 'none found');
+    } catch (e) {
+      console.log('  ⚠️  Could not read existing .env.development:', e.message);
+    }
+  }
+
+  // Build env content with preserved values
   const envContent = `VITE_DEFAULT_NETWORK=local
 VITE_ETH_RPC_URL=/eth-rpc
 VITE_WALLET_RPC_URL=http://localhost:8545
+VITE_OWNER_ADDRESS=${preservedValues.VITE_OWNER_ADDRESS || account.address}
 VITE_REGISTRY_ADDRESS=${registry}
 VITE_PODS_STORAGE_ADDRESS=${podsStorage}
 VITE_PODS_CREATE_ADDRESS=${podsCreate}
@@ -337,6 +360,13 @@ VITE_MESSAGE_READER_ADDRESS=${messageReader}
 VITE_PODS_CREATE_PAID_ADDRESS=${podsCreatePaid}
 VITE_SESSION_KEYS_ADDRESS=${sessionKeys}
 VITE_MESSAGE_WRITER_V2_ADDRESS=${messageWriterV2}
+
+# Private Keys (preserved from existing config)
+DEPLOYER_PRIVATE_KEY=${preservedValues.DEPLOYER_PRIVATE_KEY || process.env.DEPLOYER_PRIVATE_KEY || ''}
+TEST_USER_PRIVATE_KEY=${preservedValues.TEST_USER_PRIVATE_KEY || process.env.TEST_USER_PRIVATE_KEY || ''}
+
+# Treasury Address (preserved from existing config)
+TREASURY_ADDRESS=${preservedValues.TREASURY_ADDRESS || ''}
 
 # QNS Contract Addresses (from qns/deployments.json)
 VITE_QNS_REGISTRY_ADDRESS=${qnsAddresses.QNSRegistry || ''}
@@ -384,6 +414,49 @@ VITE_QNS_RESOLVER_ADDRESS=${qnsAddresses.QNSResolver || ''}
   console.log(`SessionKeys:     ${sessionKeys}`);
   console.log(`PodsCreatePaid:  ${podsCreatePaid}`);
   console.log('═══════════════════════════════════════\n');
+
+  // ════════════════════════════════════════════
+  // Generate Vercel-ready env file
+  // ════════════════════════════════════════════
+  const vercelEnv = `# QFLink Vercel Environment Variables
+# Generated: ${new Date().toISOString()}
+# Copy each line into Vercel → Settings → Environment Variables
+
+VITE_DEFAULT_NETWORK=mainnet
+VITE_ETH_RPC_URL=<REPLACE_WITH_MAINNET_RPC>
+VITE_WALLET_RPC_URL=<REPLACE_WITH_MAINNET_RPC>
+VITE_OWNER_ADDRESS=${account.address}
+
+VITE_REGISTRY_ADDRESS=${registry}
+VITE_PODS_STORAGE_ADDRESS=${podsStorage}
+VITE_PODS_CREATE_ADDRESS=${podsCreate}
+VITE_PODS_JOIN_ADDRESS=${podsJoin}
+VITE_PODS_LEAVE_ADDRESS=${podsLeave}
+VITE_PODS_BAN_ADDRESS=${podsBan}
+VITE_PODS_ADDMOD_ADDRESS=${podsAddMod}
+VITE_PODS_REMOVEMOD_ADDRESS=${podsRemoveMod}
+VITE_PODS_ADMIN_ADDRESS=${podsAdmin}
+VITE_PODS_READER_ADDRESS=${podsReader}
+VITE_PODS_GETPOD_ADDRESS=${podsGetPod}
+VITE_PAYMENTS_ADDRESS=${payments}
+VITE_CONTENT_STORE_ADDRESS=${contentStore}
+VITE_MESSAGE_INDEX_ADDRESS=${messageIndex}
+VITE_MESSAGE_WRITER_ADDRESS=${messageWriterV2}
+VITE_MESSAGE_READER_ADDRESS=${messageReader}
+VITE_PODS_CREATE_PAID_ADDRESS=${podsCreatePaid}
+VITE_SESSION_KEYS_ADDRESS=${sessionKeys}
+VITE_MESSAGE_WRITER_V2_ADDRESS=${messageWriterV2}
+
+# QNS Addresses
+VITE_QNS_REGISTRY_ADDRESS=${qnsAddresses.QNSRegistry || ''}
+VITE_QNS_REGISTRAR_ADDRESS=${qnsAddresses.QNSRegistrar || ''}
+VITE_QNS_RESOLVER_ADDRESS=${qnsAddresses.QNSResolver || ''}
+`;
+
+  const vercelEnvPath = path.join(ROOT, 'vercel-env.txt');
+  writeFileSync(vercelEnvPath, vercelEnv);
+  console.log('📋 Vercel env file written to vercel-env.txt');
+  console.log('   Copy values into Vercel dashboard → Settings → Environment Variables');
 }
 
 main().catch(err => {

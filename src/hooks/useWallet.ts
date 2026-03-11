@@ -11,7 +11,6 @@ export function useWallet() {
   const linkedWallets = useWalletStore((s) => s.linkedWallets)
   const walletType = useWalletStore((s) => s.walletType)
   const evmAddress = useWalletStore((s) => s.evmAddress)
-  const storeConnect = useWalletStore((s) => s.connect)
   const storeConnectMetaMask = useWalletStore((s) => s.connectMetaMask)
   const storeDisconnect = useWalletStore((s) => s.disconnect)
   const setBalance = useWalletStore((s) => s.setBalance)
@@ -20,20 +19,19 @@ export function useWallet() {
   const removeLinkedWallet = useWalletStore((s) => s.removeLinkedWallet)
   const addToast = useUIStore((s) => s.addToast)
 
-  // Connect with Substrate wallet (opens account selection modal)
-  // Note: This is called by the modal after user selects an account
-  const connect = useCallback(async (selectedAccount?: any) => {
+  // Connect with MetaMask directly (opens MetaMask popup)
+  const connect = useCallback(async () => {
     try {
-      await storeConnect(selectedAccount)
-      addToast('success', 'Wallet connected successfully')
+      await storeConnectMetaMask()
+      addToast('success', 'MetaMask connected successfully')
     } catch (err) {
-      const message = err instanceof Error ? err.message : 'Failed to connect wallet'
+      const message = err instanceof Error ? err.message : 'Failed to connect MetaMask'
       addToast('error', message)
       throw err
     }
-  }, [storeConnect, addToast])
+  }, [storeConnectMetaMask, addToast])
 
-  // Connect with MetaMask
+  // Connect with MetaMask (alias for connect)
   const connectMetaMask = useCallback(async () => {
     try {
       await storeConnectMetaMask()

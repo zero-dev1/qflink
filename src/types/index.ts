@@ -16,7 +16,7 @@ export type ConnectionStatus = 'disconnected' | 'connecting' | 'connected' | 'er
 export interface WalletAccount {
   address: string
   name?: string
-  source: 'talisman' | 'polkadot-js' | 'subwallet'
+  source: 'metamask'
 }
 
 export interface LinkedWallet {

@@ -6,4 +6,5 @@ interface IPayments {
     function getEntryFee(uint64 podId) external view returns (uint256);
     function hasPaid(uint64 podId, address user) external view returns (bool);
     function processPayment(uint64 podId, address user) external payable;
+    function getCreatorRevenue(uint64 podId) external view returns (uint256);
 }

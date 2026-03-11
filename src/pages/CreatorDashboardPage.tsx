@@ -5,23 +5,59 @@ import { useWallet } from '@/hooks/useWallet'
 import { useUIStore } from '@/stores/ui'
 import { cn, formatExactAmount, formatCompactBalance } from '@/lib/utils'
 import * as cc from '@/lib/contractCalls'
-import { resolveQFName } from '@/lib/qns'
+import { resolveQFName, normalizeQFName } from '@/lib/qns'
+import { getPublicClient, CONTRACT_ADDRESSES } from '@/lib/viemClient'
 import type { CustomPod } from '@/types'
 
 type DashboardView = 'overview' | 'pods' | 'revenue' | 'settings' | `pod-${number}`
 
 const CREATOR_FEE_PCT = 95n
+
+// ABI for getCreatorRevenue view function
+const paymentsAbi = [{
+  name: 'getCreatorRevenue',
+  type: 'function',
+  stateMutability: 'view',
+  inputs: [{ name: 'podId', type: 'uint64' }],
+  outputs: [{ name: '', type: 'uint256' }],
+}] as const
+
 // memberCount from contract is accurate (creator counted once)
 function getAdjustedMemberCount(pod: CustomPod): number {
   return pod.memberCount || 0
 }
 
-function calcPodRevenue(pod: CustomPod): bigint {
+// Calculate estimated revenue (fallback when contract data unavailable)
+function calcEstimatedPodRevenue(pod: CustomPod): bigint {
   const fee = pod.entryFee ?? 0n
   if (fee === 0n) return 0n
   // Subtract 1 for creator (who doesn't pay entry fee)
   const payingMembers = BigInt(Math.max(0, (pod.memberCount || 0) - 1))
   return payingMembers * fee * CREATOR_FEE_PCT / 100n
+}
+
+// Fetch actual revenue from on-chain Payments contract
+async function fetchPodRevenue(podId: number): Promise<bigint> {
+  const publicClient = getPublicClient()
+  const paymentsAddress = CONTRACT_ADDRESSES.payments
+  
+  // Check if payments address is set
+  if (!paymentsAddress || paymentsAddress === '0x0000000000000000000000000000000000000000') {
+    return 0n
+  }
+
+  try {
+    const revenue = await publicClient.readContract({
+      address: paymentsAddress,
+      abi: paymentsAbi,
+      functionName: 'getCreatorRevenue',
+      args: [BigInt(podId)],
+    })
+    return revenue || 0n
+  } catch (err) {
+    console.error(`[fetchPodRevenue] Failed to fetch revenue for pod ${podId}:`, err)
+    return 0n
+  }
 }
 
 function formatQF(wei: bigint): string {
@@ -139,26 +175,38 @@ const CreatorDashboardPage: React.FC = () => {
   const [modActionAddress, setModActionAddress] = useState('')
   const [modActionLoading, setModActionLoading] = useState(false)
   const [modActionError, setModActionError] = useState<string | null>(null)
+  
+  // Actual revenue from on-chain events
+  const [podRevenues, setPodRevenues] = useState<Record<number, bigint>>({})
+  const [loadingRevenues, setLoadingRevenues] = useState(true)
+  
+  // Resolved address preview state
+  const [resolvedAddress, setResolvedAddress] = useState<string | null>(null)
+  const [resolving, setResolving] = useState(false)
+  const [resolveError, setResolveError] = useState(false)
+  
+  // Target status state for context-aware buttons
+  const [targetStatus, setTargetStatus] = useState<{
+    isMember: boolean
+    isBanned: boolean
+    isMod: boolean
+  } | null>(null)
+  const [checkingStatus, setCheckingStatus] = useState(false)
 
   // Helper to resolve .qf name or address to address
   const resolveToAddress = async (input: string): Promise<`0x${string}` | null> => {
-    const trimmed = input.trim()
-    
     // Already a valid address
+    const trimmed = input.trim()
     if (trimmed.startsWith('0x') && trimmed.length === 42) {
       return trimmed as `0x${string}`
     }
     
-    // Try QNS resolution — handle both "name" and "name.qf"
-    let qnsName = trimmed
-    if (!qnsName.endsWith('.qf')) {
-      qnsName = qnsName + '.qf'
-    }
-    // Remove the .qf for the lookup if the resolve function expects just the name
-    const nameOnly = qnsName.replace(/\.qf$/, '')
+    // Use shared helper to normalize QF name (auto-append .qf if needed)
+    const normalized = normalizeQFName(trimmed)
+    if (!normalized) return null // Input was a raw address but invalid format
     
     try {
-      const resolved = await resolveQFName(nameOnly)
+      const resolved = await resolveQFName(normalized)
       if (resolved && resolved !== '0x0000000000000000000000000000000000000000') {
         return resolved as `0x${string}`
       }
@@ -206,10 +254,45 @@ const CreatorDashboardPage: React.FC = () => {
     return () => { cancelled = true }
   }, [myCreatedPods.map(p => p.id).join(',')])
 
+  // Fetch actual revenue from on-chain PaymentProcessed events
+  useEffect(() => {
+    if (myCreatedPods.length === 0) {
+      setLoadingRevenues(false)
+      return
+    }
+    let cancelled = false
+    const fetchRevenues = async () => {
+      setLoadingRevenues(true)
+      const revenues: Record<number, bigint> = {}
+      await Promise.all(
+        myCreatedPods.map(async (pod) => {
+          revenues[pod.id] = await fetchPodRevenue(pod.id)
+        })
+      )
+      if (!cancelled) {
+        setPodRevenues(revenues)
+        setLoadingRevenues(false)
+      }
+    }
+    fetchRevenues()
+    return () => { cancelled = true }
+  }, [myCreatedPods.map(p => p.id).join(',')])
+
+  // Helper to get actual or estimated revenue for a pod
+  const getPodRevenue = useCallback((pod: CustomPod): bigint => {
+    // Use actual revenue from events if available, otherwise fall back to estimate
+    const actualRevenue = podRevenues[pod.id]
+    if (actualRevenue !== undefined && actualRevenue > 0n) {
+      return actualRevenue
+    }
+    // Fall back to estimated revenue based on current fee × paying members
+    return calcEstimatedPodRevenue(pod)
+  }, [podRevenues])
+
   // Aggregate stats
   const totalRevenue = useMemo(
-    () => myCreatedPods.reduce((sum, pod) => sum + calcPodRevenue(pod), 0n),
-    [myCreatedPods]
+    () => myCreatedPods.reduce((sum, pod) => sum + getPodRevenue(pod), 0n),
+    [myCreatedPods, podRevenues, getPodRevenue]
   )
   const totalMembers = useMemo(
     () => myCreatedPods.reduce((sum, pod) => sum + getAdjustedMemberCount(pod), 0),
@@ -224,12 +307,85 @@ const CreatorDashboardPage: React.FC = () => {
   const detailPodId = view.startsWith('pod-') ? Number(view.slice(4)) : null
   const detailPod = detailPodId !== null ? myCreatedPods.find((p) => p.id === detailPodId) : null
 
-  // Reset edit fee state when switching pods
+  // Reset edit fee state and moderation state when switching pods
   useEffect(() => {
     setEditingFee(false)
     setFeeInputValue('')
     setFeeError('')
+    setModActionAddress('')
+    setModActionError(null)
+    setResolvedAddress(null)
+    setResolveError(false)
+    setTargetStatus(null)
   }, [detailPodId])
+
+  // Debounced resolver for live address preview
+  useEffect(() => {
+    const input = modActionAddress.trim()
+    
+    // Reset states
+    setResolveError(false)
+    setTargetStatus(null)
+    
+    // If it's already a valid address, use it directly
+    if (input.startsWith('0x') && input.length === 42) {
+      setResolvedAddress(input)
+      setResolving(false)
+      // Check status for raw addresses too
+      if (detailPod) {
+        setCheckingStatus(true)
+        const checkStatus = async () => {
+          const addr = input as `0x${string}`
+          const [member, banned, moderator] = await Promise.all([
+            cc.isMember(detailPod.id, addr),
+            cc.isBanned(detailPod.id, addr),
+            cc.isMod(detailPod.id, addr),
+          ])
+          setTargetStatus({ isMember: member, isBanned: banned, isMod: moderator })
+          setCheckingStatus(false)
+        }
+        checkStatus()
+      }
+      return
+    }
+    
+    // Clear resolved address if input is too short
+    if (input.length < 2) {
+      setResolvedAddress(null)
+      setResolving(false)
+      return
+    }
+    
+    // Start resolving
+    setResolving(true)
+    setResolvedAddress(null)
+    
+    const timeout = setTimeout(async () => {
+      const addr = await resolveToAddress(input)
+      if (addr) {
+        setResolvedAddress(addr)
+        setResolveError(false)
+        // Fetch target status for context-aware buttons
+        if (detailPod) {
+          setCheckingStatus(true)
+          const [member, banned, moderator] = await Promise.all([
+            cc.isMember(detailPod.id, addr),
+            cc.isBanned(detailPod.id, addr),
+            cc.isMod(detailPod.id, addr),
+          ])
+          setTargetStatus({ isMember: member, isBanned: banned, isMod: moderator })
+          setCheckingStatus(false)
+        }
+      } else {
+        setResolveError(true)
+        setResolvedAddress(null)
+        setTargetStatus(null)
+      }
+      setResolving(false)
+    }, 500) // 500ms debounce
+    
+    return () => clearTimeout(timeout)
+  }, [modActionAddress, detailPod])
 
   // Moderation handlers
   const handleBan = useCallback(async (podId: number) => {
@@ -505,6 +661,7 @@ const CreatorDashboardPage: React.FC = () => {
                           pod={pod}
                           messageCount={messageCounts[pod.id] ?? 0}
                           onManage={() => setView(`pod-${pod.id}`)}
+                          actualRevenue={podRevenues[pod.id]}
                         />
                       ))}
                     </div>
@@ -568,6 +725,7 @@ const CreatorDashboardPage: React.FC = () => {
                         setModActionAddress('')
                         setView(`pod-${pod.id}`)
                       }}
+                      actualRevenue={podRevenues[pod.id]}
                     />
                   ))}
                 </div>
@@ -615,7 +773,11 @@ const CreatorDashboardPage: React.FC = () => {
                 />
                 <StatCard
                   label="Revenue"
-                  value={`${formatQF(calcPodRevenue(detailPod))} QF`}
+                  value={`${formatQF(
+                    podRevenues[detailPod.id] !== undefined && podRevenues[detailPod.id] > 0n
+                      ? podRevenues[detailPod.id]
+                      : calcEstimatedPodRevenue(detailPod)
+                  )} QF`}
                   accent
                   icon={<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="23 6 13.5 15.5 8.5 10.5 1 18" /><polyline points="17 6 23 6 23 12" /></svg>}
                 />
@@ -659,36 +821,99 @@ const CreatorDashboardPage: React.FC = () => {
                   onChange={(e) => setModActionAddress(e.target.value)}
                   className="w-full h-10 border border-gray-200 dark:border-gray-800 bg-gray-50 dark:bg-white/5 px-3 text-sm text-gray-900 dark:text-white placeholder:text-gray-400 dark:placeholder:text-gray-600 focus:border-[#0991B2] focus:outline-none focus:ring-1 focus:ring-[#0991B2] transition-colors mb-2"
                 />
-                {modActionAddress && !modActionAddress.startsWith('0x') && (
-                  <span className="text-gray-500 text-xs block mb-2">Will resolve QNS name to wallet address</span>
-                )}
+                
+                {/* Resolved address preview */}
+                <div className="min-h-[20px] mb-2">
+                  {resolving && (
+                    <span className="text-gray-400 text-xs">Resolving...</span>
+                  )}
+                  {!resolving && resolvedAddress && !modActionAddress.trim().startsWith('0x') && (
+                    <span 
+                      className="text-[#0991B2] text-xs cursor-help" 
+                      title={resolvedAddress}
+                    >
+                      → {resolvedAddress.slice(0, 6)}...{resolvedAddress.slice(-4)}
+                    </span>
+                  )}
+                  {!resolving && resolveError && modActionAddress.trim().length >= 2 && !modActionAddress.trim().startsWith('0x') && (
+                    <span className="text-red-500 text-xs">Could not resolve address</span>
+                  )}
+                </div>
+                
                 {modActionError && <p className="text-red-400 text-xs mb-2">{modActionError}</p>}
+                
+                {/* Status indicator */}
+                {targetStatus && resolvedAddress && !resolving && (
+                  <div className="flex flex-wrap gap-2 mb-3 text-xs">
+                    <span className={cn(
+                      'px-2 py-0.5 border',
+                      targetStatus.isMember 
+                        ? 'text-green-600 border-green-500/30' 
+                        : 'text-gray-500 border-gray-500/30'
+                    )}>
+                      {targetStatus.isMember ? 'Member' : 'Not Member'}
+                    </span>
+                    <span className={cn(
+                      'px-2 py-0.5 border',
+                      targetStatus.isBanned 
+                        ? 'text-red-600 border-red-500/30' 
+                        : 'text-gray-500 border-gray-500/30'
+                    )}>
+                      {targetStatus.isBanned ? 'Banned' : 'Not Banned'}
+                    </span>
+                    <span className={cn(
+                      'px-2 py-0.5 border',
+                      targetStatus.isMod 
+                        ? 'text-[#0991B2] border-[#0991B2]/30' 
+                        : 'text-gray-500 border-gray-500/30'
+                    )}>
+                      {targetStatus.isMod ? 'Moderator' : 'Not Moderator'}
+                    </span>
+                  </div>
+                )}
+                
                 <div className="flex flex-wrap gap-2">
                   <button
                     onClick={() => handleBan(detailPod.id)}
-                    disabled={modActionLoading || !modActionAddress.trim()}
-                    className="px-4 py-2 text-xs font-semibold bg-red-600/20 text-red-600 dark:text-red-400 border border-red-600/30 hover:bg-red-600/30 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+                    disabled={
+                      modActionLoading || 
+                      !resolvedAddress || 
+                      (targetStatus !== null && (!targetStatus.isMember || targetStatus.isBanned))
+                    }
+                    className="px-4 py-2 text-xs font-semibold bg-transparent border border-red-500 text-red-500 hover:bg-red-500/10 disabled:opacity-40 disabled:cursor-not-allowed disabled:pointer-events-none transition-colors"
                   >
                     {modActionLoading ? 'Processing...' : 'Ban Member'}
                   </button>
                   <button
                     onClick={() => handleUnban(detailPod.id)}
-                    disabled={modActionLoading || !modActionAddress.trim()}
-                    className="px-4 py-2 text-xs font-semibold bg-green-600/20 text-green-600 dark:text-green-400 border border-green-600/30 hover:bg-green-600/30 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+                    disabled={
+                      modActionLoading || 
+                      !resolvedAddress || 
+                      (targetStatus !== null && !targetStatus.isBanned)
+                    }
+                    className="px-4 py-2 text-xs font-semibold bg-transparent border border-amber-500 text-amber-500 hover:bg-amber-500/10 disabled:opacity-40 disabled:cursor-not-allowed disabled:pointer-events-none transition-colors"
                   >
                     {modActionLoading ? 'Processing...' : 'Unban Member'}
                   </button>
                   <button
                     onClick={() => handleAddMod(detailPod.id)}
-                    disabled={modActionLoading || !modActionAddress.trim()}
-                    className="px-4 py-2 text-xs font-semibold bg-[#0991B2]/20 text-[#0991B2] dark:text-[#0AA1C2] border border-[#0991B2]/30 hover:bg-[#0991B2]/30 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+                    disabled={
+                      modActionLoading || 
+                      !resolvedAddress || 
+                      (targetStatus !== null && (!targetStatus.isMember || targetStatus.isMod))
+                    }
+                    className="px-4 py-2 text-xs font-semibold bg-transparent border border-[#0991B2] text-[#0991B2] hover:bg-[#0991B2]/10 disabled:opacity-40 disabled:cursor-not-allowed disabled:pointer-events-none transition-colors"
                   >
                     {modActionLoading ? 'Processing...' : 'Add Mod'}
                   </button>
                   <button
                     onClick={() => handleRemoveMod(detailPod.id)}
-                    disabled={modActionLoading || !modActionAddress.trim()}
-                    className="px-4 py-2 text-xs font-semibold bg-orange-600/20 text-orange-600 dark:text-orange-400 border border-orange-600/30 hover:bg-orange-600/30 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+                    disabled={
+                      modActionLoading || 
+                      !resolvedAddress || 
+                      (targetStatus !== null && !targetStatus.isMod)
+                    }
+                    className="px-4 py-2 text-xs font-semibold bg-transparent border border-orange-500 text-orange-500 hover:bg-orange-500/10 disabled:opacity-40 disabled:cursor-not-allowed disabled:pointer-events-none transition-colors"
                   >
                     {modActionLoading ? 'Processing...' : 'Remove Mod'}
                   </button>
@@ -817,7 +1042,11 @@ const CreatorDashboardPage: React.FC = () => {
                       const fee = pod.entryFee ?? 0n
                       const payingMembers = Math.max(0, (pod.memberCount || 0) - 2)
                       const gross = fee > 0n ? BigInt(payingMembers) * fee : 0n
-                      const earned = calcPodRevenue(pod)
+                      // Use actual revenue from events if available
+                      const actualRevenue = podRevenues[pod.id]
+                      const earned = actualRevenue !== undefined && actualRevenue > 0n 
+                        ? actualRevenue 
+                        : calcEstimatedPodRevenue(pod)
                       return (
                         <div
                           key={pod.id}
@@ -875,10 +1104,14 @@ const PodSummaryCard: React.FC<{
   pod: CustomPod
   messageCount: number
   onManage: () => void
-}> = ({ pod, messageCount, onManage }) => {
+  actualRevenue?: bigint
+}> = ({ pod, messageCount, onManage, actualRevenue }) => {
   const fee = pod.entryFee ?? 0n
 
-  const revenue = calcPodRevenue(pod)
+  // Use actual revenue from events if available, otherwise estimate
+  const revenue = actualRevenue !== undefined && actualRevenue > 0n 
+    ? actualRevenue 
+    : calcEstimatedPodRevenue(pod)
   return (
     <div className="border border-gray-200 dark:border-gray-800 p-5 hover:border-gray-300 dark:hover:border-gray-700 transition-colors">
       <div className="flex items-center justify-between mb-2">
@@ -912,10 +1145,14 @@ const PodRow: React.FC<{
   pod: CustomPod
   messageCount: number
   onManage: () => void
-}> = ({ pod, messageCount, onManage }) => {
+  actualRevenue?: bigint
+}> = ({ pod, messageCount, onManage, actualRevenue }) => {
   const fee = pod.entryFee ?? 0n
 
-  const revenue = calcPodRevenue(pod)
+  // Use actual revenue from events if available, otherwise estimate
+  const revenue = actualRevenue !== undefined && actualRevenue > 0n 
+    ? actualRevenue 
+    : calcEstimatedPodRevenue(pod)
   return (
     <div className="border border-gray-200 dark:border-gray-800 p-4 hover:border-gray-300 dark:hover:border-gray-700 transition-colors">
       {/* Desktop: single row layout */}

@@ -81,7 +81,7 @@ export async function checkAvailability(name: string): Promise<boolean> {
     return available
   } catch (error) {
     console.error('Error checking availability:', error)
-    return false
+    throw new Error('Failed to check name availability. Please try again.')
   }
 }
 
