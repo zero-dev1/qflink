@@ -11,7 +11,8 @@ const CONTRACTS_DIR = path.join(ROOT, 'contracts');
 const BUILD_DIR = path.join(ROOT, 'build');
 
 // ── Config ──
-const RPC_URL = process.env.VITE_WALLET_RPC_URL || 'http://localhost:8545';
+const RPC_URL = process.env.VITE_WALLET_RPC_URL;
+if (!RPC_URL) throw new Error('VITE_WALLET_RPC_URL environment variable is required');
 const CHAIN_ID = 42;
 
 // Deployer key from environment (must be set in .env.development or .env.production)
@@ -339,7 +340,7 @@ async function main() {
   // Build env content with preserved values
   const envContent = `VITE_DEFAULT_NETWORK=local
 VITE_ETH_RPC_URL=/eth-rpc
-VITE_WALLET_RPC_URL=http://localhost:8545
+VITE_WALLET_RPC_URL=${RPC_URL}
 VITE_OWNER_ADDRESS=${preservedValues.VITE_OWNER_ADDRESS || account.address}
 VITE_REGISTRY_ADDRESS=${registry}
 VITE_PODS_STORAGE_ADDRESS=${podsStorage}
