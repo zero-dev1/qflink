@@ -6,7 +6,7 @@ import { cn } from '@/lib/utils'
 import { useQFName } from '@/hooks/useQFName'
 
 export const WalletDropdown: React.FC = () => {
-  const { address, balance, disconnect, walletType } = useWallet()
+  const { address, balance, disconnect } = useWallet()
   const [isOpen, setIsOpen] = useState(false)
   const [copied, setCopied] = useState(false)
   const dropdownRef = useRef<HTMLDivElement>(null)
@@ -43,9 +43,7 @@ export const WalletDropdown: React.FC = () => {
   if (!address) return null
 
   // Display address based on wallet type, prefer QNS name
-  const truncated = walletType === 'evm'
-    ? truncateAddress(address, 'evm')
-    : truncateAddress(address, 'substrate')
+  const truncated = truncateAddress(address, 'substrate')
   const displayAddress = qfName || truncated
 
   return (
@@ -121,7 +119,7 @@ export const WalletDropdown: React.FC = () => {
             {/* Address */}
             <div>
               <p className="text-xs text-qx-text-muted mb-1">
-                Address {walletType === 'evm' ? '(EVM)' : '(Substrate)'}
+                Address (Substrate)
               </p>
               <div className="flex items-start gap-2">
                 <p className="text-sm font-mono break-all text-qx-text-secondary flex-1">

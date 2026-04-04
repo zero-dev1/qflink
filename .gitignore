@@ -1,5 +1,6 @@
 node_modules/
 dist/
+!.papi/descriptors/dist/
 .env
 .env.local
 *.log

@@ -19,9 +19,9 @@ const STATUS_DOT: Record<string, string> = {
 }
 
 export const WalletButton: React.FC = () => {
-  const { address, balance, isConnected, isConnecting, connect, disconnect, walletType } = useWallet()
+  const { address, balance, isConnected, isConnecting, connect, disconnect, walletName } = useWallet()
   const [showOptions, setShowOptions] = useState(false)
-  const currentNetwork = useNetworkStore((s) => s.currentNetwork)
+  const currentNetwork = 'mainnet' as const
   const connectionStatus = useNetworkStore((s) => s.connectionStatus)
   const network = NETWORKS[currentNetwork]
   
@@ -40,7 +40,7 @@ export const WalletButton: React.FC = () => {
   // For EVM: show 0x41dc...1e01 format or .qf name if available
   // For Substrate: show 5FHne...94ty format
   const displayAddress = qfName || (address
-    ? walletType === 'evm'
+    ? walletName === 'metamask'
       ? truncateAddress(address, 'evm')
       : truncateAddress(address, 'substrate')
     : '')

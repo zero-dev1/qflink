@@ -29,15 +29,12 @@ export function usePods() {
   const walletAddress = useWalletStore((s) => s.address)
   const walletBalance = useWalletStore((s) => s.balance)
   const refreshBalance = useWalletStore((s) => s.refreshBalance)
-  const linkedWallets = useWalletStore((s) => s.linkedWallets)
   const addToast = useUIStore((s) => s.addToast)
 
   const walletAddressRef = useRef(walletAddress)
   walletAddressRef.current = walletAddress
   const walletBalanceRef = useRef(walletBalance)
   walletBalanceRef.current = walletBalance
-  const linkedWalletsRef = useRef(linkedWallets)
-  linkedWalletsRef.current = linkedWallets
 
   // Unified fetch path: loadPublicPods now uses fetchPods from the store
   // This eliminates the duplicate fetch path that was causing pod duplication
@@ -100,9 +97,12 @@ export function usePods() {
         }
         addToast('success', `Pod "${name}" created successfully`)
 
-        await cc.waitForBlockSync(receipt.blockNumber)
-        // Small delay for automine environments to ensure state is committed
-        await new Promise(r => setTimeout(r, 200))
+        // Wait for confirmation
+        if (receipt?.confirmation) {
+          await receipt.confirmation
+        }
+        // Small delay for state to settle
+        await new Promise(r => setTimeout(r, 1000))
         await fetchPods()
         await refreshBalance()
       } catch (err) {
@@ -137,9 +137,12 @@ export function usePods() {
       try {
         const receipt = await cc.joinPod(podId, fee)
         addToast('success', 'Successfully joined pod')
-        await cc.waitForBlockSync(receipt.blockNumber)
-        // Small delay for automine environments to ensure state is committed
-        await new Promise(r => setTimeout(r, 200))
+        // Wait for confirmation
+        if (receipt?.confirmation) {
+          await receipt.confirmation
+        }
+        // Small delay for state to settle
+        await new Promise(r => setTimeout(r, 1000))
         await fetchPods()
         await refreshBalance()
         return true
@@ -168,7 +171,10 @@ export function usePods() {
       try {
         const receipt = await cc.leavePod(podId)
         addToast('success', `You have left ${podName}`)
-        await cc.waitForBlockSync(receipt.blockNumber)
+        // Wait for confirmation
+        if (receipt?.confirmation) {
+          await receipt.confirmation
+        }
         
         // Optimistic removal: remove pod from myPods immediately
         const currentMyPods = usePodsStore.getState().myPods
@@ -272,9 +278,12 @@ export function usePods() {
       try {
         const receipt = await cc.banMember(podId, memberAddress as `0x${string}`)
         addToast('success', 'Member banned')
-        await cc.waitForBlockSync(receipt.blockNumber)
-        // Small delay for automine environments to ensure state is committed
-        await new Promise(r => setTimeout(r, 200))
+        // Wait for confirmation
+        if (receipt?.confirmation) {
+          await receipt.confirmation
+        }
+        // Small delay for state to settle
+        await new Promise(r => setTimeout(r, 1000))
         await fetchPods()
         await refreshBalance()
         // Refresh members list if available
@@ -292,9 +301,12 @@ export function usePods() {
       try {
         const receipt = await cc.unbanMember(podId, memberAddress as `0x${string}`)
         addToast('success', 'Member unbanned')
-        await cc.waitForBlockSync(receipt.blockNumber)
-        // Small delay for automine environments to ensure state is committed
-        await new Promise(r => setTimeout(r, 200))
+        // Wait for confirmation
+        if (receipt?.confirmation) {
+          await receipt.confirmation
+        }
+        // Small delay for state to settle
+        await new Promise(r => setTimeout(r, 1000))
         await fetchPods()
         await refreshBalance()
       } catch (err) {
@@ -310,9 +322,12 @@ export function usePods() {
       try {
         const receipt = await cc.addMod(podId, moderatorAddress as `0x${string}`)
         addToast('success', 'Moderator added')
-        await cc.waitForBlockSync(receipt.blockNumber)
-        // Small delay for automine environments to ensure state is committed
-        await new Promise(r => setTimeout(r, 200))
+        // Wait for confirmation
+        if (receipt?.confirmation) {
+          await receipt.confirmation
+        }
+        // Small delay for state to settle
+        await new Promise(r => setTimeout(r, 1000))
         await fetchPods()
         await refreshBalance()
         await fetchPodMods(podId)
@@ -329,9 +344,12 @@ export function usePods() {
       try {
         const receipt = await cc.removeMod(podId, moderatorAddress as `0x${string}`)
         addToast('success', 'Moderator removed')
-        await cc.waitForBlockSync(receipt.blockNumber)
-        // Small delay for automine environments to ensure state is committed
-        await new Promise(r => setTimeout(r, 200))
+        // Wait for confirmation
+        if (receipt?.confirmation) {
+          await receipt.confirmation
+        }
+        // Small delay for state to settle
+        await new Promise(r => setTimeout(r, 1000))
         await fetchPods()
         await refreshBalance()
         await fetchPodMods(podId)

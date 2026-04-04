@@ -22,6 +22,11 @@ const paymentsAbi = [{
   outputs: [{ name: '', type: 'uint256' }],
 }] as const
 
+// Helper to convert readonly ABI arrays to mutable
+function toMutable<T>(arr: readonly T[]): T[] {
+  return [...arr]
+}
+
 // memberCount from contract is accurate (creator counted once)
 function getAdjustedMemberCount(pod: CustomPod): number {
   return pod.memberCount || 0
@@ -49,7 +54,7 @@ async function fetchPodRevenue(podId: number): Promise<bigint> {
     const { callContract } = await import('@/lib/contractHelpers')
     const revenue = await callContract(
       paymentsAddress,
-      paymentsAbi,
+      toMutable(paymentsAbi),
       'getCreatorRevenue',
       [BigInt(podId)]
     )

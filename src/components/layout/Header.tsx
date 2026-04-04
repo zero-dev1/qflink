@@ -4,7 +4,7 @@ import { useUIStore } from '@/stores/ui'
 import { ThemeToggle } from '@/components/ui/ThemeToggle'
 import { WalletDropdown } from '@/components/wallet/WalletDropdown'
 import { QFLinkWordmark } from '@/components/QFLinkWordmark'
-import { SessionKeyBanner } from '@/components/ui/SessionKeyBanner'
+// import { SessionKeyBanner } from '@/components/ui/SessionKeyBanner'
 
 export const Header: React.FC = () => {
   const { isConnected } = useWallet()
@@ -31,7 +31,7 @@ export const Header: React.FC = () => {
 
       {/* Right: session key banner + wallet dropdown + theme */}
       <div className="flex items-center gap-3">
-        {isConnected && <SessionKeyBanner />}
+        {/* {isConnected && <SessionKeyBanner />} */}
         {isConnected && <WalletDropdown />}
         <ThemeToggle />
       </div>

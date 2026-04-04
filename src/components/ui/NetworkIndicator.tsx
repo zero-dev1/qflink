@@ -10,7 +10,7 @@ const STATUS_DOT: Record<string, string> = {
 }
 
 export const NetworkIndicator: React.FC = () => {
-  const currentNetwork = useNetworkStore((s) => s.currentNetwork)
+  const currentNetwork = 'mainnet' as const
   const connectionStatus = useNetworkStore((s) => s.connectionStatus)
   const network = NETWORKS[currentNetwork]
 

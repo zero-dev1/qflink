@@ -113,6 +113,8 @@ export function useMessages() {
       }
 
       try {
+        // TODO: Implement sendDirectMessageChunked function
+        /*
         const contentBytes = new TextEncoder().encode(content)
         const result = await cc.sendDirectMessageChunked(
           recipient.toLowerCase() as `0x${string}`,
@@ -123,6 +125,8 @@ export function useMessages() {
           decryptedContent: content,
         }
         addMessage(message)
+        */
+        addToast('error', 'Direct messaging not yet implemented')
       } catch (err) {
         const msg = err instanceof Error ? err.message : 'Failed to send message'
         addToast('error', msg)
