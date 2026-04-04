@@ -233,25 +233,11 @@ export const useWalletStore = create<WalletState>()(
             useWalletStore.setState({ _rehydrating: true });
             const walletType = state.walletName as "talisman" | "subwallet";
 
-            const waitForExtension = async (walletId: string, timeoutMs = 3000) => {
-              const { getInjectedExtensions } = await import("polkadot-api/pjs-signer");
-              const start = Date.now();
-              while (Date.now() - start < timeoutMs) {
-                if (getInjectedExtensions().includes(walletId)) return true;
-                await new Promise(r => setTimeout(r, 150));
-              }
-              return false;
-            };
-
-            const walletId = walletType === "talisman" ? "talisman" : "subwallet-js";
-
+            // Match QNS pattern: warm up PAPI, then connect directly.
+            // No extension-readiness gate — connectSubstrateWallet handles
+            // extension availability internally via connectInjectedExtension.
             import("../lib/papiClient").then(({ warmUpPapi }) =>
-              Promise.all([warmUpPapi(), waitForExtension(walletId)]).then(([, extensionReady]) => {
-                if (!extensionReady) {
-                  useWalletStore.setState({ _rehydrating: false });
-                  state.disconnect();  // ← CHANGED: was just setting flags, now full cleanup
-                  return;
-                }
+              warmUpPapi().then(() => {
                 state
                   .connect(walletType)
                   .then(() => {
@@ -259,7 +245,7 @@ export const useWalletStore = create<WalletState>()(
                   })
                   .catch(() => {
                     useWalletStore.setState({ _rehydrating: false });
-                    state.disconnect();  // ← CHANGED: was just setting flags, now full cleanup
+                    state.disconnect();
                   });
               })
             );

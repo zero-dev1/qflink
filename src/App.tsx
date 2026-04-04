@@ -30,13 +30,6 @@ const PageLoader: React.FC = () => (
   </div>
 )
 
-// Redirect connected users from landing to home
-const LandingRedirect: React.FC = () => {
-  const address = useWalletStore((s) => s.address)
-  if (address) return <Navigate to="/home" replace />
-  return <LandingPage />
-}
-
 const App: React.FC = () => {
   const isConnected = useWalletStore((s) => s.isConnected)
   const fetchPods = usePodsStore((s) => s.fetchPods)
@@ -54,7 +47,7 @@ const App: React.FC = () => {
       <Suspense fallback={<PageLoader />}>
         <Routes>
           {/* Public standalone pages — no Layout */}
-          <Route path="/" element={<LandingRedirect />} />
+          <Route path="/" element={<LandingPage />} />
           <Route path="/connect" element={<ConnectPage />} />
           <Route path="/whitepaper" element={<WhitepaperPage />} />
           <Route path="/creators" element={<CreatorsPage />} />

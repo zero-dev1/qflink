@@ -230,7 +230,7 @@ const ExplorePage: React.FC = () => {
           {[1, 2, 3].map((i) => <SkeletonCard key={i} />)}
         </div>
       ) : filteredExplorePods.length === 0 ? (
-        <div className="border border-gray-200 dark:border-gray-800 bg-transparent p-12 text-center">
+        <div className="border border-gray-200 dark:border-gray-800 bg-transparent p-12 text-center min-h-[240px] flex items-center justify-center">
           <p className="text-sm text-qx-text-muted">No pods found matching your search.</p>
         </div>
       ) : (

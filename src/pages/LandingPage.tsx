@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom'
 import { LandingNav } from '@/components/landing/LandingNav'
 import { FooterCTA } from '@/components/landing/FooterCTA'
 import { useInView } from '@/components/landing/useInView'
+import { useWalletStore } from '@/stores/wallet'
 
 // ── Animated block (hero strip) ───────────────────────────────────────────────
 const AnimatedBlock: React.FC<{ index: number; blockNum: number }> = ({ index, blockNum }) => (
@@ -145,6 +146,7 @@ const LandingPage: React.FC = () => {
   const [tableRef, tableInView] = useInView<HTMLDivElement>(0.05)
   const [featuresRef, featuresInView] = useInView<HTMLDivElement>(0.05)
   const [blockNumbers, setBlockNumbers] = useState([1847293, 1847294, 1847295, 1847296, 1847297])
+  const walletAddress = useWalletStore((s) => s.address)
 
   useEffect(() => {
     const interval = setInterval(() => {
@@ -188,13 +190,13 @@ const LandingPage: React.FC = () => {
           </p>
           <div className="mt-10">
             <Link
-              to="/connect"
+              to={walletAddress ? '/home' : '/connect'}
               className="inline-block bg-cyan-600 text-white font-bold text-lg px-8 py-3 rounded-none hover:bg-cyan-700 transition-colors duration-200"
             >
-              Launch App &rarr;
+              {walletAddress ? 'Enter App →' : 'Launch App →'}
             </Link>
             <p className="text-sm text-gray-400 dark:text-gray-600 mt-3">
-              Connect your wallet to start
+              {walletAddress ? 'Welcome back' : 'Connect your wallet to start'}
             </p>
           </div>
           <div className="mt-16 flex items-center justify-center gap-2 flex-wrap">

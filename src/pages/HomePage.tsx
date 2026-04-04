@@ -111,8 +111,8 @@ const HomePage: React.FC = () => {
       {isConnected && !qnsName && (
         <div className="border border-cyan-600/30 bg-cyan-600/5 p-6 flex items-center justify-between gap-4">
           <div>
-            <h3 className="text-sm font-semibold text-white mb-1">Claim your .qf name</h3>
-            <p className="text-xs text-gray-400">Your identity across every dApp on QF Network.</p>
+            <h3 className="text-sm font-semibold text-gray-900 dark:text-white mb-1">Claim your .qf name</h3>
+            <p className="text-xs text-gray-500 dark:text-gray-400">Your identity across every dApp on QF Network.</p>
           </div>
           <a
             href="https://dotqf.xyz"
