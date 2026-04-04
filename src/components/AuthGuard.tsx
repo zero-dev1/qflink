@@ -88,38 +88,65 @@ export const AuthGuard: React.FC<AuthGuardProps> = ({ children }) => {
   // Check QNS registration after profile is confirmed
   useEffect(() => {
     const checkQNS = async () => {
-      // Only check QNS after profile is confirmed registered
-      if (!isRegistered || !evmAddress || qnsCheckedRef.current) {
-        setIsCheckingQNS(false)
-        return
+      if (!isRegistered || !evmAddress) {
+        setIsCheckingQNS(false);
+        return;
       }
 
-      // Check if user has already skipped
-      const hasSkipped = localStorage.getItem('qns-skipped') === 'true'
+      const hasSkipped = localStorage.getItem('qns-skipped') === 'true';
       if (hasSkipped) {
-        qnsCheckedRef.current = true
-        setIsCheckingQNS(false)
-        return
+        qnsCheckedRef.current = true;
+        setIsCheckingQNS(false);
+        return;
       }
 
       try {
-        const qnsName = await hasRegisteredName(evmAddress)
-        if (!qnsName) {
-          // No QNS name registered - show registration screen
-          setShowQNSRegistration(true)
-        }
-        qnsCheckedRef.current = true
-      } catch (err) {
-        console.error('Error checking QNS registration:', err)
-        // On error, allow through (don't block user)
-        qnsCheckedRef.current = true
-      } finally {
-        setIsCheckingQNS(false)
-      }
-    }
+        // Clear any cached null result before checking
+        const { clearNameCache } = await import('@/lib/qns');
+        clearNameCache(evmAddress);
 
-    checkQNS()
-  }, [isRegistered, evmAddress])
+        const qnsName = await hasRegisteredName(evmAddress);
+        if (qnsName) {
+          // Name found — skip the registration screen entirely
+          qnsCheckedRef.current = true;
+          setShowQNSRegistration(false);
+          setIsCheckingQNS(false);
+          return;
+        }
+        // No name — show registration
+        setShowQNSRegistration(true);
+        qnsCheckedRef.current = true;
+      } catch (err) {
+        console.error('Error checking QNS registration:', err);
+        qnsCheckedRef.current = true;
+      } finally {
+        setIsCheckingQNS(false);
+      }
+    };
+
+    checkQNS();
+
+    // Re-check when user returns from another tab (may have registered a name there)
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'visible' && isRegistered && evmAddress && !localStorage.getItem('qns-skipped')) {
+        // Reset and recheck
+        import('@/lib/qns').then(({ clearNameCache }) => {
+          clearNameCache(evmAddress);
+          hasRegisteredName(evmAddress).then((name) => {
+            if (name) {
+              setShowQNSRegistration(false);
+              qnsCheckedRef.current = true;
+              // Also refresh the QFName hook so the name appears in the header
+              refreshQFName();
+            }
+          }).catch(() => {});
+        });
+      }
+    };
+
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    return () => document.removeEventListener('visibilitychange', handleVisibilityChange);
+  }, [isRegistered, evmAddress]);
 
   // Show loading while checking auth state or QNS status
   if (isConnecting || isChecking || (isConnected && isLoadingProfile) || isCheckingQNS) {

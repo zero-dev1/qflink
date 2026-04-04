@@ -4,13 +4,19 @@ import { truncateAddress, formatBalance, copyToClipboard } from '@/lib/utils'
 import { Avatar } from '@/components/ui/Avatar'
 import { cn } from '@/lib/utils'
 import { useQFName } from '@/hooks/useQFName'
+import { useWalletStore } from '@/stores/wallet'
 
 export const WalletDropdown: React.FC = () => {
   const { address, balance, disconnect } = useWallet()
   const [isOpen, setIsOpen] = useState(false)
   const [copied, setCopied] = useState(false)
   const dropdownRef = useRef<HTMLDivElement>(null)
-  const { name: qfName, refresh: refreshQFName } = useQFName(address || undefined)
+  const evmAddress = useWalletStore((s) => s.evmAddress)
+  const storeQnsName = useWalletStore((s) => s.qnsName)
+  const { name: hookQfName } = useQFName(evmAddress || undefined)
+
+  // Prefer store name (available instantly), fall back to hook result
+  const qfName = storeQnsName || hookQfName
 
   const handleCopy = useCallback(async () => {
     if (!address) return

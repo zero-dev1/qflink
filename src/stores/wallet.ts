@@ -21,6 +21,7 @@ export interface WalletState {
   evmAddress: string | null;    // 0x...
   walletName: string | null;    // "talisman" | "subwallet"
   accountMapped: boolean;
+  qnsName: string | null;
 
   // Transient
   balance: bigint;
@@ -30,6 +31,7 @@ export interface WalletState {
   walletSource: string | null;
   walletError: string | null;
   encryptionKeyPair: { publicKey: Uint8Array; secretKey: Uint8Array } | null;
+  _rehydrating: boolean;
 
   connect: (walletType: "talisman" | "subwallet") => Promise<void>;
   disconnect: () => void;
@@ -37,6 +39,7 @@ export interface WalletState {
   refreshBalance: () => Promise<void>;
   setEncryptionKeyPair: (kp: { publicKey: Uint8Array; secretKey: Uint8Array }) => void;
   setEvmAddress: (evmAddress: string) => void;
+  refreshName: () => Promise<void>;
   clearWalletError: () => void;
 }
 
@@ -49,6 +52,7 @@ export const useWalletStore = create<WalletState>()(
       evmAddress: null,
       walletName: null,
       accountMapped: false,
+      qnsName: null,
       balance: 0n,
       isConnected: false,
       isConnecting: false,
@@ -56,6 +60,7 @@ export const useWalletStore = create<WalletState>()(
       walletSource: null,
       walletError: null,
       encryptionKeyPair: null,
+      _rehydrating: false,
 
       connect: async (walletType: "talisman" | "subwallet") => {
         set({ isConnecting: true, walletError: null });
@@ -138,18 +143,11 @@ export const useWalletStore = create<WalletState>()(
           }
           set({ isMappingAccount: false });
 
-          // Connected — set state then fetch profile + pods
+          // Connected — set state
           set({ isConnected: true, isConnecting: false });
-
-          try {
-            const { useProfileStore } = await import("./profile");
-            await useProfileStore.getState().fetchProfile(evmAddr);
-          } catch {}
-
-          try {
-            const { usePodsStore } = await import("./pods");
-            await usePodsStore.getState().fetchPods();
-          } catch {}
+          
+          // Resolve QNS name in background (don't block connection)
+          get().refreshName().catch(() => {});
         } catch (error: any) {
           const msg = error?.message || "";
           let walletError = msg || "Failed to connect wallet";
@@ -161,25 +159,29 @@ export const useWalletStore = create<WalletState>()(
               ? "SubWallet not detected. Open this dApp inside SubWallet's built-in browser."
               : "Talisman not detected. Please install the Talisman browser extension.";
           }
-          disconnectWallet();
-          set({
-            walletError,
-            address: null, evmAddress: null, walletName: null,
-            isConnected: false, isConnecting: false,
-          });
+          
+          const { _rehydrating } = get();
+          if (_rehydrating) {
+            // During rehydration, preserve persisted state on error
+            set({
+              walletError,
+              isConnected: false,
+              isConnecting: false,
+            });
+          } else {
+            disconnectWallet();
+            set({
+              walletError,
+              address: null, evmAddress: null, walletName: null,
+              isConnected: false, isConnecting: false,
+            });
+          }
         }
       },
 
       disconnect: () => {
         if (balanceUnsub) { balanceUnsub(); balanceUnsub = null; }
         disconnectWallet();
-
-        // Clear qflink localStorage
-        if (typeof window !== "undefined") {
-          Object.keys(localStorage).forEach((key) => {
-            if (key.startsWith("qflink")) localStorage.removeItem(key);
-          });
-        }
 
         set({
           address: null, evmAddress: null, balance: 0n,
@@ -209,26 +211,57 @@ export const useWalletStore = create<WalletState>()(
 
       setEncryptionKeyPair: (kp) => set({ encryptionKeyPair: kp }),
       setEvmAddress: (evmAddress) => set({ evmAddress, accountMapped: true }),
+      refreshName: async () => {
+        const { evmAddress } = get();
+        if (!evmAddress) return;
+        try {
+          const { clearNameCache, reverseResolve } = await import("@/lib/qns");
+          clearNameCache(evmAddress);
+          const name = await reverseResolve(evmAddress);
+          set({ qnsName: name || null });
+        } catch {
+          // Preserve existing name on error
+        }
+      },
+
       clearWalletError: () => set({ walletError: null }),
     }),
     {
       name: "qflink-wallet-storage",
-      version: 1,
+      version: 2, // bumped from 1 → 2 for qnsName + _rehydrating
+      migrate: (persistedState, version) => {
+        if (version < 2) return undefined as unknown as WalletState;
+        return persistedState as WalletState;
+      },
       partialize: (state) => ({
         address: state.address,
         evmAddress: state.evmAddress,
         walletName: state.walletName,
         accountMapped: state.accountMapped,
+        qnsName: state.qnsName,
       }),
       onRehydrateStorage: () => {
         return (state) => {
           if (state?.address && state?.walletName) {
-            warmUpPapi().then(() => {
-              const walletType = state.walletName as "talisman" | "subwallet";
-              state.connect(walletType).catch(() => {
-                state.disconnect();
-              });
-            });
+            useWalletStore.setState({ _rehydrating: true });
+
+            const walletType = state.walletName as "talisman" | "subwallet";
+
+            import("../lib/papiClient").then(({ warmUpPapi }) =>
+              warmUpPapi().then(() => {
+                state
+                  .connect(walletType)
+                  .then(() => {
+                    useWalletStore.setState({ _rehydrating: false });
+                  })
+                  .catch(() => {
+                    useWalletStore.setState({ _rehydrating: false });
+                    // Do NOT call disconnect here — preserve persisted state
+                    // Just set isConnected: false so user can retry
+                    useWalletStore.setState({ isConnected: false, isConnecting: false });
+                  });
+              })
+            );
           }
         };
       },
