@@ -1,7 +1,6 @@
 import nacl from 'tweetnacl'
 import { decodeUTF8, encodeUTF8, encodeBase64, decodeBase64 } from 'tweetnacl-util'
-import { keccak256AsU8a } from '@polkadot/util-crypto'
-import { u8aToHex } from '@polkadot/util'
+import { keccak256, toHex } from 'viem'
 
 export interface EncryptionKeyPair {
   publicKey: Uint8Array
@@ -108,8 +107,7 @@ class LocalContentStore implements ContentStore {
 export const contentStore: ContentStore = new LocalContentStore()
 
 export function hashContent(data: Uint8Array): string {
-  const hash = keccak256AsU8a(data)
-  return u8aToHex(hash)
+  return keccak256(data)
 }
 
 export async function encryptDirectMessage(

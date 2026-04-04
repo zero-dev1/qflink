@@ -3,6 +3,9 @@ import { CONTRACT_ADDRESSES } from './contracts'
 import { reverseResolve } from './qns'
 import { parseAbi } from 'viem'
 
+// Helper to convert readonly ABI arrays to mutable
+const toMutable = <T>(arr: readonly T[]): T[] => [...arr]
+
 // QNS Contract addresses
 const QNS_REGISTRAR_ADDRESS = CONTRACT_ADDRESSES.qnsRegistrar
 
@@ -41,7 +44,7 @@ async function fetchPriceFromContract(
     
     const annualPrice = await callContract(
       QNS_REGISTRAR_ADDRESS,
-      registrarAbi,
+      toMutable(registrarAbi),
       functionName,
       []
     ) as bigint
@@ -49,7 +52,7 @@ async function fetchPriceFromContract(
     if (permanent) {
       const multiplier = await callContract(
         QNS_REGISTRAR_ADDRESS,
-        registrarAbi,
+        toMutable(registrarAbi),
         'permanentMultiplier',
         []
       ) as bigint
@@ -73,7 +76,7 @@ export async function checkAvailability(name: string): Promise<boolean> {
   try {
     const available = await callContract(
       QNS_REGISTRAR_ADDRESS,
-      registrarAbi,
+      toMutable(registrarAbi),
       'available',
       [name]
     ) as boolean
@@ -109,7 +112,7 @@ export async function registerQFName(
   try {
     const txResult = await writeContract(
       QNS_REGISTRAR_ADDRESS,
-      registrarAbi,
+      toMutable(registrarAbi),
       'register',
       [name, BigInt(durationYears), permanent],
       price

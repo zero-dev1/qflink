@@ -36,7 +36,7 @@ export const NETWORKS: Record<NetworkId, NetworkConfig> = {
   mainnet: {
     id: 'mainnet',
     name: 'QF Mainnet',
-    wsUrl: 'wss://mainnet.qfnetwork.xyz',
+    wsUrl: 'wss://mainnet.qfnode.net',
     explorerUrl: 'https://portal.qfnetwork.xyz/#/explorer',
     tokenSymbol: 'QF',
     tokenDecimals: 18,

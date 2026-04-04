@@ -131,6 +131,9 @@ const ConnectPage: React.FC = () => {
       if (!walletAddress) throw new Error('No wallet connected')
 
       // Substrate: use signRaw
+      // TODO: Replace @polkadot/extension-dapp with PAPI signer raw signing
+      // This is a legacy dependency that should be migrated to polkadot-api/pjs-signer
+      // The PAPI signer (connection.signer.polkadotSigner) doesn't expose signRaw directly
       const { web3Enable, web3FromSource } = await import('@polkadot/extension-dapp')
       const { walletSource } = useWalletStore.getState()
       

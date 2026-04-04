@@ -1,0 +1,22 @@
+--- a/src/pages/CreatorDashboardPage.tsx
++++ b/src/pages/CreatorDashboardPage.tsx
+@@ -9,6 +9,9 @@ import type { CustomPod } from '@/types'
+ 
+ type DashboardView = 'overview' | 'pods' | 'revenue' | 'settings' | `pod-${number}`
+ 
++// Helper to convert readonly ABI arrays to mutable
++const toMutable = <T>(arr: readonly T[]): T[] => [...arr]
++
+ const CREATOR_FEE_PCT = 95n
+ 
+ // ABI for getCreatorRevenue view function
+@@ -49,7 +52,7 @@ async function fetchPodRevenue(podId: number, paymentsAddress: string): Prom
+   try {
+     const { callContract } = await import('@/lib/contractHelpers')
+     const revenue = await callContract(
+       paymentsAddress,
+-      paymentsAbi,
++      toMutable(paymentsAbi),
+       'getCreatorRevenue',
+       [BigInt(podId)]
+     )

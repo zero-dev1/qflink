@@ -1,6 +1,5 @@
 node_modules/
 dist/
-.papi/
 .env
 .env.local
 *.log

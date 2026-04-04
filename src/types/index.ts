@@ -231,7 +231,7 @@ export interface PodsState {
   setBannedAddresses: (podId: number, addresses: string[]) => void
   setPodMessageCount: (podId: number, count: number) => void
   setLoading: (loading: boolean) => void
-  fetchPods: (blockNumber?: bigint) => Promise<void>
+  fetchPods: () => Promise<void>
   fetchPodMessages: (podId: number) => Promise<void>
   fetchPodMessageCount: (podId: number) => Promise<number>
   sendPodMessage: (podId: number, content: string) => Promise<void>

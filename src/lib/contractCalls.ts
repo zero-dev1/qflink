@@ -14,6 +14,8 @@ import {
 } from "viem";
 
 import { callContract, writeContract } from "./contractHelpers";
+import type { TxResult } from './contractHelpers';
+import { getCurrentConnection } from "./wallet";
 import { CONTRACT_ADDRESSES } from "./contracts";
 import { registryAbi, podsReaderAbi, paymentsAbi, messagesReaderAbi, messagesWriterAbi } from "./abi";
 
@@ -54,7 +56,7 @@ export async function getProfile(address: `0x${string}`): Promise<UserProfile | 
   try {
     const result = await callContract(
       CONTRACT_ADDRESSES.registry,
-      registryAbi,
+      toMutable(registryAbi),
       "getProfile",
       [address]
     );
@@ -75,7 +77,7 @@ export async function getProfile(address: `0x${string}`): Promise<UserProfile | 
 
 export async function getUserCount(): Promise<bigint> {
   try {
-    return await callContract(CONTRACT_ADDRESSES.registry, registryAbi, "getUserCount");
+    return await callContract(CONTRACT_ADDRESSES.registry, toMutable(registryAbi), "getUserCount");
   } catch {
     return 0n;
   }
@@ -92,7 +94,7 @@ export async function isGloballyBanned(_: `0x${string}`): Promise<boolean> { ret
 export async function registerProfile(displayName: string, encryptionPubkey: `0x${string}`): Promise<TxResult> {
   return writeContract(
     CONTRACT_ADDRESSES.registry,
-    registryAbi,
+    toMutable(registryAbi),
     "register",
     [toBytes32(displayName), encryptionPubkey]
   );
@@ -101,7 +103,7 @@ export async function registerProfile(displayName: string, encryptionPubkey: `0x
 export async function updateProfile(displayName: string, encryptionPubkey: `0x${string}`): Promise<TxResult> {
   return writeContract(
     CONTRACT_ADDRESSES.registry,
-    registryAbi,
+    toMutable(registryAbi),
     "updateProfile",
     [toBytes32(displayName), encryptionPubkey]
   );
@@ -139,7 +141,7 @@ export interface PodData {
 
 export async function getPodCount(): Promise<number> {
   try {
-    const result = await callContract(CONTRACT_ADDRESSES.podsReader, podsReaderAbi, "getPodCount");
+    const result = await callContract(CONTRACT_ADDRESSES.podsReader, toMutable(podsReaderAbi), "getPodCount");
     return Number(result);
   } catch {
     return 0;
@@ -150,7 +152,7 @@ export async function getPod(podId: number): Promise<PodData | null> {
   try {
     const result = await callContract(
       CONTRACT_ADDRESSES.podsGetPod,
-      podsGetPodAbi,
+      toMutable(podsGetPodAbi),
       "getPod",
       [BigInt(podId)]
     );
@@ -213,21 +215,21 @@ export async function getUserPods(address: `0x${string}`): Promise<number[]> {
 
 export async function getPodMemberCount(podId: number): Promise<number> {
   try {
-    const result = await callContract(CONTRACT_ADDRESSES.podsReader, podsReaderAbi, "getMemberCount", [BigInt(podId)]);
+    const result = await callContract(CONTRACT_ADDRESSES.podsReader, toMutable(podsReaderAbi), "getMemberCount", [BigInt(podId)]);
     return Number(result);
   } catch { return 0; }
 }
 
 export async function getModCount(podId: number): Promise<number> {
   try {
-    const result = await callContract(CONTRACT_ADDRESSES.podsReader, podsReaderAbi, "getModCount", [BigInt(podId)]);
+    const result = await callContract(CONTRACT_ADDRESSES.podsReader, toMutable(podsReaderAbi), "getModCount", [BigInt(podId)]);
     return Number(result);
   } catch { return 0; }
 }
 
 export async function checkPodAccess(podId: number, address: `0x${string}`): Promise<{ granted: boolean; code: number }> {
   try {
-    const result = await callContract(CONTRACT_ADDRESSES.podsReader, podsReaderAbi, "checkPodAccess", [BigInt(podId), address]);
+    const result = await callContract(CONTRACT_ADDRESSES.podsReader, toMutable(podsReaderAbi), "checkPodAccess", [BigInt(podId), address]);
     return { granted: result as boolean, code: result ? 0 : 1 };
   } catch {
     return { granted: false, code: 255 };
@@ -235,34 +237,34 @@ export async function checkPodAccess(podId: number, address: `0x${string}`): Pro
 }
 
 export async function isBanned(podId: number, address: `0x${string}`): Promise<boolean> {
-  try { return await callContract(CONTRACT_ADDRESSES.podsReader, podsReaderAbi, "isBanned", [BigInt(podId), address]); } catch { return false; }
+  try { return await callContract(CONTRACT_ADDRESSES.podsReader, toMutable(podsReaderAbi), "isBanned", [BigInt(podId), address]); } catch { return false; }
 }
 
 export async function isMod(podId: number, address: `0x${string}`): Promise<boolean> {
-  try { return await callContract(CONTRACT_ADDRESSES.podsReader, podsReaderAbi, "isMod", [BigInt(podId), address]); } catch { return false; }
+  try { return await callContract(CONTRACT_ADDRESSES.podsReader, toMutable(podsReaderAbi), "isMod", [BigInt(podId), address]); } catch { return false; }
 }
 
 export async function isMember(podId: number, address: `0x${string}`): Promise<boolean> {
-  try { return await callContract(CONTRACT_ADDRESSES.podsReader, podsReaderAbi, "isMember", [BigInt(podId), address]); } catch { return false; }
+  try { return await callContract(CONTRACT_ADDRESSES.podsReader, toMutable(podsReaderAbi), "isMember", [BigInt(podId), address]); } catch { return false; }
 }
 
 export async function getCreator(podId: number): Promise<string | null> {
   try {
-    const result = await callContract(CONTRACT_ADDRESSES.podsReader, podsReaderAbi, "getCreator", [BigInt(podId)]);
+    const result = await callContract(CONTRACT_ADDRESSES.podsReader, toMutable(podsReaderAbi), "getCreator", [BigInt(podId)]);
     return (result as string).toLowerCase();
   } catch { return null; }
 }
 
 export async function getPodTier(podId: number): Promise<number> {
-  try { return Number(await callContract(CONTRACT_ADDRESSES.podsReader, podsReaderAbi, "getPodTier", [BigInt(podId)])); } catch { return 0; }
+  try { return Number(await callContract(CONTRACT_ADDRESSES.podsReader, toMutable(podsReaderAbi), "getPodTier", [BigInt(podId)])); } catch { return 0; }
 }
 
 export async function getEntryFee(podId: number): Promise<bigint> {
-  try { return await callContract(CONTRACT_ADDRESSES.payments, paymentsAbi, "getEntryFee", [BigInt(podId)]); } catch { return 0n; }
+  try { return await callContract(CONTRACT_ADDRESSES.payments, toMutable(paymentsAbi), "getEntryFee", [BigInt(podId)]); } catch { return 0n; }
 }
 
 export async function hasPaid(podId: number, address: `0x${string}`): Promise<boolean> {
-  try { return await callContract(CONTRACT_ADDRESSES.payments, paymentsAbi, "hasPaid", [BigInt(podId), address]); } catch { return false; }
+  try { return await callContract(CONTRACT_ADDRESSES.payments, toMutable(paymentsAbi), "hasPaid", [BigInt(podId), address]); } catch { return false; }
 }
 
 export async function getPodMembersFromCandidates(podId: number, candidates: string[]): Promise<string[]> {
@@ -303,7 +305,7 @@ export interface RawPodMessage {
 }
 
 async function _fetchMessage(id: bigint) {
-  const result = await callContract(CONTRACT_ADDRESSES.messageReader, messagesReaderAbi, "getMessage", [id]);
+  const result = await callContract(CONTRACT_ADDRESSES.messageReader, toMutable(messagesReaderAbi), "getMessage", [id]);
   const [sender, timestamp, content, podId, recipient] = result as any;
   return {
     sender: (sender as string).toLowerCase(),
@@ -317,7 +319,7 @@ async function _fetchMessage(id: bigint) {
 export async function getPodMessages(podId: number, start = 0, limit = 100): Promise<RawPodMessage[]> {
   try {
     const ids = await callContract(
-      CONTRACT_ADDRESSES.messageReader, messagesReaderAbi,
+      CONTRACT_ADDRESSES.messageReader, toMutable(messagesReaderAbi),
       "getPodMessageIds", [BigInt(podId), BigInt(start), BigInt(limit)]
     ) as bigint[];
     return await Promise.all(ids.map(async (id) => {
@@ -328,7 +330,7 @@ export async function getPodMessages(podId: number, start = 0, limit = 100): Pro
 }
 
 export async function getPodMessageCount(podId: number): Promise<number> {
-  try { return Number(await callContract(CONTRACT_ADDRESSES.messageReader, messagesReaderAbi, "getPodMessageCount", [BigInt(podId)])); } catch { return 0; }
+  try { return Number(await callContract(CONTRACT_ADDRESSES.messageReader, toMutable(messagesReaderAbi), "getPodMessageCount", [BigInt(podId)])); } catch { return 0; }
 }
 
 export interface DirectMessageData {
@@ -341,7 +343,7 @@ export interface DirectMessageData {
 export async function getMessages(addr1: `0x${string}`, addr2: `0x${string}`, start = 0, limit = 50): Promise<DirectMessageData[]> {
   try {
     const ids = await callContract(
-      CONTRACT_ADDRESSES.messageReader, messagesReaderAbi,
+      CONTRACT_ADDRESSES.messageReader, toMutable(messagesReaderAbi),
       "getDirectMessageIds", [addr1, addr2, BigInt(start), BigInt(limit)]
     ) as bigint[];
     return await Promise.all(ids.map(async (id) => {
@@ -358,13 +360,13 @@ export async function getMessages(addr1: `0x${string}`, addr2: `0x${string}`, st
 
 export async function getConversations(address: `0x${string}`): Promise<string[]> {
   try {
-    const result = await callContract(CONTRACT_ADDRESSES.messageReader, messagesReaderAbi, "getConversations", [address]);
+    const result = await callContract(CONTRACT_ADDRESSES.messageReader, toMutable(messagesReaderAbi), "getConversations", [address]);
     return (result as string[]).map((a: string) => a.toLowerCase());
   } catch { return []; }
 }
 
 export async function getMessageCount(): Promise<number> {
-  try { return Number(await callContract(CONTRACT_ADDRESSES.messageReader, messagesReaderAbi, "getMessageCount")); } catch { return 0; }
+  try { return Number(await callContract(CONTRACT_ADDRESSES.messageReader, toMutable(messagesReaderAbi), "getMessageCount")); } catch { return 0; }
 }
 
 // ============================================================
@@ -383,7 +385,7 @@ export async function createPod(
   const CREATION_FEE = 500000000000000000000n; // 500 QF
   return writeContract(
     CONTRACT_ADDRESSES.podsCreate,
-    podsCreateAbi,
+    toMutable(podsCreateAbi),
     "createPod",
     [toBytes32(name.trim()), true, threshold, toBytes32(category), descriptionHex],
     CREATION_FEE
@@ -402,7 +404,7 @@ export async function createPaidPod(
   const descriptionHex = toHex(new TextEncoder().encode(description.slice(0, 256)));
   return writeContract(
     CONTRACT_ADDRESSES.podsCreatePaid,
-    podsCreatePaidAbi,
+    toMutable(podsCreatePaidAbi),
     "createPaidPod",
     [toBytes32(name), isPublic, threshold, entryFee, toBytes32(category), descriptionHex],
     creationFee
@@ -420,7 +422,7 @@ export async function joinPod(podId: number, _fee: bigint = 0n): Promise<TxResul
 
   return writeContract(
     CONTRACT_ADDRESSES.podsJoin,
-    podsJoinAbi,
+    toMutable(podsJoinAbi),
     "joinPod",
     [BigInt(podId)],
     alreadyPaid ? 0n : freshFee
@@ -428,13 +430,13 @@ export async function joinPod(podId: number, _fee: bigint = 0n): Promise<TxResul
 }
 
 export async function leavePod(podId: number): Promise<TxResult> {
-  return writeContract(CONTRACT_ADDRESSES.podsLeave, podsLeaveAbi, "leavePod", [BigInt(podId)]);
+  return writeContract(CONTRACT_ADDRESSES.podsLeave, toMutable(podsLeaveAbi), "leavePod", [BigInt(podId)]);
 }
 
 export async function sendPodMessage(podId: number, content: string): Promise<TxResult> {
   return writeContract(
     CONTRACT_ADDRESSES.messageWriter,
-    messagesWriterAbi,
+    toMutable(messagesWriterAbi),
     "sendPodMessage",
     [BigInt(podId), content]
   );
@@ -443,64 +445,64 @@ export async function sendPodMessage(podId: number, content: string): Promise<Tx
 export async function sendMessage(recipient: `0x${string}`, content: string): Promise<TxResult> {
   return writeContract(
     CONTRACT_ADDRESSES.messageWriter,
-    messagesWriterAbi,
+    toMutable(messagesWriterAbi),
     "sendMessage",
     [recipient, content]
   );
 }
 
 export async function banMember(podId: number, target: `0x${string}`): Promise<TxResult> {
-  return writeContract(CONTRACT_ADDRESSES.podsBan, podsBanAbi, "banMember", [BigInt(podId), target]);
+  return writeContract(CONTRACT_ADDRESSES.podsBan, toMutable(podsBanAbi), "banMember", [BigInt(podId), target]);
 }
 
 export async function unbanMember(podId: number, target: `0x${string}`): Promise<TxResult> {
-  return writeContract(CONTRACT_ADDRESSES.podsBan, podsBanAbi, "unbanMember", [BigInt(podId), target]);
+  return writeContract(CONTRACT_ADDRESSES.podsBan, toMutable(podsBanAbi), "unbanMember", [BigInt(podId), target]);
 }
 
 export async function addMod(podId: number, moderator: `0x${string}`): Promise<TxResult> {
-  return writeContract(CONTRACT_ADDRESSES.podsAddMod, podsAddModAbi, "addMod", [BigInt(podId), moderator]);
+  return writeContract(CONTRACT_ADDRESSES.podsAddMod, toMutable(podsAddModAbi), "addMod", [BigInt(podId), moderator]);
 }
 
 export async function removeMod(podId: number, moderator: `0x${string}`): Promise<TxResult> {
-  return writeContract(CONTRACT_ADDRESSES.podsRemoveMod, podsRemoveModAbi, "removeMod", [BigInt(podId), moderator]);
+  return writeContract(CONTRACT_ADDRESSES.podsRemoveMod, toMutable(podsRemoveModAbi), "removeMod", [BigInt(podId), moderator]);
 }
 
 export async function upgradePod(podId: number, fee: bigint): Promise<TxResult> {
-  return writeContract(CONTRACT_ADDRESSES.podsAdmin, podsAdminAbi, "upgradePod", [BigInt(podId)], fee);
+  return writeContract(CONTRACT_ADDRESSES.podsAdmin, toMutable(podsAdminAbi), "upgradePod", [BigInt(podId)], fee);
 }
 
 export async function setEntryFee(podId: number, fee: bigint): Promise<TxResult> {
-  return writeContract(CONTRACT_ADDRESSES.podsAdmin, podsAdminAbi, "setEntryFee", [BigInt(podId), fee]);
+  return writeContract(CONTRACT_ADDRESSES.podsAdmin, toMutable(podsAdminAbi), "setEntryFee", [BigInt(podId), fee]);
 }
 
 export async function payEntryFee(podId: number, fee: bigint): Promise<TxResult> {
-  return writeContract(CONTRACT_ADDRESSES.payments, paymentsAbi, "payEntryFee", [BigInt(podId)], fee);
+  return writeContract(CONTRACT_ADDRESSES.payments, toMutable(paymentsAbi), "payEntryFee", [BigInt(podId)], fee);
 }
 
 // Payments admin
 export async function getPaymentsOwner(): Promise<string | null> {
-  try { return ((await callContract(CONTRACT_ADDRESSES.payments, paymentsAbi, "owner")) as string).toLowerCase(); } catch { return null; }
+  try { return ((await callContract(CONTRACT_ADDRESSES.payments, toMutable(paymentsAbi), "owner")) as string).toLowerCase(); } catch { return null; }
 }
 export async function getPaymentsTreasury(): Promise<string | null> {
-  try { return ((await callContract(CONTRACT_ADDRESSES.payments, paymentsAbi, "treasury")) as string).toLowerCase(); } catch { return null; }
+  try { return ((await callContract(CONTRACT_ADDRESSES.payments, toMutable(paymentsAbi), "treasury")) as string).toLowerCase(); } catch { return null; }
 }
 export async function getPaymentsBalance(): Promise<bigint> {
-  try { return await callContract(CONTRACT_ADDRESSES.payments, paymentsAbi, "getContractBalance"); } catch { return 0n; }
+  try { return await callContract(CONTRACT_ADDRESSES.payments, toMutable(paymentsAbi), "getContractBalance"); } catch { return 0n; }
 }
 export async function setPaymentsTreasury(treasury: `0x${string}`): Promise<TxResult> {
-  return writeContract(CONTRACT_ADDRESSES.payments, paymentsAbi, "setTreasury", [treasury]);
+  return writeContract(CONTRACT_ADDRESSES.payments, toMutable(paymentsAbi), "setTreasury", [treasury]);
 }
 export async function setPaymentsAuthorized(auth: `0x${string}`, status: boolean): Promise<TxResult> {
-  return writeContract(CONTRACT_ADDRESSES.payments, paymentsAbi, "setAuthorized", [auth, status]);
+  return writeContract(CONTRACT_ADDRESSES.payments, toMutable(paymentsAbi), "setAuthorized", [auth, status]);
 }
 export async function withdrawPayments(amount: bigint): Promise<TxResult> {
-  return writeContract(CONTRACT_ADDRESSES.payments, paymentsAbi, "withdraw", [amount]);
+  return writeContract(CONTRACT_ADDRESSES.payments, toMutable(paymentsAbi), "withdraw", [amount]);
 }
 export async function withdrawPaymentsToTreasury(amount: bigint): Promise<TxResult> {
-  return writeContract(CONTRACT_ADDRESSES.payments, paymentsAbi, "withdrawToTreasury", [amount]);
+  return writeContract(CONTRACT_ADDRESSES.payments, toMutable(paymentsAbi), "withdrawToTreasury", [amount]);
 }
 export async function transferPaymentsOwnership(newOwner: `0x${string}`): Promise<TxResult> {
-  return writeContract(CONTRACT_ADDRESSES.payments, paymentsAbi, "transferOwnership", [newOwner]);
+  return writeContract(CONTRACT_ADDRESSES.payments, toMutable(paymentsAbi), "transferOwnership", [newOwner]);
 }
 
 // v1 stubs
