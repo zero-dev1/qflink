@@ -26,6 +26,7 @@ export const AuthGuard: React.FC<AuthGuardProps> = ({ children }) => {
   
   const isConnected = useWalletStore((s) => s.isConnected)
   const isConnecting = useWalletStore((s) => s.isConnecting)
+  const isRehydrating = useWalletStore((s) => s._rehydrating)
   const evmAddress = useWalletStore((s) => s.evmAddress)
   const isRegistered = useProfileStore((s) => s.isRegistered)
   const needsRegistration = useProfileStore((s) => s.needsRegistration)
@@ -149,13 +150,13 @@ export const AuthGuard: React.FC<AuthGuardProps> = ({ children }) => {
   }, [isRegistered, evmAddress]);
 
   // Show loading while checking auth state or QNS status
-  if (isConnecting || isChecking || (isConnected && isLoadingProfile) || isCheckingQNS) {
+  if (isConnecting || isChecking || isRehydrating || (isConnected && isLoadingProfile) || isCheckingQNS) {
     return (
       <div className="flex h-screen items-center justify-center bg-[#0D0D0D]">
         <div className="flex flex-col items-center gap-4">
           <Spinner size="lg" />
           <p className="text-sm text-gray-500">
-            {networkError ? 'Network busy, retrying...' : 'Checking authentication...'}
+            {networkError ? 'Network busy, retrying...' : isRehydrating ? 'Reconnecting wallet...' : 'Checking authentication...'}
           </p>
         </div>
       </div>

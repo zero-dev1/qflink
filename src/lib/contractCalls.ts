@@ -382,7 +382,7 @@ export async function createPod(
   category: string = "trading"
 ): Promise<TxResult> {
   const descriptionHex = toHex(new TextEncoder().encode(description.slice(0, 256)));
-  const CREATION_FEE = 500000000000000000000n; // 500 QF
+  const CREATION_FEE = await getCreationFee('create');
   return writeContract(
     CONTRACT_ADDRESSES.podsCreate,
     toMutable(podsCreateAbi),
@@ -402,12 +402,13 @@ export async function createPaidPod(
   description: string = ""
 ): Promise<TxResult> {
   const descriptionHex = toHex(new TextEncoder().encode(description.slice(0, 256)));
+  const actualCreationFee = await getCreationFee('createPaid');
   return writeContract(
     CONTRACT_ADDRESSES.podsCreatePaid,
     toMutable(podsCreatePaidAbi),
     "createPaidPod",
     [toBytes32(name), isPublic, threshold, entryFee, toBytes32(category), descriptionHex],
-    creationFee
+    actualCreationFee
   );
 }
 
@@ -489,11 +490,20 @@ export async function getPaymentsTreasury(): Promise<string | null> {
 export async function getPaymentsBalance(): Promise<bigint> {
   try { return await callContract(CONTRACT_ADDRESSES.payments, toMutable(paymentsAbi), "getContractBalance"); } catch { return 0n; }
 }
+export async function getPaymentsCreatorShare(): Promise<bigint> {
+  return callContract(CONTRACT_ADDRESSES.payments, toMutable(paymentsAbi), "getCreatorShare");
+}
+export async function getPaymentsTreasuryShare(): Promise<bigint> {
+  return callContract(CONTRACT_ADDRESSES.payments, toMutable(paymentsAbi), "getTreasuryShare");
+}
 export async function setPaymentsTreasury(treasury: `0x${string}`): Promise<TxResult> {
   return writeContract(CONTRACT_ADDRESSES.payments, toMutable(paymentsAbi), "setTreasury", [treasury]);
 }
 export async function setPaymentsAuthorized(auth: `0x${string}`, status: boolean): Promise<TxResult> {
   return writeContract(CONTRACT_ADDRESSES.payments, toMutable(paymentsAbi), "setAuthorized", [auth, status]);
+}
+export async function setPaymentsSplit(creatorShare: bigint, treasuryShare: bigint): Promise<TxResult> {
+  return writeContract(CONTRACT_ADDRESSES.payments, toMutable(paymentsAbi), "setSplit", [creatorShare, treasuryShare]);
 }
 export async function withdrawPayments(amount: bigint): Promise<TxResult> {
   return writeContract(CONTRACT_ADDRESSES.payments, toMutable(paymentsAbi), "withdraw", [amount]);
@@ -508,6 +518,70 @@ export async function transferPaymentsOwnership(newOwner: `0x${string}`): Promis
 // v1 stubs
 export async function setProFee(_: bigint) { throw new Error("Not available in v1"); }
 export async function setTreasury(_: `0x${string}`) { throw new Error("Not available in v1"); }
+
+// ── PodsCreate reads ──
+export async function getPodsCreateCreationFee(): Promise<bigint> {
+  return callContract(CONTRACT_ADDRESSES.podsCreate, toMutable(podsCreateAbi), "creationFee");
+}
+export async function getPodsCreateTreasuryShare(): Promise<bigint> {
+  return callContract(CONTRACT_ADDRESSES.podsCreate, toMutable(podsCreateAbi), "treasuryShare");
+}
+export async function getPodsCreateBurnShare(): Promise<bigint> {
+  return callContract(CONTRACT_ADDRESSES.podsCreate, toMutable(podsCreateAbi), "burnShare");
+}
+export async function getPodsCreateBurnAddress(): Promise<string> {
+  return callContract(CONTRACT_ADDRESSES.podsCreate, toMutable(podsCreateAbi), "burnAddress");
+}
+export async function getPodsCreateOwner(): Promise<string> {
+  return callContract(CONTRACT_ADDRESSES.podsCreate, toMutable(podsCreateAbi), "owner");
+}
+
+// ── PodsCreate writes ──
+export async function setPodsCreateCreationFee(fee: bigint): Promise<TxResult> {
+  return writeContract(CONTRACT_ADDRESSES.podsCreate, toMutable(podsCreateAbi), "setCreationFee", [fee]);
+}
+export async function setPodsCreateSplit(treasuryShare: bigint, burnShare: bigint): Promise<TxResult> {
+  return writeContract(CONTRACT_ADDRESSES.podsCreate, toMutable(podsCreateAbi), "setSplit", [treasuryShare, burnShare]);
+}
+export async function setPodsCreateBurnAddress(addr: `0x${string}`): Promise<TxResult> {
+  return writeContract(CONTRACT_ADDRESSES.podsCreate, toMutable(podsCreateAbi), "setBurnAddress", [addr]);
+}
+
+// ── PodsCreatePaid reads ──
+export async function getPodsCreatePaidCreationFee(): Promise<bigint> {
+  return callContract(CONTRACT_ADDRESSES.podsCreatePaid, toMutable(podsCreatePaidAbi), "creationFee");
+}
+export async function getPodsCreatePaidTreasuryShare(): Promise<bigint> {
+  return callContract(CONTRACT_ADDRESSES.podsCreatePaid, toMutable(podsCreatePaidAbi), "treasuryShare");
+}
+export async function getPodsCreatePaidBurnShare(): Promise<bigint> {
+  return callContract(CONTRACT_ADDRESSES.podsCreatePaid, toMutable(podsCreatePaidAbi), "burnShare");
+}
+export async function getPodsCreatePaidBurnAddress(): Promise<string> {
+  return callContract(CONTRACT_ADDRESSES.podsCreatePaid, toMutable(podsCreatePaidAbi), "burnAddress");
+}
+
+// ── PodsCreatePaid writes ──
+export async function setPodsCreatePaidCreationFee(fee: bigint): Promise<TxResult> {
+  return writeContract(CONTRACT_ADDRESSES.podsCreatePaid, toMutable(podsCreatePaidAbi), "setCreationFee", [fee]);
+}
+export async function setPodsCreatePaidSplit(treasuryShare: bigint, burnShare: bigint): Promise<TxResult> {
+  return writeContract(CONTRACT_ADDRESSES.podsCreatePaid, toMutable(podsCreatePaidAbi), "setSplit", [treasuryShare, burnShare]);
+}
+export async function setPodsCreatePaidBurnAddress(addr: `0x${string}`): Promise<TxResult> {
+  return writeContract(CONTRACT_ADDRESSES.podsCreatePaid, toMutable(podsCreatePaidAbi), "setBurnAddress", [addr]);
+}
+
+// ── Unified creation fee reader ──
+export async function getCreationFee(contract: 'create' | 'createPaid' = 'create'): Promise<bigint> {
+  const address = contract === 'create'
+    ? CONTRACT_ADDRESSES.podsCreate
+    : CONTRACT_ADDRESSES.podsCreatePaid;
+  const abi = contract === 'create' ? toMutable(podsCreateAbi) : toMutable(podsCreatePaidAbi);
+
+  const result = await callContract(address, abi, 'creationFee', []);
+  return BigInt(result);
+}
 
 // Chunked send — in PAPI there's no chunking needed, just a passthrough
 export async function sendPodMessageChunked(podId: number, content: string): Promise<{ id: string; podId: number; sender: string; content: string; timestamp: number }> {

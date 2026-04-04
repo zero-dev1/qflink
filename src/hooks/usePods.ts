@@ -73,15 +73,15 @@ export function usePods() {
         return
       }
       try {
-        const CREATION_FEE = 500000000000000000000n // 500 QF
         let receipt
         if (entryFee > 0n) {
+          const creationFee = await cc.getCreationFee('createPaid')
           receipt = await cc.createPaidPod(
             name,
             isPublic,
             minBalance,
             entryFee,
-            CREATION_FEE,
+            creationFee,
             category,
             description
           )

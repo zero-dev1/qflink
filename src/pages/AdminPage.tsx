@@ -11,9 +11,6 @@ import { formatExactAmount } from '@/lib/utils'
 const OWNER_ADDRESS = (import.meta.env.VITE_OWNER_ADDRESS || '').toLowerCase()
 const PAYMENTS_ADDRESS = CONTRACT_ADDRESSES.payments as `0x${string}`
 
-// Platform fee is 5% (hardcoded in contract)
-const PLATFORM_FEE_PCT = 5
-
 // Contract list for display
 const CONTRACTS_LIST = [
   { name: 'Registry', key: 'registry' as const },
@@ -158,6 +155,35 @@ const AdminPage: React.FC = () => {
   const [paymentsBalance, setPaymentsBalance] = useState<bigint>(0n)
   const [loading, setLoading] = useState(true)
   
+  // Economics states
+  const [platformFeePct, setPlatformFeePct] = useState<number>(0)
+  const [podsCreateFee, setPodsCreateFee] = useState<bigint>(0n)
+  const [podsCreateTreasuryShare, setPodsCreateTreasuryShare] = useState<bigint>(0n)
+  const [podsCreateBurnShare, setPodsCreateBurnShare] = useState<bigint>(0n)
+  const [podsCreateBurnAddress, setPodsCreateBurnAddress] = useState<string>('')
+  const [podsCreatePaidFee, setPodsCreatePaidFee] = useState<bigint>(0n)
+  const [podsCreatePaidTreasuryShare, setPodsCreatePaidTreasuryShare] = useState<bigint>(0n)
+  const [podsCreatePaidBurnShare, setPodsCreatePaidBurnShare] = useState<bigint>(0n)
+  const [podsCreatePaidBurnAddress, setPodsCreatePaidBurnAddress] = useState<string>('')
+  
+  // Form states for economics
+  const [newPaymentsSplit, setNewPaymentsSplit] = useState({ creatorShare: '', treasuryShare: '' })
+  const [newPodsCreateFee, setNewPodsCreateFee] = useState('')
+  const [newPodsCreateSplit, setNewPodsCreateSplit] = useState({ treasuryShare: '', burnShare: '' })
+  const [newPodsCreateBurnAddress, setNewPodsCreateBurnAddress] = useState('')
+  const [newPodsCreatePaidFee, setNewPodsCreatePaidFee] = useState('')
+  const [newPodsCreatePaidSplit, setNewPodsCreatePaidSplit] = useState({ treasuryShare: '', burnShare: '' })
+  const [newPodsCreatePaidBurnAddress, setNewPodsCreatePaidBurnAddress] = useState('')
+  
+  // Loading states
+  const [updatingPaymentsSplit, setUpdatingPaymentsSplit] = useState(false)
+  const [updatingPodsCreateFee, setUpdatingPodsCreateFee] = useState(false)
+  const [updatingPodsCreateSplit, setUpdatingPodsCreateSplit] = useState(false)
+  const [updatingPodsCreateBurnAddress, setUpdatingPodsCreateBurnAddress] = useState(false)
+  const [updatingPodsCreatePaidFee, setUpdatingPodsCreatePaidFee] = useState(false)
+  const [updatingPodsCreatePaidSplit, setUpdatingPodsCreatePaidSplit] = useState(false)
+  const [updatingPodsCreatePaidBurnAddress, setUpdatingPodsCreatePaidBurnAddress] = useState(false)
+  
   // Form states
   const [newTreasuryInput, setNewTreasuryInput] = useState('')
   const [newOwnerInput, setNewOwnerInput] = useState('')
@@ -172,17 +198,54 @@ const AdminPage: React.FC = () => {
     
     setLoading(true)
     try {
-      const [treasury, owner, pods, payBalance] = await Promise.all([
+      const [
+        treasury, 
+        owner, 
+        pods, 
+        payBalance,
+        paymentsTreasuryShare,
+        podsCreateData,
+        podsCreatePaidData
+      ] = await Promise.all([
         cc.getPaymentsTreasury(),
         cc.getPaymentsOwner(),
         cc.getPodCount(),
         cc.getPaymentsBalance(),
+        cc.getPaymentsTreasuryShare(),
+        Promise.all([
+          cc.getPodsCreateCreationFee(),
+          cc.getPodsCreateTreasuryShare(),
+          cc.getPodsCreateBurnShare(),
+          cc.getPodsCreateBurnAddress()
+        ]),
+        Promise.all([
+          cc.getPodsCreatePaidCreationFee(),
+          cc.getPodsCreatePaidTreasuryShare(),
+          cc.getPodsCreatePaidBurnShare(),
+          cc.getPodsCreatePaidBurnAddress()
+        ])
       ])
       
       setCurrentTreasury(treasury)
       setCurrentOwner(owner)
       setPodCount(pods)
       setPaymentsBalance(payBalance)
+      
+      // Calculate platform fee percentage from treasury share (assuming 10000 = 100%)
+      const feePct = Number(paymentsTreasuryShare) / 100
+      setPlatformFeePct(feePct)
+      
+      // Set PodsCreate economics
+      setPodsCreateFee(podsCreateData[0])
+      setPodsCreateTreasuryShare(podsCreateData[1])
+      setPodsCreateBurnShare(podsCreateData[2])
+      setPodsCreateBurnAddress(podsCreateData[3])
+      
+      // Set PodsCreatePaid economics
+      setPodsCreatePaidFee(podsCreatePaidData[0])
+      setPodsCreatePaidTreasuryShare(podsCreatePaidData[1])
+      setPodsCreatePaidBurnShare(podsCreatePaidData[2])
+      setPodsCreatePaidBurnAddress(podsCreatePaidData[3])
       
       // Fetch treasury balance if treasury exists
       if (treasury && treasury !== '0x0000000000000000000000000000000000000000') {
@@ -283,6 +346,149 @@ const AdminPage: React.FC = () => {
       addToast('error', err instanceof Error ? err.message : 'Failed to withdraw to treasury')
     } finally {
       setWithdrawingToTreasury(false)
+    }
+  }
+  
+  // Economics handlers
+  const handleUpdatePaymentsSplit = async () => {
+    if (!newPaymentsSplit.creatorShare || !newPaymentsSplit.treasuryShare) return
+    
+    setUpdatingPaymentsSplit(true)
+    try {
+      const creatorShare = BigInt(Math.floor(parseFloat(newPaymentsSplit.creatorShare) * 100))
+      const treasuryShare = BigInt(Math.floor(parseFloat(newPaymentsSplit.treasuryShare) * 100))
+      
+      const txResult = await cc.setPaymentsSplit(creatorShare, treasuryShare)
+      await txResult.confirmation
+      addToast('success', 'Payments split updated successfully')
+      setNewPaymentsSplit({ creatorShare: '', treasuryShare: '' })
+      await fetchData()
+    } catch (err) {
+      addToast('error', err instanceof Error ? err.message : 'Failed to update payments split')
+    } finally {
+      setUpdatingPaymentsSplit(false)
+    }
+  }
+  
+  const handleUpdatePodsCreateFee = async () => {
+    if (!newPodsCreateFee) return
+    
+    setUpdatingPodsCreateFee(true)
+    try {
+      const fee = BigInt(newPodsCreateFee)
+      const txResult = await cc.setPodsCreateCreationFee(fee)
+      await txResult.confirmation
+      addToast('success', 'PodsCreate fee updated successfully')
+      setNewPodsCreateFee('')
+      await fetchData()
+    } catch (err) {
+      addToast('error', err instanceof Error ? err.message : 'Failed to update PodsCreate fee')
+    } finally {
+      setUpdatingPodsCreateFee(false)
+    }
+  }
+  
+  const handleUpdatePodsCreateSplit = async () => {
+    if (!newPodsCreateSplit.treasuryShare || !newPodsCreateSplit.burnShare) return
+    
+    setUpdatingPodsCreateSplit(true)
+    try {
+      const treasuryShare = BigInt(Math.floor(parseFloat(newPodsCreateSplit.treasuryShare) * 100))
+      const burnShare = BigInt(Math.floor(parseFloat(newPodsCreateSplit.burnShare) * 100))
+      
+      const txResult = await cc.setPodsCreateSplit(treasuryShare, burnShare)
+      await txResult.confirmation
+      addToast('success', 'PodsCreate split updated successfully')
+      setNewPodsCreateSplit({ treasuryShare: '', burnShare: '' })
+      await fetchData()
+    } catch (err) {
+      addToast('error', err instanceof Error ? err.message : 'Failed to update PodsCreate split')
+    } finally {
+      setUpdatingPodsCreateSplit(false)
+    }
+  }
+  
+  const handleUpdatePodsCreateBurnAddress = async () => {
+    if (!newPodsCreateBurnAddress.trim()) return
+    
+    setUpdatingPodsCreateBurnAddress(true)
+    try {
+      const addr = await resolveToAddress(newPodsCreateBurnAddress)
+      if (!addr) {
+        addToast('error', 'Could not resolve address. Enter a valid 0x address or .qf name.')
+        return
+      }
+      
+      const txResult = await cc.setPodsCreateBurnAddress(addr)
+      await txResult.confirmation
+      addToast('success', 'PodsCreate burn address updated successfully')
+      setNewPodsCreateBurnAddress('')
+      await fetchData()
+    } catch (err) {
+      addToast('error', err instanceof Error ? err.message : 'Failed to update PodsCreate burn address')
+    } finally {
+      setUpdatingPodsCreateBurnAddress(false)
+    }
+  }
+  
+  const handleUpdatePodsCreatePaidFee = async () => {
+    if (!newPodsCreatePaidFee) return
+    
+    setUpdatingPodsCreatePaidFee(true)
+    try {
+      const fee = BigInt(newPodsCreatePaidFee)
+      const txResult = await cc.setPodsCreatePaidCreationFee(fee)
+      await txResult.confirmation
+      addToast('success', 'PodsCreatePaid fee updated successfully')
+      setNewPodsCreatePaidFee('')
+      await fetchData()
+    } catch (err) {
+      addToast('error', err instanceof Error ? err.message : 'Failed to update PodsCreatePaid fee')
+    } finally {
+      setUpdatingPodsCreatePaidFee(false)
+    }
+  }
+  
+  const handleUpdatePodsCreatePaidSplit = async () => {
+    if (!newPodsCreatePaidSplit.treasuryShare || !newPodsCreatePaidSplit.burnShare) return
+    
+    setUpdatingPodsCreatePaidSplit(true)
+    try {
+      const treasuryShare = BigInt(Math.floor(parseFloat(newPodsCreatePaidSplit.treasuryShare) * 100))
+      const burnShare = BigInt(Math.floor(parseFloat(newPodsCreatePaidSplit.burnShare) * 100))
+      
+      const txResult = await cc.setPodsCreatePaidSplit(treasuryShare, burnShare)
+      await txResult.confirmation
+      addToast('success', 'PodsCreatePaid split updated successfully')
+      setNewPodsCreatePaidSplit({ treasuryShare: '', burnShare: '' })
+      await fetchData()
+    } catch (err) {
+      addToast('error', err instanceof Error ? err.message : 'Failed to update PodsCreatePaid split')
+    } finally {
+      setUpdatingPodsCreatePaidSplit(false)
+    }
+  }
+  
+  const handleUpdatePodsCreatePaidBurnAddress = async () => {
+    if (!newPodsCreatePaidBurnAddress.trim()) return
+    
+    setUpdatingPodsCreatePaidBurnAddress(true)
+    try {
+      const addr = await resolveToAddress(newPodsCreatePaidBurnAddress)
+      if (!addr) {
+        addToast('error', 'Could not resolve address. Enter a valid 0x address or .qf name.')
+        return
+      }
+      
+      const txResult = await cc.setPodsCreatePaidBurnAddress(addr)
+      await txResult.confirmation
+      addToast('success', 'PodsCreatePaid burn address updated successfully')
+      setNewPodsCreatePaidBurnAddress('')
+      await fetchData()
+    } catch (err) {
+      addToast('error', err instanceof Error ? err.message : 'Failed to update PodsCreatePaid burn address')
+    } finally {
+      setUpdatingPodsCreatePaidBurnAddress(false)
     }
   }
   
@@ -393,7 +599,263 @@ const AdminPage: React.FC = () => {
           </div>
         </section>
         
-        {/* Section 2: Platform Stats */}
+        {/* Section 2: Economics */}
+        <section>
+          <h2 className="text-lg font-semibold text-white mb-4">Economics</h2>
+          
+          {/* Entry Fee Economics (Payments) */}
+          <div className="border border-gray-800 bg-[#0d0d14] p-6 mb-6">
+            <h3 className="text-md font-semibold text-white mb-4">Entry Fee Economics (Payments)</h3>
+            
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+              <div className="flex items-center justify-between py-3 border-b border-gray-800">
+                <span className="text-sm text-gray-400">Creator Share</span>
+                <span className="text-sm text-white">{100 - platformFeePct}%</span>
+              </div>
+              <div className="flex items-center justify-between py-3 border-b border-gray-800">
+                <span className="text-sm text-gray-400">Treasury Share</span>
+                <span className="text-sm text-white">{platformFeePct}%</span>
+              </div>
+            </div>
+            
+            <div className="pt-2">
+              <label className="text-xs text-gray-500 uppercase tracking-wider block mb-2">Update Split</label>
+              <div className="flex gap-2">
+                <input
+                  type="number"
+                  placeholder="Creator %"
+                  value={newPaymentsSplit.creatorShare}
+                  onChange={(e) => setNewPaymentsSplit(prev => ({ ...prev, creatorShare: e.target.value }))}
+                  disabled={updatingPaymentsSplit}
+                  className="flex-1 h-10 border border-gray-800 bg-white/5 px-3 text-sm text-white placeholder:text-gray-600 focus:border-[#0991B2] focus:outline-none focus:ring-1 focus:ring-[#0991B2] transition-colors disabled:opacity-50"
+                />
+                <input
+                  type="number"
+                  placeholder="Treasury %"
+                  value={newPaymentsSplit.treasuryShare}
+                  onChange={(e) => setNewPaymentsSplit(prev => ({ ...prev, treasuryShare: e.target.value }))}
+                  disabled={updatingPaymentsSplit}
+                  className="flex-1 h-10 border border-gray-800 bg-white/5 px-3 text-sm text-white placeholder:text-gray-600 focus:border-[#0991B2] focus:outline-none focus:ring-1 focus:ring-[#0991B2] transition-colors disabled:opacity-50"
+                />
+                <button
+                  onClick={handleUpdatePaymentsSplit}
+                  disabled={updatingPaymentsSplit || !newPaymentsSplit.creatorShare || !newPaymentsSplit.treasuryShare}
+                  className="bg-[#0991B2] px-6 py-2 text-sm font-semibold text-white hover:bg-[#0880A0] transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+                >
+                  {updatingPaymentsSplit && <Spinner size="sm" />}
+                  Update Split
+                </button>
+              </div>
+            </div>
+          </div>
+          
+          {/* Pod Creation Economics */}
+          <div className="border border-gray-800 bg-[#0d0d14] p-6 mb-6">
+            <h3 className="text-md font-semibold text-white mb-4">Pod Creation Economics</h3>
+            
+            {/* PodsCreate */}
+            <div className="mb-6">
+              <h4 className="text-sm font-medium text-gray-300 mb-3">PodsCreate (Free Pods)</h4>
+              
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+                <div className="flex items-center justify-between py-3 border-b border-gray-800">
+                  <span className="text-sm text-gray-400">Creation Fee</span>
+                  <span className="text-sm text-white">{formatExactAmount(podsCreateFee)} QF</span>
+                </div>
+                <div className="flex items-center justify-between py-3 border-b border-gray-800">
+                  <span className="text-sm text-gray-400">Treasury Share</span>
+                  <span className="text-sm text-white">{Number(podsCreateTreasuryShare) / 100}%</span>
+                </div>
+                <div className="flex items-center justify-between py-3 border-b border-gray-800">
+                  <span className="text-sm text-gray-400">Burn Share</span>
+                  <span className="text-sm text-white">{Number(podsCreateBurnShare) / 100}%</span>
+                </div>
+                <div className="flex items-center justify-between py-3 border-b border-gray-800">
+                  <span className="text-sm text-gray-400">Burn Address</span>
+                  <AddressDisplay address={podsCreateBurnAddress} truncate />
+                </div>
+              </div>
+              
+              <div className="space-y-3">
+                <div>
+                  <label className="text-xs text-gray-500 uppercase tracking-wider block mb-2">Update Creation Fee</label>
+                  <div className="flex gap-2">
+                    <input
+                      type="text"
+                      placeholder="New fee in wei"
+                      value={newPodsCreateFee}
+                      onChange={(e) => setNewPodsCreateFee(e.target.value)}
+                      disabled={updatingPodsCreateFee}
+                      className="flex-1 h-10 border border-gray-800 bg-white/5 px-3 text-sm text-white placeholder:text-gray-600 focus:border-[#0991B2] focus:outline-none focus:ring-1 focus:ring-[#0991B2] transition-colors disabled:opacity-50"
+                    />
+                    <button
+                      onClick={handleUpdatePodsCreateFee}
+                      disabled={updatingPodsCreateFee || !newPodsCreateFee}
+                      className="bg-[#0991B2] px-6 py-2 text-sm font-semibold text-white hover:bg-[#0880A0] transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+                    >
+                      {updatingPodsCreateFee && <Spinner size="sm" />}
+                      Update Fee
+                    </button>
+                  </div>
+                </div>
+                
+                <div>
+                  <label className="text-xs text-gray-500 uppercase tracking-wider block mb-2">Update Split</label>
+                  <div className="flex gap-2">
+                    <input
+                      type="number"
+                      placeholder="Treasury %"
+                      value={newPodsCreateSplit.treasuryShare}
+                      onChange={(e) => setNewPodsCreateSplit(prev => ({ ...prev, treasuryShare: e.target.value }))}
+                      disabled={updatingPodsCreateSplit}
+                      className="flex-1 h-10 border border-gray-800 bg-white/5 px-3 text-sm text-white placeholder:text-gray-600 focus:border-[#0991B2] focus:outline-none focus:ring-1 focus:ring-[#0991B2] transition-colors disabled:opacity-50"
+                    />
+                    <input
+                      type="number"
+                      placeholder="Burn %"
+                      value={newPodsCreateSplit.burnShare}
+                      onChange={(e) => setNewPodsCreateSplit(prev => ({ ...prev, burnShare: e.target.value }))}
+                      disabled={updatingPodsCreateSplit}
+                      className="flex-1 h-10 border border-gray-800 bg-white/5 px-3 text-sm text-white placeholder:text-gray-600 focus:border-[#0991B2] focus:outline-none focus:ring-1 focus:ring-[#0991B2] transition-colors disabled:opacity-50"
+                    />
+                    <button
+                      onClick={handleUpdatePodsCreateSplit}
+                      disabled={updatingPodsCreateSplit || !newPodsCreateSplit.treasuryShare || !newPodsCreateSplit.burnShare}
+                      className="bg-[#0991B2] px-6 py-2 text-sm font-semibold text-white hover:bg-[#0880A0] transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+                    >
+                      {updatingPodsCreateSplit && <Spinner size="sm" />}
+                      Update Split
+                    </button>
+                  </div>
+                </div>
+                
+                <div>
+                  <label className="text-xs text-gray-500 uppercase tracking-wider block mb-2">Update Burn Address</label>
+                  <div className="flex gap-2">
+                    <input
+                      type="text"
+                      placeholder="New burn address or .qf name"
+                      value={newPodsCreateBurnAddress}
+                      onChange={(e) => setNewPodsCreateBurnAddress(e.target.value)}
+                      disabled={updatingPodsCreateBurnAddress}
+                      className="flex-1 h-10 border border-gray-800 bg-white/5 px-3 text-sm text-white placeholder:text-gray-600 focus:border-[#0991B2] focus:outline-none focus:ring-1 focus:ring-[#0991B2] transition-colors disabled:opacity-50"
+                    />
+                    <button
+                      onClick={handleUpdatePodsCreateBurnAddress}
+                      disabled={updatingPodsCreateBurnAddress || !newPodsCreateBurnAddress.trim()}
+                      className="bg-[#0991B2] px-6 py-2 text-sm font-semibold text-white hover:bg-[#0880A0] transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+                    >
+                      {updatingPodsCreateBurnAddress && <Spinner size="sm" />}
+                      Update Address
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </div>
+            
+            {/* PodsCreatePaid */}
+            <div>
+              <h4 className="text-sm font-medium text-gray-300 mb-3">PodsCreatePaid (Paid Pods)</h4>
+              
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+                <div className="flex items-center justify-between py-3 border-b border-gray-800">
+                  <span className="text-sm text-gray-400">Creation Fee</span>
+                  <span className="text-sm text-white">{formatExactAmount(podsCreatePaidFee)} QF</span>
+                </div>
+                <div className="flex items-center justify-between py-3 border-b border-gray-800">
+                  <span className="text-sm text-gray-400">Treasury Share</span>
+                  <span className="text-sm text-white">{Number(podsCreatePaidTreasuryShare) / 100}%</span>
+                </div>
+                <div className="flex items-center justify-between py-3 border-b border-gray-800">
+                  <span className="text-sm text-gray-400">Burn Share</span>
+                  <span className="text-sm text-white">{Number(podsCreatePaidBurnShare) / 100}%</span>
+                </div>
+                <div className="flex items-center justify-between py-3 border-b border-gray-800">
+                  <span className="text-sm text-gray-400">Burn Address</span>
+                  <AddressDisplay address={podsCreatePaidBurnAddress} truncate />
+                </div>
+              </div>
+              
+              <div className="space-y-3">
+                <div>
+                  <label className="text-xs text-gray-500 uppercase tracking-wider block mb-2">Update Creation Fee</label>
+                  <div className="flex gap-2">
+                    <input
+                      type="text"
+                      placeholder="New fee in wei"
+                      value={newPodsCreatePaidFee}
+                      onChange={(e) => setNewPodsCreatePaidFee(e.target.value)}
+                      disabled={updatingPodsCreatePaidFee}
+                      className="flex-1 h-10 border border-gray-800 bg-white/5 px-3 text-sm text-white placeholder:text-gray-600 focus:border-[#0991B2] focus:outline-none focus:ring-1 focus:ring-[#0991B2] transition-colors disabled:opacity-50"
+                    />
+                    <button
+                      onClick={handleUpdatePodsCreatePaidFee}
+                      disabled={updatingPodsCreatePaidFee || !newPodsCreatePaidFee}
+                      className="bg-[#0991B2] px-6 py-2 text-sm font-semibold text-white hover:bg-[#0880A0] transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+                    >
+                      {updatingPodsCreatePaidFee && <Spinner size="sm" />}
+                      Update Fee
+                    </button>
+                  </div>
+                </div>
+                
+                <div>
+                  <label className="text-xs text-gray-500 uppercase tracking-wider block mb-2">Update Split</label>
+                  <div className="flex gap-2">
+                    <input
+                      type="number"
+                      placeholder="Treasury %"
+                      value={newPodsCreatePaidSplit.treasuryShare}
+                      onChange={(e) => setNewPodsCreatePaidSplit(prev => ({ ...prev, treasuryShare: e.target.value }))}
+                      disabled={updatingPodsCreatePaidSplit}
+                      className="flex-1 h-10 border border-gray-800 bg-white/5 px-3 text-sm text-white placeholder:text-gray-600 focus:border-[#0991B2] focus:outline-none focus:ring-1 focus:ring-[#0991B2] transition-colors disabled:opacity-50"
+                    />
+                    <input
+                      type="number"
+                      placeholder="Burn %"
+                      value={newPodsCreatePaidSplit.burnShare}
+                      onChange={(e) => setNewPodsCreatePaidSplit(prev => ({ ...prev, burnShare: e.target.value }))}
+                      disabled={updatingPodsCreatePaidSplit}
+                      className="flex-1 h-10 border border-gray-800 bg-white/5 px-3 text-sm text-white placeholder:text-gray-600 focus:border-[#0991B2] focus:outline-none focus:ring-1 focus:ring-[#0991B2] transition-colors disabled:opacity-50"
+                    />
+                    <button
+                      onClick={handleUpdatePodsCreatePaidSplit}
+                      disabled={updatingPodsCreatePaidSplit || !newPodsCreatePaidSplit.treasuryShare || !newPodsCreatePaidSplit.burnShare}
+                      className="bg-[#0991B2] px-6 py-2 text-sm font-semibold text-white hover:bg-[#0880A0] transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+                    >
+                      {updatingPodsCreatePaidSplit && <Spinner size="sm" />}
+                      Update Split
+                    </button>
+                  </div>
+                </div>
+                
+                <div>
+                  <label className="text-xs text-gray-500 uppercase tracking-wider block mb-2">Update Burn Address</label>
+                  <div className="flex gap-2">
+                    <input
+                      type="text"
+                      placeholder="New burn address or .qf name"
+                      value={newPodsCreatePaidBurnAddress}
+                      onChange={(e) => setNewPodsCreatePaidBurnAddress(e.target.value)}
+                      disabled={updatingPodsCreatePaidBurnAddress}
+                      className="flex-1 h-10 border border-gray-800 bg-white/5 px-3 text-sm text-white placeholder:text-gray-600 focus:border-[#0991B2] focus:outline-none focus:ring-1 focus:ring-[#0991B2] transition-colors disabled:opacity-50"
+                    />
+                    <button
+                      onClick={handleUpdatePodsCreatePaidBurnAddress}
+                      disabled={updatingPodsCreatePaidBurnAddress || !newPodsCreatePaidBurnAddress.trim()}
+                      className="bg-[#0991B2] px-6 py-2 text-sm font-semibold text-white hover:bg-[#0880A0] transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+                    >
+                      {updatingPodsCreatePaidBurnAddress && <Spinner size="sm" />}
+                      Update Address
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </section>
+        
+        {/* Section 3: Platform Stats */}
         <section>
           <h2 className="text-lg font-semibold text-white mb-4">Platform Stats</h2>
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
@@ -435,7 +897,7 @@ const AdminPage: React.FC = () => {
             />
             <StatCard
               label="Platform Fee"
-              value={`${PLATFORM_FEE_PCT}%`}
+              value={`${platformFeePct}%`}
               accent
               loading={loading}
               icon={
@@ -449,7 +911,7 @@ const AdminPage: React.FC = () => {
           </div>
         </section>
         
-        {/* Section 3: Contract Addresses */}
+        {/* Section 4: Contract Addresses */}
         <section>
           <h2 className="text-lg font-semibold text-white mb-4">Deployed Contracts</h2>
           <div className="border border-gray-800 bg-[#0d0d14] overflow-x-auto">
@@ -483,14 +945,14 @@ const AdminPage: React.FC = () => {
           </div>
         </section>
         
-        {/* Section 4: Contract Authorization (Skipped - no isAuthorized view function) */}
+        {/* Section 5: Contract Authorization (Skipped - no isAuthorized view function) */}
         {/* 
           TODO: Add isAuthorized view function to contracts
           The contracts have setAuthorized but no public getter for checking authorization status.
           Without isAuthorized(address) view function, we cannot display authorization badges.
         */}
         
-        {/* Section 5: Quick Actions */}
+        {/* Section 6: Quick Actions */}
         <section>
           <h2 className="text-lg font-semibold text-white mb-4">Quick Actions</h2>
           <div className="border border-gray-800 bg-[#0d0d14] p-6">

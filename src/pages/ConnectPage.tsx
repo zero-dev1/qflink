@@ -29,10 +29,22 @@ const ConnectPage: React.FC = () => {
   const isMappingAccount = useWalletStore((s) => s.isMappingAccount)
   const walletSource = useWalletStore((s) => s.walletSource)
   const walletError = useWalletStore((s) => s.walletError)
+  const isRehydrating = useWalletStore((s) => s._rehydrating)
   const connectStore = useWalletStore((s) => s.connect)
   const clearWalletError = useWalletStore((s) => s.clearWalletError)
   const addToast = useUIStore((s) => s.addToast)
   const profile = useProfileStore()
+
+  // Show loading while rehydrating
+  if (isRehydrating) {
+    return (
+      <div className="h-dvh overflow-hidden bg-[#0D0D0D] flex flex-col items-center justify-center px-4">
+        <QFLinkWordmark size={56} variant="dark" className="mb-10" />
+        <Spinner size="lg" />
+        <p className="text-sm text-gray-500 mt-4">Reconnecting wallet...</p>
+      </div>
+    )
+  }
 
   // After wallet connects, do a fresh on-chain profile check to decide next step.
   // We do NOT rely on the profile store's cached isRegistered — we always query
