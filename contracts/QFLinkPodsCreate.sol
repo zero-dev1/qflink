@@ -3,62 +3,71 @@ pragma solidity ^0.8.20;
 
 import {IPodsStorage} from "./IPodsStorage.sol";
 
-// QFLinkPodsCreate — Single function: createPod
-// Requires 500 QF creation fee, split 95% treasury / 5% burn
-
-// Custom errors
 error InvalidName();
 error InsufficientCreationFee();
+error InvalidSplit();
 
 contract QFLinkPodsCreate {
-    // ============ Immutable Reference ============
-    
     IPodsStorage public immutable storage_;
-    
-    // ============ Fee Configuration ============
-    
-    uint256 public constant CREATION_FEE = 500 ether; // 500 QF
+
+    uint256 public creationFee;
     address public treasury;
+    address public burnAddress;
     address public owner;
-    
-    // Fee split constants
-    uint256 constant TREASURY_SHARE = 95;
-    uint256 constant BURN_SHARE = 5;
+
+    uint256 public treasuryShare;
+    uint256 public burnShare;
     uint256 constant SHARE_DENOMINATOR = 100;
-    
-    // ============ Events ============
-    
+
     event OwnershipTransferred(address indexed previousOwner, address indexed newOwner);
-    
-    // ============ Modifiers ============
-    
+    event CreationFeeUpdated(uint256 oldFee, uint256 newFee);
+    event SplitUpdated(uint256 treasuryShare, uint256 burnShare);
+    event BurnAddressUpdated(address oldBurn, address newBurn);
+
     modifier onlyOwner() {
         require(msg.sender == owner, "Not owner");
         _;
     }
-    
-    // ============ Constructor ============
-    
+
     constructor(address _storage, address _treasury) {
         storage_ = IPodsStorage(_storage);
         treasury = _treasury;
         owner = msg.sender;
+        creationFee = 500 ether;
+        treasuryShare = 95;
+        burnShare = 5;
+        burnAddress = address(0xdead);
     }
-    
-    // ============ Admin Functions ============
-    
+
+    function setCreationFee(uint256 _fee) external onlyOwner {
+        uint256 oldFee = creationFee;
+        creationFee = _fee;
+        emit CreationFeeUpdated(oldFee, _fee);
+    }
+
+    function setSplit(uint256 _treasuryShare, uint256 _burnShare) external onlyOwner {
+        if (_treasuryShare + _burnShare != SHARE_DENOMINATOR) revert InvalidSplit();
+        treasuryShare = _treasuryShare;
+        burnShare = _burnShare;
+        emit SplitUpdated(_treasuryShare, _burnShare);
+    }
+
+    function setBurnAddress(address _burnAddress) external onlyOwner {
+        address oldBurn = burnAddress;
+        burnAddress = _burnAddress;
+        emit BurnAddressUpdated(oldBurn, _burnAddress);
+    }
+
     function setTreasury(address _treasury) external onlyOwner {
         treasury = _treasury;
     }
-    
+
     function transferOwnership(address newOwner) external onlyOwner {
         require(newOwner != address(0), "Invalid address");
         emit OwnershipTransferred(owner, newOwner);
         owner = newOwner;
     }
-    
-    // ============ Create Function ============
-    
+
     function createPod(
         bytes32 name,
         bool isPublic,
@@ -67,26 +76,23 @@ contract QFLinkPodsCreate {
         bytes calldata description
     ) external payable returns (uint64) {
         if (name == bytes32(0)) revert InvalidName();
-        if (msg.value != CREATION_FEE) revert InsufficientCreationFee();
-        
-        // 1. Create pod in storage (tier 1 = Pro equivalent, supports 3 mods)
-        // createPodFull already adds creator as member and mod, sets counts to 1
+        if (msg.value != creationFee) revert InsufficientCreationFee();
+
         uint64 podId = storage_.createPodFull(name, msg.sender, isPublic, threshold, 1, category, description);
-        
-        // 2. Distribute creation fee: 95% to treasury, 5% to burn address
-        uint256 treasuryAmount = (msg.value * TREASURY_SHARE) / SHARE_DENOMINATOR;
+
+        uint256 treasuryAmount = (msg.value * treasuryShare) / SHARE_DENOMINATOR;
         uint256 burnAmount = msg.value - treasuryAmount;
-        
+
         if (treasuryAmount > 0 && treasury != address(0)) {
             (bool sent, ) = payable(treasury).call{value: treasuryAmount}("");
             require(sent, "Treasury transfer failed");
         }
-        
-        if (burnAmount > 0) {
-            (bool sent, ) = payable(address(0xdead)).call{value: burnAmount}("");
+
+        if (burnAmount > 0 && burnAddress != address(0)) {
+            (bool sent, ) = payable(burnAddress).call{value: burnAmount}("");
             require(sent, "Burn transfer failed");
         }
-        
+
         return podId;
     }
 }

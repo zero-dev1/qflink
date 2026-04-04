@@ -24,9 +24,10 @@ export const paymentsAbi = [
   },
   {
     type: 'function',
-    name: 'setPods',
+    name: 'setAuthorized',
     inputs: [
-      { name: '_pods', type: 'address', internalType: 'address' },
+      { name: '_auth', type: 'address', internalType: 'address' },
+      { name: '_status', type: 'bool', internalType: 'bool' },
     ],
     outputs: [],
     stateMutability: 'nonpayable',
@@ -42,10 +43,30 @@ export const paymentsAbi = [
   },
   {
     type: 'function',
-    name: 'setAuthorized',
+    name: 'setSplit',
     inputs: [
-      { name: '_auth', type: 'address', internalType: 'address' },
-      { name: '_status', type: 'bool', internalType: 'bool' },
+      { name: '_creatorShare', type: 'uint256', internalType: 'uint256' },
+      { name: '_treasuryShare', type: 'uint256', internalType: 'uint256' },
+    ],
+    outputs: [],
+    stateMutability: 'nonpayable',
+  },
+  {
+    type: 'function',
+    name: 'migrateEntryFee',
+    inputs: [
+      { name: 'podId', type: 'uint64', internalType: 'uint64' },
+      { name: 'fee', type: 'uint256', internalType: 'uint256' },
+    ],
+    outputs: [],
+    stateMutability: 'nonpayable',
+  },
+  {
+    type: 'function',
+    name: 'migratePayment',
+    inputs: [
+      { name: 'podId', type: 'uint64', internalType: 'uint64' },
+      { name: 'user', type: 'address', internalType: 'address' },
     ],
     outputs: [],
     stateMutability: 'nonpayable',
@@ -113,6 +134,35 @@ export const paymentsAbi = [
   },
   {
     type: 'function',
+    name: 'getCreatorRevenue',
+    inputs: [
+      { name: 'podId', type: 'uint64', internalType: 'uint64' },
+    ],
+    outputs: [
+      { name: '', type: 'uint256', internalType: 'uint256' },
+    ],
+    stateMutability: 'view',
+  },
+  {
+    type: 'function',
+    name: 'getCreatorShare',
+    inputs: [],
+    outputs: [
+      { name: '', type: 'uint256', internalType: 'uint256' },
+    ],
+    stateMutability: 'view',
+  },
+  {
+    type: 'function',
+    name: 'getTreasuryShare',
+    inputs: [],
+    outputs: [
+      { name: '', type: 'uint256', internalType: 'uint256' },
+    ],
+    stateMutability: 'view',
+  },
+  {
+    type: 'function',
     name: 'owner',
     inputs: [],
     outputs: [
@@ -122,10 +172,12 @@ export const paymentsAbi = [
   },
   {
     type: 'function',
-    name: 'pods',
-    inputs: [],
-    outputs: [
+    name: 'authorized',
+    inputs: [
       { name: '', type: 'address', internalType: 'address' },
+    ],
+    outputs: [
+      { name: '', type: 'bool', internalType: 'bool' },
     ],
     stateMutability: 'view',
   },
@@ -135,6 +187,24 @@ export const paymentsAbi = [
     inputs: [],
     outputs: [
       { name: '', type: 'address', internalType: 'address' },
+    ],
+    stateMutability: 'view',
+  },
+  {
+    type: 'function',
+    name: 'creatorShare',
+    inputs: [],
+    outputs: [
+      { name: '', type: 'uint256', internalType: 'uint256' },
+    ],
+    stateMutability: 'view',
+  },
+  {
+    type: 'function',
+    name: 'treasuryShare',
+    inputs: [],
+    outputs: [
+      { name: '', type: 'uint256', internalType: 'uint256' },
     ],
     stateMutability: 'view',
   },
@@ -149,12 +219,51 @@ export const paymentsAbi = [
     ],
     anonymous: false,
   },
+  {
+    type: 'event',
+    name: 'SplitUpdated',
+    inputs: [
+      { name: 'creatorShare', type: 'uint256', indexed: false, internalType: 'uint256' },
+      { name: 'treasuryShare', type: 'uint256', indexed: false, internalType: 'uint256' },
+    ],
+    anonymous: false,
+  },
+  {
+    type: 'event',
+    name: 'PaymentProcessed',
+    inputs: [
+      { name: 'podId', type: 'uint64', indexed: true, internalType: 'uint64' },
+      { name: 'user', type: 'address', indexed: true, internalType: 'address' },
+      { name: 'fee', type: 'uint256', indexed: false, internalType: 'uint256' },
+      { name: 'creatorAmount', type: 'uint256', indexed: false, internalType: 'uint256' },
+      { name: 'treasuryAmount', type: 'uint256', indexed: false, internalType: 'uint256' },
+    ],
+    anonymous: false,
+  },
+  {
+    type: 'event',
+    name: 'EntryFeeMigrated',
+    inputs: [
+      { name: 'podId', type: 'uint64', indexed: true, internalType: 'uint64' },
+      { name: 'fee', type: 'uint256', indexed: false, internalType: 'uint256' },
+    ],
+    anonymous: false,
+  },
+  {
+    type: 'event',
+    name: 'PaymentMigrated',
+    inputs: [
+      { name: 'podId', type: 'uint64', indexed: true, internalType: 'uint64' },
+      { name: 'user', type: 'address', indexed: true, internalType: 'address' },
+    ],
+    anonymous: false,
+  },
 
   // Custom errors
   { type: 'error', name: 'NotAuthorized', inputs: [] },
   { type: 'error', name: 'NotOwner', inputs: [] },
-  { type: 'error', name: 'InvalidFee', inputs: [] },
   { type: 'error', name: 'PaymentNotRequired', inputs: [] },
   { type: 'error', name: 'AlreadyPaid', inputs: [] },
   { type: 'error', name: 'InsufficientPayment', inputs: [] },
+  { type: 'error', name: 'InvalidSplit', inputs: [] },
 ] as const
