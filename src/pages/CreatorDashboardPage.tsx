@@ -6,7 +6,7 @@ import { useUIStore } from '@/stores/ui'
 import { cn, formatExactAmount, formatCompactBalance } from '@/lib/utils'
 import * as cc from '@/lib/contractCalls'
 import { resolveQFName, normalizeQFName } from '@/lib/qns'
-import { getPublicClient, CONTRACT_ADDRESSES } from '@/lib/viemClient'
+import { CONTRACT_ADDRESSES } from '@/lib/contracts'
 import type { CustomPod } from '@/types'
 
 type DashboardView = 'overview' | 'pods' | 'revenue' | 'settings' | `pod-${number}`
@@ -38,7 +38,6 @@ function calcEstimatedPodRevenue(pod: CustomPod): bigint {
 
 // Fetch actual revenue from on-chain Payments contract
 async function fetchPodRevenue(podId: number): Promise<bigint> {
-  const publicClient = getPublicClient()
   const paymentsAddress = CONTRACT_ADDRESSES.payments
   
   // Check if payments address is set
@@ -47,12 +46,13 @@ async function fetchPodRevenue(podId: number): Promise<bigint> {
   }
 
   try {
-    const revenue = await publicClient.readContract({
-      address: paymentsAddress,
-      abi: paymentsAbi,
-      functionName: 'getCreatorRevenue',
-      args: [BigInt(podId)],
-    })
+    const { callContract } = await import('@/lib/contractHelpers')
+    const revenue = await callContract(
+      paymentsAddress,
+      paymentsAbi,
+      'getCreatorRevenue',
+      [BigInt(podId)]
+    )
     return revenue || 0n
   } catch (err) {
     console.error(`[fetchPodRevenue] Failed to fetch revenue for pod ${podId}:`, err)
@@ -397,8 +397,8 @@ const CreatorDashboardPage: React.FC = () => {
     }
     setModActionLoading(true)
     try {
-      const receipt = await cc.banMember(podId, addr)
-      await cc.waitForBlockSync(receipt.blockNumber)
+      const txResult = await cc.banMember(podId, addr)
+      await txResult.confirmation
       addToast('success', 'Member banned successfully')
       setModActionAddress('')
     } catch (err) {
@@ -417,8 +417,8 @@ const CreatorDashboardPage: React.FC = () => {
     }
     setModActionLoading(true)
     try {
-      const receipt = await cc.unbanMember(podId, addr)
-      await cc.waitForBlockSync(receipt.blockNumber)
+      const txResult = await cc.unbanMember(podId, addr)
+      await txResult.confirmation
       addToast('success', 'Member unbanned successfully')
       setModActionAddress('')
     } catch (err) {
@@ -437,8 +437,8 @@ const CreatorDashboardPage: React.FC = () => {
     }
     setModActionLoading(true)
     try {
-      const receipt = await cc.addMod(podId, addr)
-      await cc.waitForBlockSync(receipt.blockNumber)
+      const txResult = await cc.addMod(podId, addr)
+      await txResult.confirmation
       addToast('success', 'Moderator added successfully')
       setModActionAddress('')
     } catch (err) {
@@ -457,8 +457,8 @@ const CreatorDashboardPage: React.FC = () => {
     }
     setModActionLoading(true)
     try {
-      const receipt = await cc.removeMod(podId, addr)
-      await cc.waitForBlockSync(receipt.blockNumber)
+      const txResult = await cc.removeMod(podId, addr)
+      await txResult.confirmation
       addToast('success', 'Moderator removed successfully')
       setModActionAddress('')
     } catch (err) {
@@ -473,8 +473,8 @@ const CreatorDashboardPage: React.FC = () => {
     setFeeLoading(true)
     setFeeError('')
     try {
-      const receipt = await cc.setEntryFee(podId, newFeeWei)
-      await cc.waitForBlockSync(receipt.blockNumber)
+      const txResult = await cc.setEntryFee(podId, newFeeWei)
+      await txResult.confirmation
       // Confirm fee update from chain (ensures we show actual on-chain value)
       const confirmedFee = await cc.getEntryFee(podId)
       setLocalEntryFees(prev => ({ ...prev, [podId]: confirmedFee }))

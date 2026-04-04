@@ -9,7 +9,7 @@ import { ConversationList } from '@/components/messages/ConversationList'
 import { NewMessageModal } from '@/components/messages/NewMessageModal'
 import { Button } from '@/components/ui/Button'
 import { cn, isSubstrateAddress } from '@/lib/utils'
-import { deriveEvmAddress } from '@/lib/chain'
+import { deriveEVMAddress } from '@/lib/wallet'
 import { markConversationAsRead, getDMUnreadCount } from '@/lib/unreadTracker'
 import { useMessagesStore } from '@/stores/messages'
 import { sendNotification } from '@/lib/notifications'
@@ -156,7 +156,7 @@ const DirectMessagesPage: React.FC = () => {
     // Convert Substrate address to EVM if needed
     let evmRecipient = recipient.toLowerCase()
     if (isSubstrateAddress(recipient)) {
-      evmRecipient = deriveEvmAddress(recipient).toLowerCase()
+      evmRecipient = deriveEVMAddress(recipient).toLowerCase()
     }
     await sendMessage(evmRecipient, content)
     // Mark as read so sender doesn't see their own message as unread

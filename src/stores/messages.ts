@@ -156,18 +156,18 @@ export const useMessagesStore = create<MessagesState>((set, get) => ({
     }
 
     const contentBytes = new TextEncoder().encode(content)
-    const result = await cc.sendDirectMessageChunked(
+    const txResult = await cc.sendMessage(
       recipient.toLowerCase() as `0x${string}`,
-      contentBytes
+      content
     )
 
     const message: Message = {
-      id: result.id,
-      sender: result.sender,
-      recipient: result.recipient,
-      encryptedContent: result.encryptedContent,
-      decryptedContent: result.decryptedContent,
-      timestamp: result.timestamp,
+      id: txResult.txHash,
+      sender: evmAddress,
+      recipient: recipient.toLowerCase(),
+      encryptedContent: contentBytes, // TODO: encrypt content
+      decryptedContent: content,
+      timestamp: Date.now(),
     }
 
     get().addMessage(message)

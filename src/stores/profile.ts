@@ -37,8 +37,10 @@ export const useProfileStore = create<ProfileState>((set, get) => ({
       throw new Error('Wallet not connected')
     }
 
-    const pubkeyHex = toHex(encryptionPubkey, { size: 32 }) as `0x${string}`
-    await cc.registerProfile(displayName, pubkeyHex)
+    const pubkeyHex = toHex(encryptionPubkey, { size: 32 }) as `0x${string}` 
+    const txResult = await cc.registerProfile(displayName, pubkeyHex)
+    // Wait for on-chain confirmation
+    await txResult.confirmation
 
     set({
       displayName,
@@ -113,7 +115,9 @@ export const useProfileStore = create<ProfileState>((set, get) => ({
     }
 
     const pubkeyHex = toHex(encryptionPubkey, { size: 32 }) as `0x${string}`
-    await cc.updateProfile(displayName, pubkeyHex)
+    const txResult = await cc.updateProfile(displayName, pubkeyHex)
+    // Wait for on-chain confirmation
+    await txResult.confirmation
 
     set({
       displayName,

@@ -1,34 +1,49 @@
-import { create } from 'zustand'
-import type { ConnectionStatus, NetworkId } from '@/lib/network'
-import { getNetworkId } from '@/lib/network'
+import { create } from "zustand";
+import { watchConnectionStatus, getClient } from "@/lib/papiClient";
 
 export interface NetworkState {
-  currentNetwork: NetworkId
-  connectionStatus: ConnectionStatus
-  latestBlock: number
-  latestBlockTime: number
-  isHealthy: boolean
-  reconnectAttempts: number
-  setCurrentNetwork: (id: NetworkId) => void
-  setConnectionStatus: (status: ConnectionStatus) => void
-  setBlockInfo: (block: number, time: number) => void
-  setHealthy: (healthy: boolean) => void
-  incrementReconnectAttempts: () => void
-  resetReconnectAttempts: () => void
+  connectionStatus: "connected" | "connecting" | "disconnected";
+  latestBlock: number;
+  latestBlockTime: number;
+  isHealthy: boolean;
+  setConnectionStatus: (status: "connected" | "connecting" | "disconnected") => void;
+  setBlockInfo: (block: number, time: number) => void;
+  setHealthy: (healthy: boolean) => void;
+  startSubscriptions: () => () => void;
 }
 
 export const useNetworkStore = create<NetworkState>((set, get) => ({
-  currentNetwork: getNetworkId(),
-  connectionStatus: 'disconnected',
+  connectionStatus: "connecting",
   latestBlock: 0,
   latestBlockTime: 0,
   isHealthy: false,
-  reconnectAttempts: 0,
 
-  setCurrentNetwork: (id) => set({ currentNetwork: id, reconnectAttempts: 0 }),
   setConnectionStatus: (status) => set({ connectionStatus: status }),
   setBlockInfo: (block, time) => set({ latestBlock: block, latestBlockTime: time, isHealthy: true }),
   setHealthy: (healthy) => set({ isHealthy: healthy }),
-  incrementReconnectAttempts: () => set({ reconnectAttempts: get().reconnectAttempts + 1 }),
-  resetReconnectAttempts: () => set({ reconnectAttempts: 0 }),
-}))
+
+  startSubscriptions: () => {
+    // Connection health
+    const unsubHealth = watchConnectionStatus((connected) => {
+      set({ connectionStatus: connected ? "connected" : "disconnected", isHealthy: connected });
+    });
+
+    // Best block tracking
+    const client = getClient();
+    const blockSub = client.bestBlocks$.subscribe({
+      next(blocks) {
+        if (blocks.length > 0) {
+          set({ latestBlock: blocks[0].number, latestBlockTime: Date.now(), isHealthy: true });
+        }
+      },
+      error() {
+        set({ isHealthy: false });
+      },
+    });
+
+    return () => {
+      unsubHealth();
+      blockSub.unsubscribe();
+    };
+  },
+}));

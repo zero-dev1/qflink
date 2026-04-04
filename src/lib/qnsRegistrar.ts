@@ -1,10 +1,10 @@
-import { getPublicClient, getWalletClient, qfChain } from './viemClient'
+import { callContract, writeContract } from './contractHelpers'
+import { CONTRACT_ADDRESSES } from './contracts'
 import { reverseResolve } from './qns'
 import { parseAbi } from 'viem'
 
 // QNS Contract addresses
-const QNS_REGISTRAR_ADDRESS = (import.meta.env.VITE_QNS_REGISTRAR_ADDRESS ||
-  '0x0000000000000000000000000000000000000000') as `0x${string}`
+const QNS_REGISTRAR_ADDRESS = CONTRACT_ADDRESSES.qnsRegistrar
 
 // Registrar ABI matching the actual contract
 const registrarAbi = parseAbi([
@@ -34,25 +34,25 @@ async function fetchPriceFromContract(
   permanent: boolean
 ): Promise<bigint> {
   try {
-    const publicClient = getPublicClient()
-    
     // Read the right price variable based on name length
     const functionName = nameLength === 3 ? 'price3Char' 
       : nameLength === 4 ? 'price4Char' 
       : 'price5PlusChar'
     
-    const annualPrice = await publicClient.readContract({
-      address: QNS_REGISTRAR_ADDRESS,
-      abi: registrarAbi,
+    const annualPrice = await callContract(
+      QNS_REGISTRAR_ADDRESS,
+      registrarAbi,
       functionName,
-    }) as bigint
+      []
+    ) as bigint
     
     if (permanent) {
-      const multiplier = await publicClient.readContract({
-        address: QNS_REGISTRAR_ADDRESS,
-        abi: registrarAbi,
-        functionName: 'permanentMultiplier',
-      }) as bigint
+      const multiplier = await callContract(
+        QNS_REGISTRAR_ADDRESS,
+        registrarAbi,
+        'permanentMultiplier',
+        []
+      ) as bigint
       return annualPrice * multiplier
     }
     
@@ -71,13 +71,12 @@ export async function checkAvailability(name: string): Promise<boolean> {
   if (!name || name.length < 3) return false
 
   try {
-    const publicClient = getPublicClient()
-    const available = await publicClient.readContract({
-      address: QNS_REGISTRAR_ADDRESS,
-      abi: registrarAbi,
-      functionName: 'available',
-      args: [name],
-    }) as boolean
+    const available = await callContract(
+      QNS_REGISTRAR_ADDRESS,
+      registrarAbi,
+      'available',
+      [name]
+    ) as boolean
     return available
   } catch (error) {
     console.error('Error checking availability:', error)
@@ -105,25 +104,19 @@ export async function registerQFName(
     throw new Error('Name must be at least 3 characters')
   }
 
-  const walletClient = await getWalletClient()
-  const [account] = await walletClient.getAddresses()
-  if (!account) {
-    throw new Error('No EVM account available. Please enable Ethereum accounts in your wallet.')
-  }
-
   const price = await fetchPriceFromContract(name.length, durationYears, permanent)
 
   try {
-    const hash = await walletClient.writeContract({
-      account,
-      chain: qfChain,
-      address: QNS_REGISTRAR_ADDRESS,
-      abi: registrarAbi,
-      functionName: 'register',
-      args: [name, BigInt(durationYears), permanent],
-      value: price,
-    })
-    return hash
+    const txResult = await writeContract(
+      QNS_REGISTRAR_ADDRESS,
+      registrarAbi,
+      'register',
+      [name, BigInt(durationYears), permanent],
+      price
+    )
+    // Wait for confirmation
+    await txResult.confirmation
+    return txResult.txHash as `0x${string}`
   } catch (error) {
     console.error('Error registering name:', error)
     throw error

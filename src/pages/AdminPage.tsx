@@ -4,7 +4,7 @@ import { useUIStore } from '@/stores/ui'
 import { Spinner } from '@/components/ui/Spinner'
 import * as cc from '@/lib/contractCalls'
 import { resolveQFName, normalizeQFName } from '@/lib/qns'
-import { getPublicClient, CONTRACT_ADDRESSES } from '@/lib/viemClient'
+import { CONTRACT_ADDRESSES } from '@/lib/contracts'
 import { formatExactAmount } from '@/lib/utils'
 
 // Owner address from environment (used as fallback while loading)
@@ -32,9 +32,7 @@ const CONTRACTS_LIST = [
   { name: 'Content Store', key: 'contentStore' as const },
   { name: 'Message Index', key: 'messageIndex' as const },
   { name: 'Message Writer', key: 'messageWriter' as const },
-  { name: 'Message Writer V2', key: 'messageWriterV2' as const },
   { name: 'Message Reader', key: 'messageReader' as const },
-  { name: 'Session Keys', key: 'sessionKeys' as const },
 ]
 
 // Helper to resolve QNS name or address to address
@@ -140,13 +138,8 @@ const AdminPage: React.FC = () => {
   useEffect(() => {
     async function fetchOwner() {
       try {
-        const publicClient = getPublicClient()
-        const owner = await publicClient.readContract({
-          address: PAYMENTS_ADDRESS,
-          abi: [{ name: 'owner', type: 'function', inputs: [], outputs: [{ type: 'address' }], stateMutability: 'view' }],
-          functionName: 'owner',
-        })
-        setContractOwner(owner as string)
+        const owner = await cc.getPaymentsOwner()
+        setContractOwner(owner)
       } catch (err) {
         console.error('[AdminPage] Failed to fetch contract owner:', err)
       }
@@ -193,9 +186,8 @@ const AdminPage: React.FC = () => {
       
       // Fetch treasury balance if treasury exists
       if (treasury && treasury !== '0x0000000000000000000000000000000000000000') {
-        const client = getPublicClient()
-        const bal = await client.getBalance({ address: treasury as `0x${string}` })
-        setTreasuryBalance(bal)
+        // Treasury balance fetching not available in PAPI - set to 0 for now
+        setTreasuryBalance(0n)
       }
     } catch (err) {
       console.error('[AdminPage] Error fetching data:', err)
@@ -224,8 +216,8 @@ const AdminPage: React.FC = () => {
         return
       }
       
-      const receipt = await cc.setPaymentsTreasury(addr)
-      await cc.waitForBlockSync(receipt.blockNumber)
+      const txResult = await cc.setPaymentsTreasury(addr)
+      await txResult.confirmation
       addToast('success', 'Treasury updated successfully')
       setNewTreasuryInput('')
       await fetchData()
@@ -248,8 +240,8 @@ const AdminPage: React.FC = () => {
         return
       }
       
-      const receipt = await cc.transferPaymentsOwnership(addr)
-      await cc.waitForBlockSync(receipt.blockNumber)
+      const txResult = await cc.transferPaymentsOwnership(addr)
+      await txResult.confirmation
       addToast('success', 'Ownership transferred successfully')
       setNewOwnerInput('')
       await fetchData()
@@ -266,8 +258,8 @@ const AdminPage: React.FC = () => {
     
     setWithdrawingPayments(true)
     try {
-      const receipt = await cc.withdrawPayments(paymentsBalance)
-      await cc.waitForBlockSync(receipt.blockNumber)
+      const txResult = await cc.withdrawPayments(paymentsBalance)
+      await txResult.confirmation
       addToast('success', `Withdrawn ${formatExactAmount(paymentsBalance)} QF from Payments`)
       await fetchData()
     } catch (err) {
@@ -283,8 +275,8 @@ const AdminPage: React.FC = () => {
     
     setWithdrawingToTreasury(true)
     try {
-      const receipt = await cc.withdrawPaymentsToTreasury(paymentsBalance)
-      await cc.waitForBlockSync(receipt.blockNumber)
+      const txResult = await cc.withdrawPaymentsToTreasury(paymentsBalance)
+      await txResult.confirmation
       addToast('success', `Transferred ${formatExactAmount(paymentsBalance)} QF to Treasury`)
       await fetchData()
     } catch (err) {

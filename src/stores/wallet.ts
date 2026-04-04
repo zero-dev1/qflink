@@ -1,481 +1,237 @@
-import { create } from 'zustand'
-import type { WalletState, LinkedWallet, WalletType } from '@/types'
-import { subscribeBalance, queryBalance, ensureAccountMapped, getEvmAddress, deriveEvmAddress, getApi, type InjectedAccountWithMeta } from '@/lib/chain'
+import { create } from "zustand";
+import { persist } from "zustand/middleware";
+import type { WalletConnection } from "@/lib/wallet";
+import {
+  connectSubstrateWallet,
+  disconnectWallet,
+  getCurrentConnection,
+  deriveEVMAddress,
+} from "@/lib/wallet";
+import {
+  ensureAccountMapped,
+  METADATA_HASH_ERROR,
+  USER_CANCELLED,
+  INSUFFICIENT_BALANCE_FOR_MAPPING,
+} from "@/lib/accountMapping";
+import { warmUpPapi, getTypedApi } from "@/lib/papiClient";
 
+export interface WalletState {
+  // Persisted
+  address: string | null;       // SS58
+  evmAddress: string | null;    // 0x...
+  walletName: string | null;    // "talisman" | "subwallet"
+  accountMapped: boolean;
 
-let balanceUnsub: (() => void) | null = null
-let metamaskListenersSetup = false
+  // Transient
+  balance: bigint;
+  isConnected: boolean;
+  isConnecting: boolean;
+  isMappingAccount: boolean;
+  walletSource: string | null;
+  walletError: string | null;
+  encryptionKeyPair: { publicKey: Uint8Array; secretKey: Uint8Array } | null;
 
-const SESSION_KEY = 'qflink-session'
-const WALLET_TYPE_KEY = 'qflink-wallet-type'
-
-interface SessionData {
-  address: string
-  source: string
-  walletType: WalletType
+  connect: (walletType: "talisman" | "subwallet") => Promise<void>;
+  disconnect: () => void;
+  setBalance: (balance: bigint) => void;
+  refreshBalance: () => Promise<void>;
+  setEncryptionKeyPair: (kp: { publicKey: Uint8Array; secretKey: Uint8Array }) => void;
+  setEvmAddress: (evmAddress: string) => void;
+  clearWalletError: () => void;
 }
 
-function saveSession(address: string, source: string, walletType: WalletType) {
-  const session: SessionData = { address, source, walletType }
-  localStorage.setItem(SESSION_KEY, JSON.stringify(session))
-  if (walletType) {
-    localStorage.setItem(WALLET_TYPE_KEY, walletType)
-  }
-}
+let balanceUnsub: (() => void) | null = null;
 
-function loadSession(): SessionData | null {
-  try {
-    const raw = localStorage.getItem(SESSION_KEY)
-    if (!raw) return null
-    return JSON.parse(raw) as SessionData
-  } catch {
-    return null
-  }
-}
-
-function clearSession() {
-  localStorage.removeItem(SESSION_KEY)
-  localStorage.removeItem(WALLET_TYPE_KEY)
-}
-
-export const useWalletStore = create<WalletState>((set, get) => ({
-  address: null,
-  balance: BigInt(0),
-  isConnected: false,
-  isConnecting: false,
-  walletSource: null,
-  encryptionKeyPair: null,
-  linkedWallets: [],
-  evmAddress: null,
-  accountMapped: false,
-  isMappingAccount: false,
-  walletType: null,
-
-  connect: async (selectedAccount?: InjectedAccountWithMeta) => {
-    set({ isConnecting: true })
-
-    try {
-      const { web3Enable, web3Accounts } = await import('@polkadot/extension-dapp')
-
-      const extensions = await web3Enable('QFLink')
-      if (extensions.length === 0) {
-        set({ isConnecting: false })
-        throw new Error('No wallet extension found. Please install Polkadot.js, Talisman, or SubWallet.')
-      }
-
-      let account: InjectedAccountWithMeta
-      
-      if (selectedAccount) {
-        account = selectedAccount
-      } else {
-        const accounts = await web3Accounts()
-        if (accounts.length === 0) {
-          set({ isConnecting: false })
-          throw new Error('No accounts found. Please create an account in your wallet extension.')
-        }
-        account = accounts[0]
-      }
-
-      const address = account.address
-      const source = account.meta?.source || 'polkadot-js'
-
-      // Attach signer to account and API before any tx (fixes "No signer specified" error)
-      const { web3FromAddress } = await import('@polkadot/extension-dapp')
-      const injector = await web3FromAddress(address)
-      account = { ...account, signer: injector.signer }
-      const chainApi = await getApi()
-      chainApi.setSigner(injector.signer)
-
-      // Fetch initial balance and set up subscription
-      let initialBalance = BigInt(0)
-      try {
-        initialBalance = await queryBalance(address)
-
-        if (balanceUnsub) {
-          balanceUnsub()
-          balanceUnsub = null
-        }
-
-        balanceUnsub = await subscribeBalance(address, (free) => {
-          set({ balance: free })
-        })
-      } catch (err) {
-        // Silently handle balance fetch errors
-      }
-
-      let evmAddr: string | null = null
-
-      // Ensure account is mapped BEFORE setting isConnected=true.
-      // Contract queries (registryGetProfile, etc.) will fail with AccountUnmapped
-      // if we allow components to fire them against an unmapped account.
-      evmAddr = await getEvmAddress(address)
-
-      if (evmAddr) {
-        // Mapping already exists on-chain — proceed immediately
-      } else {
-        // No mapping — submit mapAccount and WAIT for finalization before continuing
-        set({ isMappingAccount: true })
-        try {
-          evmAddr = await ensureAccountMapped(account)
-        } catch (mapErr: any) {
-          // Surface the error to the UI — do NOT fall back to a derived address
-          // and do NOT set isConnected=true. The user must resolve this first.
-          set({ isMappingAccount: false, isConnecting: false })
-          throw mapErr
-        }
-        set({ isMappingAccount: false })
-      }
-
-      if (!evmAddr) {
-        set({ isConnecting: false })
-        throw new Error('Could not determine EVM address after mapping')
-      }
-
-      saveSession(address, source, 'substrate')
-
-      // Only NOW set isConnected=true — mapping is confirmed, contract queries are safe
-      set({
-        address,
-        evmAddress: evmAddr.toLowerCase(),
-        isConnected: true,
-        isConnecting: false,
-        walletSource: source,
-        accountMapped: true,
-        walletType: 'substrate',
-        balance: initialBalance,
-      })
-
-      const { useProfileStore } = await import('./profile')
-      try {
-        await useProfileStore.getState().fetchProfile(evmAddr)
-      } catch (profileErr) {
-        // Don't block connection if profile fetch fails — AuthGuard/ConnectPage will handle it
-      }
-
-      // Fetch pods after profile is loaded so Home page has data ready
-      try {
-        const { usePodsStore } = await import('./pods')
-        await usePodsStore.getState().fetchPods()
-      } catch (podsErr) {
-        // Don't block connection if pods fetch fails
-      }
-    } catch (error) {
-      set({ isConnecting: false })
-      throw error
-    }
-  },
-
-  connectMetaMask: async () => {
-    set({ isConnecting: true })
-
-    try {
-      // Check if MetaMask is installed
-      if (!window.ethereum) {
-        set({ isConnecting: false })
-        throw new Error('MetaMask not installed')
-      }
-
-      // Request account access (opens MetaMask popup)
-      const accounts = await window.ethereum.request({ method: 'eth_requestAccounts' })
-      
-      if (!accounts || accounts.length === 0) {
-        set({ isConnecting: false })
-        throw new Error('No accounts found. Please create an account in MetaMask.')
-      }
-
-      const evmAddress = accounts[0].toLowerCase()
-      
-      await get().finalizeMetaMaskConnection(evmAddress)
-    } catch (error) {
-      set({ isConnecting: false })
-      throw error
-    }
-  },
-
-  /**
-   * Silently connect to MetaMask using existing permissions (for auto-reconnect).
-   * Uses eth_accounts instead of eth_requestAccounts to avoid popup.
-   */
-  silentConnectMetaMask: async (): Promise<boolean> => {
-    try {
-      // Check if MetaMask is installed
-      if (!window.ethereum) {
-        return false
-      }
-
-      // Check existing accounts without prompting (silently)
-      const accounts = await window.ethereum.request({ method: 'eth_accounts' })
-      
-      if (!accounts || accounts.length === 0) {
-        return false
-      }
-
-      const evmAddress = accounts[0].toLowerCase()
-      const session = loadSession()
-      
-      // Verify the connected account matches the saved session
-      if (!session || session.address.toLowerCase() !== evmAddress) {
-        return false
-      }
-
-      await get().finalizeMetaMaskConnection(evmAddress)
-      return true
-    } catch (error) {
-      console.error('❌ [silentConnectMetaMask] Failed:', error)
-      return false
-    }
-  },
-
-  /**
-   * Finalize MetaMask connection - shared between connect and silent connect.
-   */
-  finalizeMetaMaskConnection: async (evmAddress: string) => {
-    try {
-      // Get balance from Ethereum RPC
-      let balance = BigInt(0)
-      try {
-        const ethRpcUrl = import.meta.env.VITE_ETH_RPC_URL
-        if (ethRpcUrl) {
-          const response = await fetch(ethRpcUrl, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              jsonrpc: '2.0',
-              id: 1,
-              method: 'eth_getBalance',
-              params: [evmAddress, 'latest'],
-            }),
-          })
-          const data = await response.json()
-          if (data.result) {
-            // Convert hex balance to bigint
-            balance = BigInt(data.result)
-          }
-        }
-      } catch (err) {
-        // Silently handle balance fetch errors
-      }
-
-      // Save session
-      saveSession(evmAddress, 'metamask', 'evm')
-
-      // Set all state atomically
-      set({
-        address: evmAddress,
-        evmAddress: evmAddress,
-        isConnected: true,
-        isConnecting: false,
-        walletSource: 'metamask',
-        accountMapped: true,
-        walletType: 'evm',
-        balance,
-        linkedWallets: [],
-      })
-
-      // Fetch profile and pods
-      const { useProfileStore } = await import('./profile')
-      await useProfileStore.getState().fetchProfile(evmAddress)
-
-      const { usePodsStore } = await import('./pods')
-      await usePodsStore.getState().fetchPods()
-
-      // Set up MetaMask event listeners (only once)
-      if (!metamaskListenersSetup && window.ethereum) {
-        const handleAccountsChanged = async (accounts: string[]) => {
-          if (accounts.length === 0) {
-            // User disconnected
-            get().disconnect()
-          } else {
-            // Account changed - update state
-            const newAddress = accounts[0].toLowerCase()
-            set({
-              address: newAddress,
-              evmAddress: newAddress,
-            })
-            // Refresh profile for new account
-            const { useProfileStore } = await import('./profile')
-            const profileStore = useProfileStore.getState()
-            await profileStore.fetchProfile(newAddress)
-            
-            // If new account doesn't have a profile, redirect to /connect
-            if (profileStore.needsRegistration || !profileStore.isRegistered) {
-              if (typeof window !== 'undefined' && window.location.pathname !== '/connect') {
-                window.location.href = '/connect'
-              }
-            }
-          }
-        }
-
-        const handleChainChanged = () => {
-          // Reload page on chain change (standard MetaMask behavior)
-          window.location.reload()
-        }
-
-        window.ethereum.on('accountsChanged', handleAccountsChanged)
-        window.ethereum.on('chainChanged', handleChainChanged)
-        
-        metamaskListenersSetup = true
-      }
-
-    } catch (error) {
-      console.error('❌ [finalizeMetaMaskConnection] Error:', error)
-      set({ isConnecting: false })
-      throw error
-    }
-  },
-
-  disconnect: async () => {
-    if (balanceUnsub) {
-      balanceUnsub()
-      balanceUnsub = null
-    }
-    clearSession()
-    
-    // Clear all qflink-prefixed localStorage entries on disconnect
-    if (typeof window !== 'undefined') {
-      Object.keys(localStorage).forEach(key => {
-        if (key.startsWith('qflink')) localStorage.removeItem(key);
-      });
-    }
-    
-    set({
+export const useWalletStore = create<WalletState>()(
+  persist(
+    (set, get) => ({
       address: null,
-      balance: BigInt(0),
-      isConnected: false,
-      walletSource: null,
-      encryptionKeyPair: null,
-      linkedWallets: [],
       evmAddress: null,
+      walletName: null,
       accountMapped: false,
-      walletType: null,
-    })
+      balance: 0n,
+      isConnected: false,
+      isConnecting: false,
+      isMappingAccount: false,
+      walletSource: null,
+      walletError: null,
+      encryptionKeyPair: null,
 
-    const { useProfileStore } = await import('./profile')
-    useProfileStore.getState().reset()
-    
-    // Redirect to /connect page (only if in browser and not already there)
-    if (typeof window !== 'undefined' && window.location.pathname !== '/connect' && window.location.pathname !== '/') {
-      window.location.href = '/connect'
-    }
-  },
+      connect: async (walletType: "talisman" | "subwallet") => {
+        set({ isConnecting: true, walletError: null });
 
-  ensureMapping: async () => {
-    const { address, walletSource, walletType } = get()
-    
-    // For EVM wallets, no mapping needed
-    if (walletType === 'evm') {
-      const evmAddr = get().evmAddress
-      if (!evmAddr) {
-        throw new Error('No EVM address available')
-      }
-      return evmAddr
-    }
-    
-    if (!address || !walletSource) {
-      throw new Error('No wallet connected')
-    }
+        try {
+          const walletId = walletType === "talisman" ? "talisman" : "subwallet-js";
+          const connection = await Promise.race([
+            connectSubstrateWallet(walletId),
+            new Promise<never>((_, reject) =>
+              setTimeout(() => reject(new Error("Wallet connection timed out after 10s.")), 10_000)
+            ),
+          ]);
 
-    const { web3FromSource } = await import('@polkadot/extension-dapp')
-    const injector = await web3FromSource(walletSource)
-    
-    const account: InjectedAccountWithMeta = {
-      address,
-      meta: { source: walletSource },
-      signer: injector.signer,
-    }
+          const ss58 = connection.address;
+          const evmAddr = connection.evmAddress.toLowerCase();
 
-    const evmAddr = await ensureAccountMapped(account)
-    set({ evmAddress: evmAddr, accountMapped: true })
-    
-    const { useProfileStore } = await import('./profile')
-    await useProfileStore.getState().fetchProfile(evmAddr)
-    
-    return evmAddr
-  },
+          // Start balance subscription
+          if (balanceUnsub) { balanceUnsub(); balanceUnsub = null; }
+          try {
+            const typedApi = getTypedApi();
+            const sub = typedApi.query.System.Account.watchValue(ss58).subscribe({
+              next(info: any) {
+                set({ balance: BigInt(info.data.free.toString()) });
+              },
+              error() {},
+            });
+            balanceUnsub = () => sub.unsubscribe();
 
-  setBalance: (balance: bigint) => set({ balance }),
+            // Also fetch initial balance
+            const acct = await typedApi.query.System.Account.getValue(ss58);
+            set({ balance: BigInt((acct as any).data.free.toString()) });
+          } catch {}
 
-  refreshBalance: async () => {
-    const { evmAddress, walletType } = get()
-    if (!evmAddress) return
+          set({
+            address: ss58,
+            evmAddress: evmAddr,
+            walletName: walletType,
+            walletSource: walletId,
+          });
 
-    try {
-      if (walletType === 'evm') {
-        // MetaMask: fetch via eth_getBalance
-        const ethRpcUrl = import.meta.env.VITE_ETH_RPC_URL
-        if (ethRpcUrl) {
-          const response = await fetch(ethRpcUrl, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              jsonrpc: '2.0',
-              id: 1,
-              method: 'eth_getBalance',
-              params: [evmAddress, 'latest'],
-            }),
-          })
-          const data = await response.json()
-          if (data.result) {
-            set({ balance: BigInt(data.result) })
+          // Map account
+          set({ isMappingAccount: true });
+          try {
+            await ensureAccountMapped(ss58);
+            set({ accountMapped: true });
+          } catch (mapErr: any) {
+            const msg = mapErr?.message ?? "";
+
+            if (msg === METADATA_HASH_ERROR || msg.includes("METADATA_HASH_ERROR")) {
+              const onMobile = /Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
+              set({
+                walletError: onMobile
+                  ? "Disable metadata hash verification in SubWallet settings for QF Network, then reconnect."
+                  : "Disable metadata hash verification in Talisman → Settings → Networks & Tokens → QF Network, then reconnect.",
+                isMappingAccount: false,
+                isConnecting: false,
+              });
+              return;
+            }
+            if (msg === USER_CANCELLED || msg.includes("USER_CANCELLED")) {
+              set({ isMappingAccount: false, isConnecting: false });
+              return;
+            }
+            if (msg === INSUFFICIENT_BALANCE_FOR_MAPPING || msg.includes("INSUFFICIENT_BALANCE")) {
+              set({
+                walletError: "Your wallet needs QF to get started. Fund your wallet and reconnect.",
+                isMappingAccount: false,
+                isConnecting: false,
+              });
+              return;
+            }
+
+            disconnectWallet();
+            set({
+              walletError: "Account setup incomplete — please try connecting again.",
+              address: null, evmAddress: null, walletName: null,
+              isMappingAccount: false, isConnecting: false,
+            });
+            return;
           }
+          set({ isMappingAccount: false });
+
+          // Connected — set state then fetch profile + pods
+          set({ isConnected: true, isConnecting: false });
+
+          try {
+            const { useProfileStore } = await import("./profile");
+            await useProfileStore.getState().fetchProfile(evmAddr);
+          } catch {}
+
+          try {
+            const { usePodsStore } = await import("./pods");
+            await usePodsStore.getState().fetchPods();
+          } catch {}
+        } catch (error: any) {
+          const msg = error?.message || "";
+          let walletError = msg || "Failed to connect wallet";
+          if (msg.includes("No accounts found")) {
+            walletError = "No accounts found. Please create an account in your wallet extension.";
+          } else if (msg.includes("extension") || msg.includes("not installed") || msg.includes("Cannot read properties")) {
+            const onMobile = /Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
+            walletError = onMobile
+              ? "SubWallet not detected. Open this dApp inside SubWallet's built-in browser."
+              : "Talisman not detected. Please install the Talisman browser extension.";
+          }
+          disconnectWallet();
+          set({
+            walletError,
+            address: null, evmAddress: null, walletName: null,
+            isConnected: false, isConnecting: false,
+          });
         }
-      } else {
-        // Substrate: query balance
-        const { queryBalance } = await import('@/lib/chain')
-        const balance = await queryBalance(get().address!)
-        set({ balance })
-      }
-    } catch (err) {
-      console.error('[refreshBalance] Failed:', err)
-    }
-  },
+      },
 
-  setEncryptionKeyPair: (keyPair) => set({ encryptionKeyPair: keyPair }),
+      disconnect: () => {
+        if (balanceUnsub) { balanceUnsub(); balanceUnsub = null; }
+        disconnectWallet();
 
-  addLinkedWallet: (wallet: LinkedWallet) => {
-    const current = get().linkedWallets
-    if (!current.find((w) => w.address === wallet.address)) {
-      set({ linkedWallets: [...current, wallet] })
-    }
-  },
-
-  removeLinkedWallet: (address: string) => {
-    set({ linkedWallets: get().linkedWallets.filter((w) => w.address !== address) })
-  },
-
-  setEvmAddress: (evmAddress: string) => set({ evmAddress, accountMapped: true }),
-}))
-
-// Auto-reconnect from saved session on app load
-if (typeof window !== 'undefined') {
-  const session = loadSession()
-  if (session) {
-    ;(async () => {
-      try {
-        // Check wallet type and reconnect accordingly
-        if (session.walletType === 'evm') {
-          // For EVM wallets, use silent connect (no popup)
-          const restored = await useWalletStore.getState().silentConnectMetaMask()
-          if (!restored) {
-            clearSession()
-          }
-        } else {
-          // Substrate wallet reconnection
-          const { web3Enable, web3Accounts } = await import('@polkadot/extension-dapp')
-          await web3Enable('QFLink')
-          const accounts = await web3Accounts()
-          const account = accounts.find(acc => acc.address === session.address)
-          
-          if (account) {
-            await useWalletStore.getState().connect(account)
-          } else {
-            clearSession()
-          }
+        // Clear qflink localStorage
+        if (typeof window !== "undefined") {
+          Object.keys(localStorage).forEach((key) => {
+            if (key.startsWith("qflink")) localStorage.removeItem(key);
+          });
         }
-      } catch (err) {
-        console.error('❌ Failed to restore session:', err)
-        clearSession()
-      }
-    })()
-  }
-}
+
+        set({
+          address: null, evmAddress: null, balance: 0n,
+          isConnected: false, walletSource: null, walletName: null,
+          encryptionKeyPair: null, accountMapped: false,
+          walletError: null,
+        });
+
+        import("./profile").then(({ useProfileStore }) => useProfileStore.getState().reset());
+
+        if (typeof window !== "undefined" && window.location.pathname !== "/connect" && window.location.pathname !== "/") {
+          window.location.href = "/connect";
+        }
+      },
+
+      setBalance: (balance) => set({ balance }),
+
+      refreshBalance: async () => {
+        const { address } = get();
+        if (!address) return;
+        try {
+          const typedApi = getTypedApi();
+          const acct = await typedApi.query.System.Account.getValue(address);
+          set({ balance: BigInt((acct as any).data.free.toString()) });
+        } catch {}
+      },
+
+      setEncryptionKeyPair: (kp) => set({ encryptionKeyPair: kp }),
+      setEvmAddress: (evmAddress) => set({ evmAddress, accountMapped: true }),
+      clearWalletError: () => set({ walletError: null }),
+    }),
+    {
+      name: "qflink-wallet-storage",
+      version: 1,
+      partialize: (state) => ({
+        address: state.address,
+        evmAddress: state.evmAddress,
+        walletName: state.walletName,
+        accountMapped: state.accountMapped,
+      }),
+      onRehydrateStorage: () => {
+        return (state) => {
+          if (state?.address && state?.walletName) {
+            warmUpPapi().then(() => {
+              const walletType = state.walletName as "talisman" | "subwallet";
+              state.connect(walletType).catch(() => {
+                state.disconnect();
+              });
+            });
+          }
+        };
+      },
+    }
+  )
+);

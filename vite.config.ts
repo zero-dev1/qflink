@@ -16,23 +16,12 @@ export default defineConfig({
     rollupOptions: {
       output: {
         manualChunks: {
-          'polkadot': [
-            '@polkadot/api',
-            '@polkadot/extension-dapp',
-            '@polkadot/util',
-            '@polkadot/util-crypto',
-          ],
+          'polkadot-api': ['polkadot-api'],
         },
       },
     },
   },
-  server: {
-    proxy: {
-      '/eth-rpc': {
-        target: 'http://localhost:8545',
-        changeOrigin: true,
-        rewrite: (path) => path.replace(/^\/eth-rpc/, ''),
-      },
-    },
+  esbuild: {
+    target: 'esnext',
   },
 })

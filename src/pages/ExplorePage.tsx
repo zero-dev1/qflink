@@ -82,8 +82,8 @@ const ExplorePage: React.FC = () => {
             return
           }
           // Rejoin with 0 value since they already paid
-          const joinReceipt = await cc.joinPod(pod.id, 0n)
-          await cc.waitForBlockSync(joinReceipt.blockNumber)
+          const joinTxResult = await cc.joinPod(pod.id, 0n)
+          await joinTxResult.confirmation
           await new Promise(r => setTimeout(r, 1000))
           await usePodsStore.getState().fetchPods()
           await refreshBalance()
@@ -116,7 +116,7 @@ const ExplorePage: React.FC = () => {
           }
         }
         const joinReceipt = await cc.joinPod(pod.id, 0n)
-        await cc.waitForBlockSync(joinReceipt.blockNumber)
+        await joinReceipt.confirmation
         await new Promise(r => setTimeout(r, 1000))
         await usePodsStore.getState().fetchPods()
         await refreshBalance()
@@ -158,9 +158,9 @@ const ExplorePage: React.FC = () => {
         }
       }
       
-      const joinReceipt = await cc.joinPod(paidPodModalPod.id, entryFee)
+      const joinTxResult = await cc.joinPod(paidPodModalPod.id, entryFee)
       // Refresh pods to update sidebar immediately (myPods now comes from on-chain check)
-      await cc.waitForBlockSync(joinReceipt.blockNumber)
+      await joinTxResult.confirmation
       // BUG 4 FIX: Add delay before fetching to ensure contract state is updated
       await new Promise(r => setTimeout(r, 1000))
       await fetchPods()

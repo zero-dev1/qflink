@@ -1,86 +1,38 @@
-import { namehash } from 'viem/ens';
-import { getPublicClient } from './viemClient';
-
-// QNS Resolver address — from .env.development (VITE_QNS_RESOLVER_ADDRESS)
-const QNS_RESOLVER_ADDRESS = (import.meta.env.VITE_QNS_RESOLVER_ADDRESS || '') as `0x${string}`;
-
-// Warn if resolver address is not set
-if (!QNS_RESOLVER_ADDRESS) {
-  console.warn('[qns] QNS_RESOLVER_ADDRESS not set — .qf name resolution will not work');
-}
+import { namehash } from "viem/ens";
+import { callContract } from "./contractHelpers";
+import { CONTRACT_ADDRESSES } from "./contracts";
 
 const resolverABI = [
-  {
-    name: 'addr',
-    type: 'function',
-    stateMutability: 'view',
-    inputs: [{ name: 'node', type: 'bytes32' }],
-    outputs: [{ name: '', type: 'address' }],
-  },
-  {
-    name: 'name',
-    type: 'function',
-    stateMutability: 'view',
-    inputs: [{ name: 'node', type: 'bytes32' }],
-    outputs: [{ name: '', type: 'string' }],
-  },
-  {
-    name: 'text',
-    type: 'function',
-    stateMutability: 'view',
-    inputs: [
-      { name: 'node', type: 'bytes32' },
-      { name: 'key', type: 'string' },
-    ],
-    outputs: [{ name: '', type: 'string' }],
-  },
+  { name: "addr", type: "function", stateMutability: "view", inputs: [{ name: "node", type: "bytes32" }], outputs: [{ name: "", type: "address" }] },
+  { name: "name", type: "function", stateMutability: "view", inputs: [{ name: "node", type: "bytes32" }], outputs: [{ name: "", type: "string" }] },
+  { name: "text", type: "function", stateMutability: "view", inputs: [{ name: "node", type: "bytes32" }, { name: "key", type: "string" }], outputs: [{ name: "", type: "string" }] },
 ] as const;
 
-// Cache: address → name, with TTL
+const ZERO_ADDRESS = "0x0000000000000000000000000000000000000000";
 const nameCache = new Map<string, { name: string | null; timestamp: number }>();
-const CACHE_TTL = 5 * 60 * 1000; // 5 minutes
+const CACHE_TTL = 5 * 60 * 1000;
 
-const ZERO_ADDRESS = '0x0000000000000000000000000000000000000000' as const;
-
-// Clear cache for a specific address (used after name registration)
 export function clearNameCache(address: string): void {
   nameCache.delete(address.toLowerCase());
 }
 
-// Resolve .qf name → address
 export async function resolveQFName(name: string): Promise<string | null> {
-  if (!name.endsWith('.qf')) return null;
+  if (!name.endsWith(".qf") || !CONTRACT_ADDRESSES.qnsResolver || CONTRACT_ADDRESSES.qnsResolver === ZERO_ADDRESS) return null;
   const node = namehash(name);
   try {
-    const publicClient = getPublicClient();
-    const addr = await publicClient.readContract({
-      address: QNS_RESOLVER_ADDRESS,
-      abi: resolverABI,
-      functionName: 'addr',
-      args: [node],
-    });
-    return addr === ZERO_ADDRESS ? null : addr;
-  } catch {
-    return null;
-  }
+    const addr = await callContract(CONTRACT_ADDRESSES.qnsResolver, [...resolverABI], "addr", [node]);
+    return addr === ZERO_ADDRESS ? null : addr as string;
+  } catch { return null; }
 }
 
-// Reverse resolve address → .qf name (with cache)
 export async function reverseResolve(address: string): Promise<string | null> {
+  if (!CONTRACT_ADDRESSES.qnsResolver || CONTRACT_ADDRESSES.qnsResolver === ZERO_ADDRESS) return null;
   const lower = address.toLowerCase();
   const cached = nameCache.get(lower);
-  if (cached && Date.now() - cached.timestamp < CACHE_TTL) {
-    return cached.name;
-  }
+  if (cached && Date.now() - cached.timestamp < CACHE_TTL) return cached.name;
   const reverseNode = namehash(`${lower.slice(2)}.reverse`);
   try {
-    const publicClient = getPublicClient();
-    const name = await publicClient.readContract({
-      address: QNS_RESOLVER_ADDRESS,
-      abi: resolverABI,
-      functionName: 'name',
-      args: [reverseNode],
-    });
+    const name = await callContract(CONTRACT_ADDRESSES.qnsResolver, [...resolverABI], "name", [reverseNode]) as string;
     const result = name || null;
     nameCache.set(lower, { name: result, timestamp: Date.now() });
     return result;
@@ -90,21 +42,17 @@ export async function reverseResolve(address: string): Promise<string | null> {
   }
 }
 
-// Check if input is a .qf name
 export function isQFName(input: string): boolean {
-  return input.endsWith('.qf') && input.length > 3;
+  return input.endsWith(".qf") && input.length > 3;
 }
 
-// Normalize QF name input: auto-append .qf if needed
-// Returns the normalized name, or null if input is a raw address
 export function normalizeQFName(input: string): string | null {
   const trimmed = input.trim().toLowerCase();
-  if (trimmed.startsWith('0x')) return null; // raw address, no resolution needed
-  if (trimmed.endsWith('.qf')) return trimmed;   // already has .qf
-  return `${trimmed}.qf`;                        // auto-append .qf
+  if (trimmed.startsWith("0x")) return null;
+  if (trimmed.endsWith(".qf")) return trimmed;
+  return `${trimmed}.qf`;
 }
 
-// Format display: show .qf name if available, otherwise truncated address
 export function formatAddress(address: string, qfName?: string | null): string {
   if (qfName) return qfName;
   return `${address.slice(0, 6)}...${address.slice(-4)}`;

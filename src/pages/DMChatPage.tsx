@@ -8,7 +8,7 @@ import { ConversationList } from '@/components/messages/ConversationList'
 import { NewMessageModal } from '@/components/messages/NewMessageModal'
 import { useState } from 'react'
 import { isSubstrateAddress } from '@/lib/utils'
-import { deriveEvmAddress } from '@/lib/chain'
+import { deriveEVMAddress } from '@/lib/wallet'
 
 const DMChatPage: React.FC = () => {
   const { address: peerAddressParam } = useParams<{ address: string }>()
@@ -17,7 +17,7 @@ const DMChatPage: React.FC = () => {
   const peerAddress = useMemo(() => {
     if (!peerAddressParam) return null
     if (isSubstrateAddress(peerAddressParam)) {
-      return deriveEvmAddress(peerAddressParam).toLowerCase()
+      return deriveEVMAddress(peerAddressParam).toLowerCase()
     }
     return peerAddressParam.toLowerCase()
   }, [peerAddressParam])
@@ -61,7 +61,7 @@ const DMChatPage: React.FC = () => {
     // Convert Substrate address to EVM if needed
     let evmRecipient = recipient.toLowerCase()
     if (isSubstrateAddress(recipient)) {
-      evmRecipient = deriveEvmAddress(recipient).toLowerCase()
+      evmRecipient = deriveEVMAddress(recipient).toLowerCase()
     }
     sendMessage(evmRecipient, content)
     navigate(`/direct/${evmRecipient}`)

@@ -26,7 +26,7 @@ const ProfilePage: React.FC = () => {
   // Get QNS name for display
   const { name: qnsName } = useQFName(targetAddress)
 
-  const totalBalance = linkedWallets.reduce((sum, w) => sum + w.balance, balance)
+  const totalBalance = linkedWallets.reduce((sum: bigint, w: { balance: bigint }) => sum + w.balance, balance)
   const podsJoined = myPods.length
 
   // Display name: QNS name > truncated address
@@ -140,7 +140,7 @@ const ProfilePage: React.FC = () => {
             </div>
 
             {/* Linked wallets */}
-            {linkedWallets.map((wallet) => (
+            {linkedWallets.map((wallet: { address: string; balance: bigint }) => (
               <div key={wallet.address} className="flex items-center gap-3 border border-qx-card-border p-3">
                 <Avatar address={wallet.address} size="sm" />
                 <div className="flex-1 min-w-0">

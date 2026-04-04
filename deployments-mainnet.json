@@ -1,0 +1,29 @@
+{
+  "network": "mainnet",
+  "rpcUrl": "wss://mainnet.qfnode.net",
+  "deployer": {
+    "ss58": "5D2CbYD4XqKFXrpcdarQceXvFZgu4rrzsUynXBc8jjapoDpR",
+    "evm": "0xd56dc5d0c46aa0a61f32d3bcd0b959ce59b54d75"
+  },
+  "treasury": "0x26d93898D61111625079DB017bAaCdaDAe48d959",
+  "contracts": {
+    "registry": "0x3f1395f2fc9da54645f4d7fd47877c7462153ebd",
+    "podsStorage": "0x2f1577219fa06d7cf189b44b96e7600f8b9a04ac",
+    "payments": "0xa202e945976acae6f05de1665a7c8ec0e32e378f",
+    "contentStore": "0xb97cc0946cbf7b7ed0b70abb154d9eecbe538c79",
+    "messageIndex": "0x6ef3c50243ece084d032ac99c81846081a1de7f5",
+    "podsCreate": "0xef37ca59b0074ff8869282439365497ff4af659f",
+    "podsCreatePaid": "0xa23a2385c8a4f132cba4f72b30b3fa92a2054047",
+    "podsJoin": "0xc811591883e965397050276dbbf6892267ee2fdd",
+    "podsLeave": "0x24b6c418ee0e42321e07d1b79183e4f84a2b53f4",
+    "podsBan": "0x799574bb88fee0df573f168f5903e96a62ed9809",
+    "podsAddMod": "0x7e04017782f8e4e0b603e4ada23812e97cfc3d58",
+    "podsRemoveMod": "0xa2fc5b5f732af830b970224d400a3cdd5fed144a",
+    "podsAdmin": "0x8b1d194e12bec8ed729cbea54acc6ed4f966e696",
+    "podsReader": "0xa531a73dd0564270481e74ab5d43522f820d76a3",
+    "podsGetPod": "0x50b5a20ba0b43dbc2d63c129a9fa98398dc8c427",
+    "messageWriter": "0x72ea54181a97e8e23888b4d380a5a42f0d97d234",
+    "messageReader": "0x1d3c7a9dd97e50bd9946edfca8f00a42377b81c4"
+  },
+  "timestamp": "2026-04-04T06:10:44.532Z"
+}

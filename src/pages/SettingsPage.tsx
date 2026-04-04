@@ -11,7 +11,6 @@ import { QNSRegistration } from '@/components/qns/QNSRegistration'
 import { useWalletStore } from '@/stores/wallet'
 import { formatBalance, truncateAddress, copyToClipboard } from '@/lib/utils'
 import { NETWORKS, DEV_ACCOUNTS, DEV_MNEMONIC, type NetworkId } from '@/lib/network'
-import { switchNetwork } from '@/lib/chain'
 import { useNetworkStore } from '@/stores/network'
 import type { Theme } from '@/types'
 import {
@@ -50,7 +49,6 @@ const SettingsPage: React.FC = () => {
   const [isTogglingNotif, setIsTogglingNotif] = useState(false)
   const [qnsRegistrationOpen, setQnsRegistrationOpen] = useState(false)
 
-  const activeNetwork = useNetworkStore((s) => s.currentNetwork)
   const connectionStatus = useNetworkStore((s) => s.connectionStatus)
   const latestBlock = useNetworkStore((s) => s.latestBlock)
   const theme = useUIStore((s) => s.theme)
@@ -78,17 +76,10 @@ const SettingsPage: React.FC = () => {
   }, [isTogglingNotif])
 
   const handleNetworkSwitch = useCallback(async (id: NetworkId) => {
-    if (id === activeNetwork) return
-    setSwitching(true)
-    try {
-      await switchNetwork(id)
-      toast.success(`Switched to ${NETWORKS[id].name}`)
-    } catch {
-      toast.error('Failed to switch network')
-    } finally {
-      setSwitching(false)
-    }
-  }, [activeNetwork, toast])
+    // Network switching not available in PAPI setup
+    setSwitching(false)
+    toast.error('Network switching not available in current setup')
+  }, [toast])
 
   const handleCopy = (text: string, label: string) => {
     copyToClipboard(text)
@@ -324,19 +315,15 @@ const SettingsPage: React.FC = () => {
               )}
             </div>
 
-            {/* Stalled banner */}
-            {connectionStatus === 'stalled' && (
+            {/* Network warning banner */}
+            {connectionStatus === 'disconnected' && (
               <div className="rounded-lg border border-orange-400/30 bg-orange-400/10 p-3">
                 <p className="text-sm text-orange-300 mb-2">
-                  {activeNetwork === 'testnet'
-                    ? 'Testnet appears inactive. Switch to Local Dev for testing.'
-                    : 'Network may be stalled — no new blocks in 60s.'}
+                  Network may be stalled — no new blocks in 60s.
                 </p>
-                {activeNetwork !== 'local' && (
-                  <Button size="sm" onClick={() => handleNetworkSwitch('local')}>
-                    Switch to Local Dev
-                  </Button>
-                )}
+                <p className="text-xs text-gray-400">
+                  Network switching not available in current setup
+                </p>
               </div>
             )}
 
@@ -350,52 +337,17 @@ const SettingsPage: React.FC = () => {
               </div>
             )}
 
-            {/* Network selector */}
-            <p className="text-sm text-qx-text-secondary">Select which network to connect to</p>
-            <div className="grid grid-cols-3 gap-2">
-              {(['local', 'testnet', 'mainnet'] as NetworkId[]).map((id) => {
-                const net = NETWORKS[id]
-                const dotColor = id === 'local' ? 'bg-blue-400' : id === 'testnet' ? 'bg-yellow-400' : 'bg-qx-success'
-                return (
-                  <button
-                    key={id}
-                    disabled={switching}
-                    onClick={() => handleNetworkSwitch(id)}
-                    className={`border p-3 text-left transition-[border-color,transform] duration-150 hover:-translate-y-0.5 ${
-                      activeNetwork === id
-                        ? 'border-cyan-600 bg-cyan-600'
-                        : 'border-gray-200 dark:border-gray-800 hover:border-cyan-600'
-                    } ${switching ? 'opacity-50' : ''}`}
-                  >
-                    <div className="flex items-center gap-2 mb-1">
-                      <div className={`h-2 w-2 rounded-full ${dotColor}`} />
-                      <span className={`text-sm font-medium ${activeNetwork === id ? 'text-white dark:text-black' : 'text-qx-text-primary'}`}>{net.name}</span>
-                    </div>
-                    <p className={`text-[10px] truncate ${activeNetwork === id ? 'text-white/70 dark:text-black/70' : 'text-qx-text-muted'}`}>{net.wsUrl}</p>
-                  </button>
-                )
-              })}
+            {/* Network selector disabled */}
+            <p className="text-sm text-qx-text-secondary">Network switching not available in current setup</p>
+            <div className="p-4 border border-gray-200 dark:border-gray-800 rounded-lg text-center">
+              <p className="text-sm text-qx-text-muted">Connected to default network</p>
             </div>
-
-            {activeNetwork === 'testnet' && NETWORKS.testnet.faucetUrl && (
-              <p className="text-xs text-qx-text-muted">
-                Need test tokens?{' '}
-                <a
-                  href={NETWORKS.testnet.faucetUrl}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="text-cyan-600 hover:underline"
-                >
-                  Get QF from faucet
-                </a>
-              </p>
-            )}
           </div>
         </Card>
       )}
 
       {/* Dev Wallets - DEV only */}
-      {isDev && activeNetwork === 'local' && (
+      {isDev && (
         <Card header={{ title: 'Dev Wallets (Dev Only)' }}>
           <div className="space-y-4">
             <p className="text-sm text-qx-text-secondary">
@@ -453,7 +405,7 @@ const SettingsPage: React.FC = () => {
           </div>
           <div className="flex items-center justify-between">
             <span className="text-sm text-qx-text-secondary">Network</span>
-            <span className="text-sm font-medium text-qx-text-primary">{NETWORKS[activeNetwork].name}</span>
+            <span className="text-sm font-medium text-qx-text-primary">Default Network</span>
           </div>
           <div className="flex gap-2 pt-1">
             <a

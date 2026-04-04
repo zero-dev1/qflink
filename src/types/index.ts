@@ -13,11 +13,6 @@ export type Theme = 'light' | 'dark' | 'system'
 export type ConnectionStatus = 'disconnected' | 'connecting' | 'connected' | 'error'
 
 // ── Wallet ──
-export interface WalletAccount {
-  address: string
-  name?: string
-  source: 'metamask'
-}
 
 export interface LinkedWallet {
   address: string
@@ -172,7 +167,7 @@ export interface Conversation {
 }
 
 // ── Store Types ──
-export type WalletType = 'substrate' | 'evm' | null
+export type WalletType = 'substrate' | null
 
 export interface WalletState {
   address: string | null
@@ -184,23 +179,18 @@ export interface WalletState {
     publicKey: Uint8Array
     secretKey: Uint8Array
   } | null
-  linkedWallets: LinkedWallet[]
   evmAddress: string | null
   accountMapped: boolean
   isMappingAccount: boolean
-  walletType: WalletType
-  connect: (selectedAccount?: any) => Promise<void>
-  connectMetaMask: () => Promise<void>
-  silentConnectMetaMask: () => Promise<boolean>
-  finalizeMetaMaskConnection: (evmAddress: string) => Promise<void>
-  disconnect: () => Promise<void>
-  ensureMapping: () => Promise<string>
+  walletName: string | null
+  walletError: string | null
+  connect: (walletType: 'talisman' | 'subwallet') => Promise<void>
+  disconnect: () => void
   setBalance: (balance: bigint) => void
   refreshBalance: () => Promise<void>
   setEncryptionKeyPair: (keyPair: { publicKey: Uint8Array; secretKey: Uint8Array }) => void
-  addLinkedWallet: (wallet: LinkedWallet) => void
-  removeLinkedWallet: (address: string) => void
   setEvmAddress: (evmAddress: string) => void
+  clearWalletError: () => void
 }
 
 export interface MessagesState {

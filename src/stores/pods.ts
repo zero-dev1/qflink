@@ -75,10 +75,10 @@ export const usePodsStore = create<PodsState>((set, get) => ({
 
 
 
-  fetchPods: async (blockNumber?: bigint) => {
+  fetchPods: async () => {
     set({ isLoading: true })
     try {
-      const count = await cc.getPodCount(blockNumber)
+      const count = await cc.getPodCount()
       
       if (count === 0) {
         set({ pods: [], isLoading: false })
@@ -89,8 +89,8 @@ export const usePodsStore = create<PodsState>((set, get) => ({
       
       for (let i = 1; i <= count; i++) {
         const [pod, entryFee] = await Promise.all([
-          cc.getPod(i, blockNumber),
-          cc.getEntryFee(i, blockNumber),
+          cc.getPod(i),
+          cc.getEntryFee(i),
         ])
         if (pod) {
           pods.push({
@@ -127,7 +127,7 @@ export const usePodsStore = create<PodsState>((set, get) => ({
       const evmAddress = getEvmAddress()
       
       if (evmAddress) {
-        const userPodIds = await cc.getUserPods(evmAddress as `0x${string}`, blockNumber)
+        const userPodIds = await cc.getUserPods(evmAddress as `0x${string}`)
         
         for (const podId of userPodIds) {
           const pod = uniquePods.find(p => p.id === podId)

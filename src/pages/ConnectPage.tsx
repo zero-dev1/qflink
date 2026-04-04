@@ -5,7 +5,6 @@ import { useProfileStore } from '@/stores/profile'
 import { useUIStore } from '@/stores/ui'
 import { truncateAddress } from '@/lib/utils'
 import { deriveEncryptionKeypair } from '@/lib/encryption'
-import { ensureAccountMapped } from '@/lib/chain'
 import { getProfile } from '@/lib/contractCalls'
 import { Spinner } from '@/components/ui/Spinner'
 import { QFLinkWordmark } from '@/components/QFLinkWordmark'
@@ -13,7 +12,7 @@ import { QFLinkWordmark } from '@/components/QFLinkWordmark'
 
 type Step = 1 | 2 | 3
 
-type WalletId = 'metamask' | null
+type WalletId = 'talisman' | 'subwallet' | null
 
 const ConnectPage: React.FC = () => {
   const navigate = useNavigate()
@@ -22,16 +21,16 @@ const ConnectPage: React.FC = () => {
   const [isRegistering, setIsRegistering] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [loadingWallet, setLoadingWallet] = useState<WalletId | null>(null)
-  const [metaMaskNotInstalled, setMetaMaskNotInstalled] = useState(false)
 
   const isConnected = useWalletStore((s) => s.isConnected)
   const address = useWalletStore((s) => s.address)
   const evmAddress = useWalletStore((s) => s.evmAddress)
-  const walletType = useWalletStore((s) => s.walletType)
+  const walletName = useWalletStore((s) => s.walletName)
   const isMappingAccount = useWalletStore((s) => s.isMappingAccount)
   const walletSource = useWalletStore((s) => s.walletSource)
+  const walletError = useWalletStore((s) => s.walletError)
   const connectStore = useWalletStore((s) => s.connect)
-  const connectMetaMaskStore = useWalletStore((s) => s.connectMetaMask)
+  const clearWalletError = useWalletStore((s) => s.clearWalletError)
   const addToast = useUIStore((s) => s.addToast)
   const profile = useProfileStore()
 
@@ -94,29 +93,24 @@ const ConnectPage: React.FC = () => {
     }
   }, [profile.isRegistered, isConnected, navigate, location])
 
-  // Handle wallet connection (direct MetaMask)
-  const handleConnectClick = async () => {
+  // Handle wallet connection
+  const handleConnectClick = async (walletType: 'talisman' | 'subwallet') => {
     setError(null)
+    clearWalletError()
     
-    // Check if MetaMask is installed
-    if (!window.ethereum) {
-      setMetaMaskNotInstalled(true)
-      return
-    }
-    
-    await handleMetaMaskConnect()
+    await handleWalletConnect(walletType)
   }
 
-  // Handle MetaMask connection
-  const handleMetaMaskConnect = async () => {
-    setLoadingWallet('metamask')
+  // Handle wallet connection
+  const handleWalletConnect = async (walletType: 'talisman' | 'subwallet') => {
+    setLoadingWallet(walletType)
     setError(null)
     try {
-      await connectMetaMaskStore()
+      await connectStore(walletType)
       // After successful connection, check profile in the next effect cycle
-      addToast('success', 'MetaMask connected successfully')
+      addToast('success', `${walletType === 'talisman' ? 'Talisman' : 'SubWallet'} connected successfully`)
     } catch (err: any) {
-      setError(err.message || 'Failed to connect MetaMask')
+      setError(err.message || `Failed to connect ${walletType === 'talisman' ? 'Talisman' : 'SubWallet'}`)
     } finally {
       setLoadingWallet(null)
     }
@@ -132,58 +126,34 @@ const ConnectPage: React.FC = () => {
     let keyPair: { publicKey: Uint8Array; secretKey: Uint8Array } | undefined
 
     try {
-      const { walletType: wt, address: walletAddress, evmAddress: evmAddr } = useWalletStore.getState()
+      const { walletName: wn, address: walletAddress, evmAddress: evmAddr } = useWalletStore.getState()
       
       if (!walletAddress) throw new Error('No wallet connected')
 
-      if (wt === 'evm') {
-        // MetaMask: use personal_sign
-        if (!window.ethereum) throw new Error('MetaMask not available')
-        
-        keyPair = await deriveEncryptionKeypair(async (msg) => {
-          const messageHex = '0x' + Array.from(new TextEncoder().encode(msg))
-            .map(b => b.toString(16).padStart(2, '0'))
-            .join('')
-          
-          const signature = await window.ethereum!.request({
-            method: 'personal_sign',
-            params: [messageHex, walletAddress],
-          })
-          
-          // Convert hex signature to Uint8Array
-          const hex = signature.slice(2)
-          const bytes = new Uint8Array(hex.length / 2)
-          for (let i = 0; i < hex.length; i += 2) {
-            bytes[i / 2] = parseInt(hex.substr(i, 2), 16)
-          }
-          return bytes
+      // Substrate: use signRaw
+      const { web3Enable, web3FromSource } = await import('@polkadot/extension-dapp')
+      const { walletSource } = useWalletStore.getState()
+      
+      if (!walletSource) throw new Error('No wallet source')
+      
+      await web3Enable('QFLink')
+      const injector = await web3FromSource(walletSource)
+      
+      keyPair = await deriveEncryptionKeypair(async (msg) => {
+        const signature = await injector.signer.signRaw?.({
+          address: walletAddress,
+          data: msg,
+          type: 'bytes',
         })
-      } else {
-        // Substrate: use signRaw
-        const { web3Enable, web3FromSource } = await import('@polkadot/extension-dapp')
-        const { walletSource } = useWalletStore.getState()
-        
-        if (!walletSource) throw new Error('No wallet source')
-        
-        await web3Enable('QFLink')
-        const injector = await web3FromSource(walletSource)
-        
-        keyPair = await deriveEncryptionKeypair(async (msg) => {
-          const signature = await injector.signer.signRaw?.({
-            address: walletAddress,
-            data: msg,
-            type: 'bytes',
-          })
-          if (!signature) throw new Error('Signature failed')
-          // Convert hex string to Uint8Array
-          const hex = signature.signature.slice(2)
-          const bytes = new Uint8Array(hex.length / 2)
-          for (let i = 0; i < hex.length; i += 2) {
-            bytes[i / 2] = parseInt(hex.substr(i, 2), 16)
-          }
-          return bytes
-        })
-      }
+        if (!signature) throw new Error('Signature failed')
+        // Convert hex string to Uint8Array
+        const hex = signature.signature.slice(2)
+        const bytes = new Uint8Array(hex.length / 2)
+        for (let i = 0; i < hex.length; i += 2) {
+          bytes[i / 2] = parseInt(hex.substr(i, 2), 16)
+        }
+        return bytes
+      })
 
       // Use truncated address as placeholder display name
       const placeholderName = evmAddr ? truncateAddress(evmAddr, 'evm') : truncateAddress(walletAddress, 'substrate')
@@ -195,8 +165,8 @@ const ConnectPage: React.FC = () => {
       console.error('Registration failed:', err)
       const msg: string = err?.message || String(err) || ''
 
-      // For MetaMask (EVM), account mapping is handled automatically
-      // No manual recovery needed - just show appropriate error
+      // Account mapping is handled automatically in wallet connection
+      // Just show appropriate error for any failures
 
       let userMessage: string
       if (msg === 'INSUFFICIENT_BALANCE_FOR_MAPPING' || msg.includes('1010') || msg.includes('Inability to pay') || msg.includes('insufficient')) {
@@ -219,29 +189,8 @@ const ConnectPage: React.FC = () => {
     }
   }
 
-  // Render MetaMask not installed prompt
-  const renderMetaMaskPrompt = () => (
-    <div className="space-y-4 animate-fade-in text-center">
-      <div className="text-4xl mb-4">🦊</div>
-      <p className="text-gray-300">
-        MetaMask is required to use QFLink.
-      </p>
-      <a
-        href="https://metamask.io/download/"
-        target="_blank"
-        rel="noopener noreferrer"
-        className="inline-block w-full bg-orange-500 text-white hover:bg-orange-600 py-3.5 px-6 rounded-md font-medium text-sm uppercase tracking-wider transition-colors"
-      >
-        INSTALL METAMASK
-      </a>
-      <button
-        onClick={() => setMetaMaskNotInstalled(false)}
-        className="text-gray-500 text-sm hover:text-gray-400"
-      >
-        Go back
-      </button>
-    </div>
-  )
+  // Detect if user is on mobile
+  const isMobile = /Android|iPhone|iPad|iPod/i.test(navigator.userAgent)
 
   return (
     <div className="h-dvh overflow-hidden bg-[#0D0D0D] flex flex-col items-center justify-center px-4">
@@ -265,7 +214,7 @@ const ConnectPage: React.FC = () => {
 
             {/* Subtitle */}
             <p className="text-gray-400 text-sm text-center mb-10">
-              Connect your MetaMask wallet to get started.
+              {isMobile ? 'Open this dApp in SubWallet' : 'Connect your wallet to get started.'}
             </p>
 
             {/* During mapAccount transaction: replace UI with status message */}
@@ -273,46 +222,74 @@ const ConnectPage: React.FC = () => {
               <div className="flex flex-col items-center gap-3 py-6">
                 <Spinner size="md" />
                 <p className="text-sm text-gray-300 text-center font-medium">Connecting and setting up your account...</p>
-                <p className="text-xs text-gray-500 text-center">Please approve the transaction in MetaMask.</p>
+                <p className="text-xs text-gray-500 text-center">Please approve the transaction in your wallet.</p>
               </div>
-            ) : metaMaskNotInstalled ? (
-              renderMetaMaskPrompt()
             ) : (
               <>
-                {/* Connect Button */}
-                <button
-                  onClick={handleConnectClick}
-                  disabled={loadingWallet !== null}
-                  className="w-full bg-cyan-600 text-white hover:bg-cyan-700 disabled:opacity-50 py-3.5 px-6 rounded-md font-medium text-sm uppercase tracking-wider transition-colors mb-6"
-                >
-                  {loadingWallet === 'metamask' ? (
-                    <span className="flex items-center justify-center gap-2">
-                      <Spinner size="sm" />
-                      CONNECTING...
-                    </span>
-                  ) : (
-                    'CONNECT METAMASK'
+                {/* Wallet Options */}
+                <div className="space-y-3 mb-6">
+                  {!isMobile && (
+                    <button
+                      onClick={() => handleConnectClick('talisman')}
+                      disabled={loadingWallet !== null}
+                      className="w-full bg-cyan-600 text-white hover:bg-cyan-700 disabled:opacity-50 py-3.5 px-6 rounded-md font-medium text-sm uppercase tracking-wider transition-colors"
+                    >
+                      {loadingWallet === 'talisman' ? (
+                        <span className="flex items-center justify-center gap-2">
+                          <Spinner size="sm" />
+                          CONNECTING...
+                        </span>
+                      ) : (
+                        'CONNECT TALISMAN'
+                      )}
+                    </button>
                   )}
-                </button>
+                  
+                  <button
+                    onClick={() => handleConnectClick('subwallet')}
+                    disabled={loadingWallet !== null}
+                    className="w-full bg-purple-600 text-white hover:bg-purple-700 disabled:opacity-50 py-3.5 px-6 rounded-md font-medium text-sm uppercase tracking-wider transition-colors"
+                  >
+                    {loadingWallet === 'subwallet' ? (
+                      <span className="flex items-center justify-center gap-2">
+                        <Spinner size="sm" />
+                        CONNECTING...
+                      </span>
+                    ) : (
+                      isMobile ? 'OPEN IN SUBWALLET' : 'CONNECT SUBWALLET'
+                    )}
+                  </button>
+                </div>
 
                 {/* Learn More Link */}
                 <p className="text-gray-500 text-sm text-center">
-                  Don't have MetaMask?{' '}
+                  {isMobile ? (
+                    "Don't have SubWallet? "
+                  ) : (
+                    "New to Substrate wallets? "
+                  )}
                   <a 
-                    href="https://metamask.io/download/" 
+                    href={isMobile ? "https://subwallet.app/" : "https://talisman.xyz/"} 
                     target="_blank" 
                     rel="noopener noreferrer"
                     className="text-cyan-600 hover:text-cyan-500"
                   >
-                    Install here
+                    {isMobile ? 'Download here' : 'Learn more'}
                   </a>
                 </p>
               </>
             )}
 
-            {/* Error Message */}
-            {error && (
-              <p className="text-red-400 text-sm text-center mt-4">{error}</p>
+            {/* Error Messages */}
+            {(error || walletError) && (
+              <div className="space-y-2">
+                {error && (
+                  <p className="text-red-400 text-sm text-center">{error}</p>
+                )}
+                {walletError && (
+                  <p className="text-orange-400 text-sm text-center">{walletError}</p>
+                )}
+              </div>
             )}
           </div>
         )}
@@ -372,9 +349,16 @@ const ConnectPage: React.FC = () => {
               Your identity will be your .qf name or wallet address.
             </p>
 
-            {/* Error Message */}
-            {error && (
-              <p className="text-red-400 text-sm text-center mt-3">{error}</p>
+            {/* Error Messages */}
+            {(error || walletError) && (
+              <div className="space-y-2">
+                {error && (
+                  <p className="text-red-400 text-sm text-center mt-3">{error}</p>
+                )}
+                {walletError && (
+                  <p className="text-orange-400 text-sm text-center mt-3">{walletError}</p>
+                )}
+              </div>
             )}
           </div>
         )}
