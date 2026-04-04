@@ -35,17 +35,6 @@ const ConnectPage: React.FC = () => {
   const addToast = useUIStore((s) => s.addToast)
   const profile = useProfileStore()
 
-  // Show loading while rehydrating
-  if (isRehydrating) {
-    return (
-      <div className="h-dvh overflow-hidden bg-[#0D0D0D] flex flex-col items-center justify-center px-4">
-        <QFLinkWordmark size={56} variant="dark" className="mb-10" />
-        <Spinner size="lg" />
-        <p className="text-sm text-gray-500 mt-4">Reconnecting wallet...</p>
-      </div>
-    )
-  }
-
   // After wallet connects, do a fresh on-chain profile check to decide next step.
   // We do NOT rely on the profile store's cached isRegistered — we always query
   // registryGetProfile directly so a mapped-but-unregistered account is never
@@ -214,6 +203,17 @@ const ConnectPage: React.FC = () => {
 
   // Detect if user is on mobile
   const isMobile = /Android|iPhone|iPad|iPod/i.test(navigator.userAgent)
+
+  // Show loading while rehydrating
+  if (isRehydrating) {
+    return (
+      <div className="h-dvh overflow-hidden bg-[#0D0D0D] flex flex-col items-center justify-center px-4">
+        <QFLinkWordmark size={56} variant="dark" className="mb-10" />
+        <Spinner size="lg" />
+        <p className="text-sm text-gray-500 mt-4">Reconnecting wallet...</p>
+      </div>
+    )
+  }
 
   return (
     <div className="h-dvh overflow-hidden bg-[#0D0D0D] flex flex-col items-center justify-center px-4">

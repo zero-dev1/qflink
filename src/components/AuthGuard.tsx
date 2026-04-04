@@ -24,18 +24,29 @@ export const AuthGuard: React.FC<AuthGuardProps> = ({ children }) => {
   const retryTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const qnsCheckedRef = useRef(false)
   
+  // Persisted fields — survive refresh immediately from localStorage
+  const address = useWalletStore((s) => s.address)
+  const evmAddress = useWalletStore((s) => s.evmAddress)
+  
+  // Transient fields — for loading state display only
   const isConnected = useWalletStore((s) => s.isConnected)
   const isConnecting = useWalletStore((s) => s.isConnecting)
   const isRehydrating = useWalletStore((s) => s._rehydrating)
-  const evmAddress = useWalletStore((s) => s.evmAddress)
+  
   const isRegistered = useProfileStore((s) => s.isRegistered)
   const needsRegistration = useProfileStore((s) => s.needsRegistration)
   const isLoadingProfile = useProfileStore((s) => s.isLoading)
   const fetchProfile = useProfileStore((s) => s.fetchProfile)
   const { refresh: refreshQFName } = useQFName(evmAddress || undefined)
 
+  // Profile check — only runs when we have a live connection AND evmAddress
   useEffect(() => {
     let cancelled = false
+
+    // Reset isChecking to true whenever deps change so there's no gap frame
+    if (isConnected && evmAddress && !isRegistered) {
+      setIsChecking(true)
+    }
 
     const checkProfile = async () => {
       if (!isConnected || !evmAddress || isRegistered) {
@@ -53,8 +64,6 @@ export const AuthGuard: React.FC<AuthGuardProps> = ({ children }) => {
         if (cancelled) return
         const msg: string = err?.message || String(err) || ''
 
-        // AccountUnmapped = new wallet that hasn't registered yet.
-        // Not a network error — redirect to /connect for registration.
         if (msg.toLowerCase().includes('accountunmapped') || msg.toLowerCase().includes('account_unmapped') || msg.toLowerCase().includes('unmapped')) {
           if (!cancelled) setIsChecking(false)
           return
@@ -63,14 +72,11 @@ export const AuthGuard: React.FC<AuthGuardProps> = ({ children }) => {
         retryCountRef.current += 1
 
         if (retryCountRef.current < MAX_RETRIES) {
-          // Network/rate-limit error — show loading and retry
           setNetworkError(true)
           retryTimerRef.current = setTimeout(() => {
             if (!cancelled) checkProfile()
           }, RETRY_DELAY_MS)
         } else {
-          // Exhausted retries — stay loading, do NOT redirect to register
-          // The user is likely registered but the network is unavailable
           console.error('[AuthGuard] All retries exhausted — staying on loading screen')
           setNetworkError(true)
           setIsChecking(false)
@@ -90,85 +96,96 @@ export const AuthGuard: React.FC<AuthGuardProps> = ({ children }) => {
   useEffect(() => {
     const checkQNS = async () => {
       if (!isRegistered || !evmAddress) {
-        setIsCheckingQNS(false);
-        return;
+        setIsCheckingQNS(false)
+        return
       }
 
-      const hasSkipped = localStorage.getItem('qns-skipped') === 'true';
+      const hasSkipped = localStorage.getItem('qns-skipped') === 'true'
       if (hasSkipped) {
-        qnsCheckedRef.current = true;
-        setIsCheckingQNS(false);
-        return;
+        qnsCheckedRef.current = true
+        setIsCheckingQNS(false)
+        return
       }
 
       try {
-        // Clear any cached null result before checking
-        const { clearNameCache } = await import('@/lib/qns');
-        clearNameCache(evmAddress);
+        const { clearNameCache } = await import('@/lib/qns')
+        clearNameCache(evmAddress)
 
-        const qnsName = await hasRegisteredName(evmAddress);
+        const qnsName = await hasRegisteredName(evmAddress)
         if (qnsName) {
-          // Name found — skip the registration screen entirely
-          qnsCheckedRef.current = true;
-          setShowQNSRegistration(false);
-          setIsCheckingQNS(false);
-          return;
+          qnsCheckedRef.current = true
+          setShowQNSRegistration(false)
+          setIsCheckingQNS(false)
+          return
         }
-        // No name — show registration
-        setShowQNSRegistration(true);
-        qnsCheckedRef.current = true;
+        setShowQNSRegistration(true)
+        qnsCheckedRef.current = true
       } catch (err) {
-        console.error('Error checking QNS registration:', err);
-        qnsCheckedRef.current = true;
+        console.error('Error checking QNS registration:', err)
+        qnsCheckedRef.current = true
       } finally {
-        setIsCheckingQNS(false);
+        setIsCheckingQNS(false)
       }
-    };
+    }
 
-    checkQNS();
+    checkQNS()
 
-    // Re-check when user returns from another tab (may have registered a name there)
     const handleVisibilityChange = () => {
       if (document.visibilityState === 'visible' && isRegistered && evmAddress && !localStorage.getItem('qns-skipped')) {
-        // Reset and recheck
         import('@/lib/qns').then(({ clearNameCache }) => {
-          clearNameCache(evmAddress);
+          clearNameCache(evmAddress)
           hasRegisteredName(evmAddress).then((name) => {
             if (name) {
-              setShowQNSRegistration(false);
-              qnsCheckedRef.current = true;
-              // Also refresh the QFName hook so the name appears in the header
-              refreshQFName();
+              setShowQNSRegistration(false)
+              qnsCheckedRef.current = true
+              refreshQFName()
             }
-          }).catch(() => {});
-        });
+          }).catch(() => {})
+        })
       }
-    };
+    }
 
-    document.addEventListener('visibilitychange', handleVisibilityChange);
-    return () => document.removeEventListener('visibilitychange', handleVisibilityChange);
-  }, [isRegistered, evmAddress]);
+    document.addEventListener('visibilitychange', handleVisibilityChange)
+    return () => document.removeEventListener('visibilitychange', handleVisibilityChange)
+  }, [isRegistered, evmAddress])
 
-  // Show loading while checking auth state or QNS status
-  if (isConnecting || isChecking || isRehydrating || (isConnected && isLoadingProfile) || isCheckingQNS) {
+  // ── Decision tree ──
+
+  // 1. Still rehydrating or connecting — always show spinner
+  if (isRehydrating || isConnecting) {
     return (
       <div className="flex h-screen items-center justify-center bg-[#0D0D0D]">
         <div className="flex flex-col items-center gap-4">
           <Spinner size="lg" />
           <p className="text-sm text-gray-500">
-            {networkError ? 'Network busy, retrying...' : isRehydrating ? 'Reconnecting wallet...' : 'Checking authentication...'}
+            {isRehydrating ? 'Reconnecting wallet...' : 'Connecting...'}
           </p>
         </div>
       </div>
     )
   }
 
-  // Not connected → redirect to /connect, preserving current location for return
-  if (!isConnected) {
+  // 2. No persisted address at all — genuinely not logged in, redirect
+  if (!address) {
     return <Navigate to="/connect" replace state={{ from: location }} />
   }
 
-  // After retries exhausted with network error — show a retry button instead of redirecting
+  // 3. Have persisted address but live connection not yet established, 
+  //    OR profile check in progress, OR QNS check in progress — show spinner
+  if (!isConnected || isChecking || (isConnected && isLoadingProfile) || isCheckingQNS) {
+    return (
+      <div className="flex h-screen items-center justify-center bg-[#0D0D0D]">
+        <div className="flex flex-col items-center gap-4">
+          <Spinner size="lg" />
+          <p className="text-sm text-gray-500">
+            {networkError ? 'Network busy, retrying...' : !isConnected ? 'Reconnecting wallet...' : 'Checking authentication...'}
+          </p>
+        </div>
+      </div>
+    )
+  }
+
+  // 4. After retries exhausted with network error — show retry button
   if (networkError && !isRegistered && retryCountRef.current >= MAX_RETRIES) {
     return (
       <div className="flex h-screen items-center justify-center bg-[#0D0D0D]">
@@ -189,12 +206,12 @@ export const AuthGuard: React.FC<AuthGuardProps> = ({ children }) => {
     )
   }
 
-  // Connected but confirmed no profile (query succeeded, returned null) → redirect to /connect
+  // 5. Connected but no profile — redirect to /connect for registration
   if (needsRegistration || !isRegistered) {
     return <Navigate to="/connect" replace state={{ from: location }} />
   }
 
-  // Show QNS registration if needed
+  // 6. Show QNS registration if needed
   if (showQNSRegistration) {
     return (
       <QNSRegistration
@@ -207,7 +224,7 @@ export const AuthGuard: React.FC<AuthGuardProps> = ({ children }) => {
     )
   }
 
-  // All good → render the protected content
+  // 7. All good
   return <>{children}</>
 }
 

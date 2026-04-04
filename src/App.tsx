@@ -26,7 +26,7 @@ const CreatorDashboardPage = lazy(() => import('@/pages/CreatorDashboardPage'))
 const AdminPage = lazy(() => import('@/pages/AdminPage'))
 
 const PageLoader: React.FC = () => (
-  <div className="flex h-screen items-center justify-center">
+  <div className="flex h-screen items-center justify-center bg-[#0D0D0D]">
     <Spinner size="lg" />
   </div>
 )

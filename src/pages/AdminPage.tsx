@@ -6,6 +6,7 @@ import * as cc from '@/lib/contractCalls'
 import { resolveQFName, normalizeQFName } from '@/lib/qns'
 import { CONTRACT_ADDRESSES } from '@/lib/contracts'
 import { formatExactAmount } from '@/lib/utils'
+import { parseEther } from 'viem'
 
 // Owner address from environment (used as fallback while loading)
 const OWNER_ADDRESS = (import.meta.env.VITE_OWNER_ADDRESS || '').toLowerCase()
@@ -231,9 +232,8 @@ const AdminPage: React.FC = () => {
       setPodCount(pods)
       setPaymentsBalance(payBalance)
       
-      // Calculate platform fee percentage from treasury share (assuming 10000 = 100%)
-      const feePct = Number(paymentsTreasuryShare) / 100
-      setPlatformFeePct(feePct)
+      // Calculate platform fee percentage from treasury share (raw value IS the percentage)
+      setPlatformFeePct(Number(paymentsTreasuryShare))
       
       // Set PodsCreate economics
       setPodsCreateFee(podsCreateData[0])
@@ -280,7 +280,7 @@ const AdminPage: React.FC = () => {
       }
       
       const txResult = await cc.setPaymentsTreasury(addr)
-      await txResult.confirmation
+      await awaitConfirmation(txResult)
       addToast('success', 'Treasury updated successfully')
       setNewTreasuryInput('')
       await fetchData()
@@ -304,7 +304,7 @@ const AdminPage: React.FC = () => {
       }
       
       const txResult = await cc.transferPaymentsOwnership(addr)
-      await txResult.confirmation
+      await awaitConfirmation(txResult)
       addToast('success', 'Ownership transferred successfully')
       setNewOwnerInput('')
       await fetchData()
@@ -322,7 +322,7 @@ const AdminPage: React.FC = () => {
     setWithdrawingPayments(true)
     try {
       const txResult = await cc.withdrawPayments(paymentsBalance)
-      await txResult.confirmation
+      await awaitConfirmation(txResult)
       addToast('success', `Withdrawn ${formatExactAmount(paymentsBalance)} QF from Payments`)
       await fetchData()
     } catch (err) {
@@ -339,7 +339,7 @@ const AdminPage: React.FC = () => {
     setWithdrawingToTreasury(true)
     try {
       const txResult = await cc.withdrawPaymentsToTreasury(paymentsBalance)
-      await txResult.confirmation
+      await awaitConfirmation(txResult)
       addToast('success', `Transferred ${formatExactAmount(paymentsBalance)} QF to Treasury`)
       await fetchData()
     } catch (err) {
@@ -349,17 +349,31 @@ const AdminPage: React.FC = () => {
     }
   }
   
+  // Helper to await confirmation and throw on failure
+  const awaitConfirmation = async (txResult: { confirmation: Promise<{ confirmed: boolean; error?: string }> }) => {
+    const result = await txResult.confirmation
+    if (!result.confirmed) {
+      throw new Error(result.error || 'Transaction failed on-chain')
+    }
+  }
+  
   // Economics handlers
   const handleUpdatePaymentsSplit = async () => {
     if (!newPaymentsSplit.creatorShare || !newPaymentsSplit.treasuryShare) return
     
     setUpdatingPaymentsSplit(true)
     try {
-      const creatorShare = BigInt(Math.floor(parseFloat(newPaymentsSplit.creatorShare) * 100))
-      const treasuryShare = BigInt(Math.floor(parseFloat(newPaymentsSplit.treasuryShare) * 100))
+      const creatorShare = BigInt(Math.round(parseFloat(newPaymentsSplit.creatorShare)))
+      const treasuryShare = BigInt(Math.round(parseFloat(newPaymentsSplit.treasuryShare)))
+      
+      if (creatorShare + treasuryShare !== 100n) {
+        addToast('error', 'Creator + Treasury must equal 100%')
+        setUpdatingPaymentsSplit(false)
+        return
+      }
       
       const txResult = await cc.setPaymentsSplit(creatorShare, treasuryShare)
-      await txResult.confirmation
+      await awaitConfirmation(txResult)
       addToast('success', 'Payments split updated successfully')
       setNewPaymentsSplit({ creatorShare: '', treasuryShare: '' })
       await fetchData()
@@ -375,9 +389,9 @@ const AdminPage: React.FC = () => {
     
     setUpdatingPodsCreateFee(true)
     try {
-      const fee = BigInt(newPodsCreateFee)
+      const fee = parseEther(newPodsCreateFee)
       const txResult = await cc.setPodsCreateCreationFee(fee)
-      await txResult.confirmation
+      await awaitConfirmation(txResult)
       addToast('success', 'PodsCreate fee updated successfully')
       setNewPodsCreateFee('')
       await fetchData()
@@ -393,11 +407,17 @@ const AdminPage: React.FC = () => {
     
     setUpdatingPodsCreateSplit(true)
     try {
-      const treasuryShare = BigInt(Math.floor(parseFloat(newPodsCreateSplit.treasuryShare) * 100))
-      const burnShare = BigInt(Math.floor(parseFloat(newPodsCreateSplit.burnShare) * 100))
+      const treasuryShare = BigInt(Math.round(parseFloat(newPodsCreateSplit.treasuryShare)))
+      const burnShare = BigInt(Math.round(parseFloat(newPodsCreateSplit.burnShare)))
+      
+      if (treasuryShare + burnShare !== 100n) {
+        addToast('error', 'Treasury + Burn must equal 100%')
+        setUpdatingPodsCreateSplit(false)
+        return
+      }
       
       const txResult = await cc.setPodsCreateSplit(treasuryShare, burnShare)
-      await txResult.confirmation
+      await awaitConfirmation(txResult)
       addToast('success', 'PodsCreate split updated successfully')
       setNewPodsCreateSplit({ treasuryShare: '', burnShare: '' })
       await fetchData()
@@ -420,7 +440,7 @@ const AdminPage: React.FC = () => {
       }
       
       const txResult = await cc.setPodsCreateBurnAddress(addr)
-      await txResult.confirmation
+      await awaitConfirmation(txResult)
       addToast('success', 'PodsCreate burn address updated successfully')
       setNewPodsCreateBurnAddress('')
       await fetchData()
@@ -436,9 +456,9 @@ const AdminPage: React.FC = () => {
     
     setUpdatingPodsCreatePaidFee(true)
     try {
-      const fee = BigInt(newPodsCreatePaidFee)
+      const fee = parseEther(newPodsCreatePaidFee)
       const txResult = await cc.setPodsCreatePaidCreationFee(fee)
-      await txResult.confirmation
+      await awaitConfirmation(txResult)
       addToast('success', 'PodsCreatePaid fee updated successfully')
       setNewPodsCreatePaidFee('')
       await fetchData()
@@ -454,11 +474,17 @@ const AdminPage: React.FC = () => {
     
     setUpdatingPodsCreatePaidSplit(true)
     try {
-      const treasuryShare = BigInt(Math.floor(parseFloat(newPodsCreatePaidSplit.treasuryShare) * 100))
-      const burnShare = BigInt(Math.floor(parseFloat(newPodsCreatePaidSplit.burnShare) * 100))
+      const treasuryShare = BigInt(Math.round(parseFloat(newPodsCreatePaidSplit.treasuryShare)))
+      const burnShare = BigInt(Math.round(parseFloat(newPodsCreatePaidSplit.burnShare)))
+      
+      if (treasuryShare + burnShare !== 100n) {
+        addToast('error', 'Treasury + Burn must equal 100%')
+        setUpdatingPodsCreatePaidSplit(false)
+        return
+      }
       
       const txResult = await cc.setPodsCreatePaidSplit(treasuryShare, burnShare)
-      await txResult.confirmation
+      await awaitConfirmation(txResult)
       addToast('success', 'PodsCreatePaid split updated successfully')
       setNewPodsCreatePaidSplit({ treasuryShare: '', burnShare: '' })
       await fetchData()
@@ -481,7 +507,7 @@ const AdminPage: React.FC = () => {
       }
       
       const txResult = await cc.setPodsCreatePaidBurnAddress(addr)
-      await txResult.confirmation
+      await awaitConfirmation(txResult)
       addToast('success', 'PodsCreatePaid burn address updated successfully')
       setNewPodsCreatePaidBurnAddress('')
       await fetchData()
@@ -527,7 +553,7 @@ const AdminPage: React.FC = () => {
   }
   
   return (
-    <div className="min-h-[calc(100vh-3.5rem)] bg-[#0a0a0a] p-6 md:p-8">
+    <div className="min-h-screen bg-[#0a0a0a] p-6 md:p-8">
       <div className="max-w-5xl mx-auto space-y-8">
         {/* Header */}
         <div>
@@ -664,11 +690,11 @@ const AdminPage: React.FC = () => {
                 </div>
                 <div className="flex items-center justify-between py-3 border-b border-gray-800">
                   <span className="text-sm text-gray-400">Treasury Share</span>
-                  <span className="text-sm text-white">{Number(podsCreateTreasuryShare) / 100}%</span>
+                  <span className="text-sm text-white">{Number(podsCreateTreasuryShare)}%</span>
                 </div>
                 <div className="flex items-center justify-between py-3 border-b border-gray-800">
                   <span className="text-sm text-gray-400">Burn Share</span>
-                  <span className="text-sm text-white">{Number(podsCreateBurnShare) / 100}%</span>
+                  <span className="text-sm text-white">{Number(podsCreateBurnShare)}%</span>
                 </div>
                 <div className="flex items-center justify-between py-3 border-b border-gray-800">
                   <span className="text-sm text-gray-400">Burn Address</span>
@@ -682,7 +708,7 @@ const AdminPage: React.FC = () => {
                   <div className="flex gap-2">
                     <input
                       type="text"
-                      placeholder="New fee in wei"
+                      placeholder="New fee in QF (e.g. 500)"
                       value={newPodsCreateFee}
                       onChange={(e) => setNewPodsCreateFee(e.target.value)}
                       disabled={updatingPodsCreateFee}
@@ -764,11 +790,11 @@ const AdminPage: React.FC = () => {
                 </div>
                 <div className="flex items-center justify-between py-3 border-b border-gray-800">
                   <span className="text-sm text-gray-400">Treasury Share</span>
-                  <span className="text-sm text-white">{Number(podsCreatePaidTreasuryShare) / 100}%</span>
+                  <span className="text-sm text-white">{Number(podsCreatePaidTreasuryShare)}%</span>
                 </div>
                 <div className="flex items-center justify-between py-3 border-b border-gray-800">
                   <span className="text-sm text-gray-400">Burn Share</span>
-                  <span className="text-sm text-white">{Number(podsCreatePaidBurnShare) / 100}%</span>
+                  <span className="text-sm text-white">{Number(podsCreatePaidBurnShare)}%</span>
                 </div>
                 <div className="flex items-center justify-between py-3 border-b border-gray-800">
                   <span className="text-sm text-gray-400">Burn Address</span>
@@ -782,7 +808,7 @@ const AdminPage: React.FC = () => {
                   <div className="flex gap-2">
                     <input
                       type="text"
-                      placeholder="New fee in wei"
+                      placeholder="New fee in QF (e.g. 500)"
                       value={newPodsCreatePaidFee}
                       onChange={(e) => setNewPodsCreatePaidFee(e.target.value)}
                       disabled={updatingPodsCreatePaidFee}
