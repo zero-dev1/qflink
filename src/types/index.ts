@@ -1,3 +1,7 @@
+// NOTE: The WalletState interface below is a legacy reference.
+// The canonical WalletState is defined in src/stores/wallet.ts.
+// This will be cleaned up when types are consolidated in Phase 2.
+
 // ── Network ──
 export type Network = 'local' | 'mainnet'
 

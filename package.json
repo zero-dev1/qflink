@@ -14,6 +14,7 @@
     "@polkadot-api/descriptors": "file:.papi/descriptors",
     "@polkadot/extension-dapp": "^0.63.1",
     "@tanstack/react-query": "^5.90.21",
+    "framer-motion": "^12.38.0",
     "jdenticon": "^3.2.0",
     "polkadot-api": "^1.0.0-rc.0",
     "react": "^18.2.0",

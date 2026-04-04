@@ -1,33 +1,32 @@
-import React, { useEffect, useRef } from 'react'
-import * as jdenticon from 'jdenticon'
-import { cn } from '@/lib/utils'
+import { useEffect, useRef } from "react";
+import { cn } from "@/lib/utils";
+import * as jdenticon from "jdenticon";
 
 interface AvatarProps {
-  address: string
-  size?: 'sm' | 'md' | 'lg' | number
-  className?: string
+  address: string;
+  size?: 24 | 32 | 48 | 80;
+  className?: string;
 }
 
-const sizeMap = { sm: 32, md: 40, lg: 48 }
+const pxMap = { 24: "h-6 w-6", 32: "h-8 w-8", 48: "h-12 w-12", 80: "h-20 w-20" };
 
-export const Avatar: React.FC<AvatarProps> = ({ address, size = 'md', className }) => {
-  const svgRef = useRef<HTMLDivElement>(null)
-  const px = typeof size === 'number' ? size : sizeMap[size]
+export function Avatar({ address, size = 32, className }: AvatarProps) {
+  const svgRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    if (svgRef.current) {
-      svgRef.current.innerHTML = jdenticon.toSvg(address, px)
+    if (svgRef.current && address) {
+      svgRef.current.innerHTML = jdenticon.toSvg(address, size);
     }
-  }, [address, px])
+  }, [address, size]);
 
   return (
     <div
       ref={svgRef}
       className={cn(
-        'rounded-full border border-qx-border-prominent overflow-hidden flex-shrink-0',
+        "rounded-full border border-border-subtle overflow-hidden shrink-0 bg-surface-2",
+        pxMap[size],
         className
       )}
-      style={{ width: px, height: px }}
     />
-  )
+  );
 }

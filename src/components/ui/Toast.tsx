@@ -1,59 +1,57 @@
-import React from 'react'
-import { useUIStore } from '@/stores/ui'
-import { cn } from '@/lib/utils'
-import type { ToastType } from '@/types'
+import { useToastStore, type Toast as ToastData } from "@/stores/toast";
+import { AnimatePresence, motion } from "framer-motion";
+import { cn } from "@/lib/utils";
 
-const iconMap: Record<ToastType, string> = {
-  success: '✓',
-  error: '✕',
-  info: 'ℹ',
-  warning: '⚠',
-}
+const icons: Record<string, string> = {
+  success: "✓",
+  error: "✕",
+  warning: "!",
+  info: "i",
+};
 
-const styleMap: Record<ToastType, string> = {
-  success: 'border-qx-success/30 bg-qx-success/10',
-  error: 'border-qx-error/30 bg-qx-error/10',
-  info: 'border-cyan-600/30 bg-cyan-600/10',
-  warning: 'border-qx-warning/30 bg-qx-warning/10',
-}
+const iconColors: Record<string, string> = {
+  success: "text-success",
+  error: "text-error",
+  warning: "text-warning",
+  info: "text-cyan-primary",
+};
 
-const iconColorMap: Record<ToastType, string> = {
-  success: 'text-qx-success',
-  error: 'text-qx-error',
-  info: 'text-cyan-600',
-  warning: 'text-qx-warning',
-}
-
-export const ToastContainer: React.FC = () => {
-  const toasts = useUIStore((s) => s.toasts)
-  const removeToast = useUIStore((s) => s.removeToast)
-
-  if (toasts.length === 0) return null
+function ToastItem({ toast }: { toast: ToastData }) {
+  const removeToast = useToastStore((s) => s.removeToast);
 
   return (
-    <div className="fixed bottom-4 right-4 z-50 flex flex-col gap-2">
-      {toasts.map((toast) => (
-        <div
-          key={toast.id}
-          className={cn(
-            'flex items-center gap-3 rounded-lg border px-4 py-3 shadow-lg animate-slide-up min-w-[300px] max-w-[400px]',
-            styleMap[toast.type]
-          )}
-        >
-          <span className={cn('text-lg flex-shrink-0', iconColorMap[toast.type])}>
-            {iconMap[toast.type]}
-          </span>
-          <p className="text-sm text-qx-text-primary flex-1">{toast.message}</p>
-          <button
-            onClick={() => removeToast(toast.id)}
-            className="flex-shrink-0 text-qx-text-muted hover:text-qx-text-primary transition-colors"
-          >
-            <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="2">
-              <path d="M4 4l8 8M12 4l-8 8" />
-            </svg>
-          </button>
-        </div>
-      ))}
+    <motion.div
+      layout
+      initial={{ opacity: 0, x: 40 }}
+      animate={{ opacity: 1, x: 0 }}
+      exit={{ opacity: 0, x: 40 }}
+      transition={{ duration: 0.2 }}
+      className="flex items-start gap-3 max-w-toast bg-surface-4 border border-border-medium rounded-[12px] px-4 py-3 shadow-none"
+    >
+      <span className={cn("text-label font-semibold shrink-0 mt-0.5", iconColors[toast.type])}>
+        {icons[toast.type]}
+      </span>
+      <p className="text-body-sm text-text-primary flex-1">{toast.message}</p>
+      <button
+        onClick={() => removeToast(toast.id)}
+        className="text-text-tertiary hover:text-text-secondary text-body-sm shrink-0 mt-0.5"
+      >
+        ✕
+      </button>
+    </motion.div>
+  );
+}
+
+export function ToastContainer() {
+  const toasts = useToastStore((s) => s.toasts);
+
+  return (
+    <div className="fixed bottom-6 right-6 z-50 flex flex-col gap-2">
+      <AnimatePresence mode="popLayout">
+        {toasts.map((toast) => (
+          <ToastItem key={toast.id} toast={toast} />
+        ))}
+      </AnimatePresence>
     </div>
-  )
+  );
 }

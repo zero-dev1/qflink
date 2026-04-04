@@ -1,82 +1,53 @@
-import React, { Suspense, lazy, useEffect } from 'react'
-import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
-import { Layout } from '@/components/layout/Layout'
-import { Spinner } from '@/components/ui/Spinner'
-import { ConnectWalletModal } from '@/components/wallet/ConnectWalletModal'
-import { ToastContainer } from '@/components/ui/Toast'
-import { useWalletStore } from '@/stores/wallet'
-import { usePodsStore } from '@/stores/pods'
+import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
+import { Suspense, lazy } from "react";
+import { AppLayout } from "@/components/layout/AppLayout";
+import { ToastContainer } from "@/components/ui/Toast";
 
-const LandingPage = lazy(() => import('@/pages/LandingPage'))
-const ConnectPage = lazy(() => import('@/pages/ConnectPage'))
-const HomePage = lazy(() => import('@/pages/HomePage'))
-const ExplorePage = lazy(() => import('@/pages/ExplorePage'))
-const PodsPage = lazy(() => import('@/pages/PodsPage'))
-const PodPage = lazy(() => import('@/pages/PodPage'))
-const DirectMessagesPage = lazy(() => import('@/pages/DirectMessagesPage'))
-const DMChatPage = lazy(() => import('@/pages/DMChatPage'))
-const ProfilePage = lazy(() => import('@/pages/ProfilePage'))
-const SettingsPage = lazy(() => import('@/pages/SettingsPage'))
-const CreatePodPage = lazy(() => import('@/pages/CreatePodPage'))
-const WhitepaperPage = lazy(() => import('@/pages/WhitepaperPage'))
-const CreatorsPage = lazy(() => import('@/pages/CreatorsPage'))
-const CommunitiesPage = lazy(() => import('@/pages/CommunitiesPage'))
-const CreatorDashboardPage = lazy(() => import('@/pages/CreatorDashboardPage'))
-const AdminPage = lazy(() => import('@/pages/AdminPage'))
+// Standalone pages (no sidebar)
+const Landing = lazy(() => import("@/pages/Landing"));
+const Connect = lazy(() => import("@/pages/Connect"));
 
-const PageLoader: React.FC = () => (
-  <div className="flex h-screen items-center justify-center bg-[#0D0D0D]">
-    <Spinner size="lg" />
-  </div>
-)
+// App pages (inside layout shell)
+const Home = lazy(() => import("@/pages/Home"));
+const Explore = lazy(() => import("@/pages/Explore"));
+const PodChat = lazy(() => import("@/pages/PodChat"));
+const Messages = lazy(() => import("@/pages/Messages"));
+const DMChat = lazy(() => import("@/pages/DMChat"));
+const Profile = lazy(() => import("@/pages/Profile"));
+const CreatorDashboard = lazy(() => import("@/pages/CreatorDashboard"));
 
-const App: React.FC = () => {
-  const isConnected = useWalletStore((s) => s.isConnected)
-  const fetchPods = usePodsStore((s) => s.fetchPods)
+function PageLoader() {
+  return (
+    <div className="flex h-screen items-center justify-center bg-base">
+      <div className="h-8 w-8 border-2 border-border-medium border-t-cyan-primary rounded-full animate-spin" />
+    </div>
+  );
+}
 
-  useEffect(() => {
-    if (isConnected) {
-      fetchPods().catch((err) => {
-        console.error('Failed to fetch pods on app mount:', err)
-      })
-    }
-  }, [isConnected, fetchPods])
-
+export default function App() {
   return (
     <BrowserRouter>
       <Suspense fallback={<PageLoader />}>
         <Routes>
-          {/* Public standalone pages — no Layout */}
-          <Route path="/" element={<LandingPage />} />
-          <Route path="/connect" element={<ConnectPage />} />
-          <Route path="/whitepaper" element={<WhitepaperPage />} />
-          <Route path="/creators" element={<CreatorsPage />} />
-          <Route path="/communities" element={<CommunitiesPage />} />
-          <Route path="/admin" element={<AdminPage />} />
+          {/* Standalone — no app chrome */}
+          <Route path="/" element={<Landing />} />
+          <Route path="/connect" element={<Connect />} />
 
-          {/* App pages — inside Layout, handle own auth state */}
-          <Route element={<Layout />}>
-            <Route path="/home" element={<HomePage />} />
-            <Route path="/explore" element={<ExplorePage />} />
-            <Route path="/pods" element={<PodsPage />} />
-            <Route path="/pods/:podId" element={<PodsPage />} />
-            <Route path="/pod/:id" element={<PodPage />} />
-            <Route path="/direct" element={<DirectMessagesPage />} />
-            <Route path="/direct/:address" element={<DMChatPage />} />
-            <Route path="/profile" element={<ProfilePage />} />
-            <Route path="/profile/:address" element={<ProfilePage />} />
-            <Route path="/settings" element={<SettingsPage />} />
-            <Route path="/create-pod" element={<CreatePodPage />} />
-            <Route path="/creator" element={<CreatorDashboardPage />} />
+          {/* App — sidebar + content */}
+          <Route element={<AppLayout />}>
+            <Route path="/home" element={<Home />} />
+            <Route path="/explore" element={<Explore />} />
+            <Route path="/pod/:id" element={<PodChat />} />
+            <Route path="/messages" element={<Messages />} />
+            <Route path="/dm/:address" element={<DMChat />} />
+            <Route path="/profile" element={<Profile />} />
+            <Route path="/creator/:podId" element={<CreatorDashboard />} />
           </Route>
 
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
       </Suspense>
-      <ConnectWalletModal />
       <ToastContainer />
     </BrowserRouter>
-  )
+  );
 }
-
-export default App
