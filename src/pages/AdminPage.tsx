@@ -289,7 +289,7 @@ const AdminPage: React.FC = () => {
   // Not connected
   if (!isConnected) {
     return (
-      <div className="flex flex-col items-center justify-center h-[calc(100vh-3.5rem)] text-center px-6 bg-[#0a0a0a]">
+      <div className="flex flex-col items-center justify-center min-h-screen text-center px-6 bg-[#0a0a0a]">
         <h2 className="text-xl font-semibold text-white mb-4">Admin Access</h2>
         <p className="text-sm text-gray-500 mb-6">Connect your wallet to access admin functions</p>
         <button
@@ -305,7 +305,7 @@ const AdminPage: React.FC = () => {
   // Not owner
   if (!isOwner) {
     return (
-      <div className="flex flex-col items-center justify-center h-[calc(100vh-3.5rem)] text-center px-6 bg-[#0a0a0a]">
+      <div className="flex flex-col items-center justify-center min-h-screen text-center px-6 bg-[#0a0a0a]">
         <div className="w-16 h-16 border border-red-500/30 bg-red-500/10 flex items-center justify-center mb-4">
           <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="text-red-500">
             <circle cx="12" cy="12" r="10" />

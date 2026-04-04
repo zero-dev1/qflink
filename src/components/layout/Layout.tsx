@@ -2,8 +2,6 @@ import React from 'react'
 import { Outlet } from 'react-router-dom'
 import { Sidebar, BottomNav } from './Sidebar'
 import { Header } from './Header'
-import { ToastContainer } from '@/components/ui/Toast'
-import { ConnectWalletModal } from '@/components/wallet/ConnectWalletModal'
 
 export const Layout: React.FC = () => {
   return (
@@ -16,8 +14,6 @@ export const Layout: React.FC = () => {
         </main>
       </div>
       <BottomNav />
-      <ToastContainer />
-      <ConnectWalletModal />
     </div>
   )
 }

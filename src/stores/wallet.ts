@@ -244,21 +244,33 @@ export const useWalletStore = create<WalletState>()(
         return (state) => {
           if (state?.address && state?.walletName) {
             useWalletStore.setState({ _rehydrating: true });
-
             const walletType = state.walletName as "talisman" | "subwallet";
 
+            const waitForExtension = async (walletId: string, timeoutMs = 3000) => {
+              const { getInjectedExtensions } = await import("polkadot-api/pjs-signer");
+              const start = Date.now();
+              while (Date.now() - start < timeoutMs) {
+                if (getInjectedExtensions().includes(walletId)) return true;
+                await new Promise(r => setTimeout(r, 150));
+              }
+              return false;
+            };
+
+            const walletId = walletType === "talisman" ? "talisman" : "subwallet-js";
+
             import("../lib/papiClient").then(({ warmUpPapi }) =>
-              warmUpPapi().then(() => {
+              Promise.all([warmUpPapi(), waitForExtension(walletId)]).then(([, extensionReady]) => {
+                if (!extensionReady) {
+                  useWalletStore.setState({ _rehydrating: false, isConnected: false, isConnecting: false });
+                  return;
+                }
                 state
                   .connect(walletType)
                   .then(() => {
                     useWalletStore.setState({ _rehydrating: false });
                   })
                   .catch(() => {
-                    useWalletStore.setState({ _rehydrating: false });
-                    // Do NOT call disconnect here — preserve persisted state
-                    // Just set isConnected: false so user can retry
-                    useWalletStore.setState({ isConnected: false, isConnecting: false });
+                    useWalletStore.setState({ _rehydrating: false, isConnected: false, isConnecting: false });
                   });
               })
             );

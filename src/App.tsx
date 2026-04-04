@@ -3,6 +3,8 @@ import { BrowserRouter, Routes, Route, Navigate, Outlet } from 'react-router-dom
 import { Layout } from '@/components/layout/Layout'
 import { AuthGuard } from '@/components/AuthGuard'
 import { Spinner } from '@/components/ui/Spinner'
+import { ConnectWalletModal } from '@/components/wallet/ConnectWalletModal'
+import { ToastContainer } from '@/components/ui/Toast'
 import { useWalletStore } from '@/stores/wallet'
 import { usePodsStore } from '@/stores/pods'
 
@@ -87,6 +89,8 @@ const App: React.FC = () => {
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
       </Suspense>
+      <ConnectWalletModal />
+      <ToastContainer />
     </BrowserRouter>
   )
 }
