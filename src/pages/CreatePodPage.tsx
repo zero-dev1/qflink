@@ -1,4 +1,4 @@
-import React, { useState } from 'react'
+import React, { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useWallet } from '@/hooks/useWallet'
 import { usePods } from '@/hooks/usePods'
@@ -7,7 +7,8 @@ import { useUIStore } from '@/stores/ui'
 import { Button } from '@/components/ui/Button'
 import { Input, Textarea } from '@/components/ui/Input'
 import { Card } from '@/components/ui/Card'
-import { formatBalance } from '@/lib/utils'
+import { formatBalance, formatExactAmount } from '@/lib/utils'
+import * as cc from '@/lib/contractCalls'
 import { POD_CATEGORIES, LIMITS } from '@/types'
 import type { PodCategory } from '@/types'
 
@@ -28,10 +29,44 @@ const CreatePodPage: React.FC = () => {
   const [error, setError] = useState('')
   const [isCreating, setIsCreating] = useState(false)
 
-  // Creation fee constants
-  const CREATION_FEE = 500 // QF
-  const TREASURY_AMOUNT = 475 // 95%
-  const BURN_AMOUNT = 25 // 5%
+  // Creation fee — fetched live from contract
+  const [creationFee, setCreationFee] = useState<bigint | null>(null)
+  const [treasurySharePct, setTreasurySharePct] = useState<number | null>(null)
+  const [burnSharePct, setBurnSharePct] = useState<number | null>(null)
+  const [loadingEconomics, setLoadingEconomics] = useState(true)
+
+  useEffect(() => {
+    let cancelled = false
+    const fetchEconomics = async () => {
+      try {
+        const [fee, treasury, burn] = await Promise.all([
+          cc.getPodsCreateCreationFee(),
+          cc.getPodsCreateTreasuryShare(),
+          cc.getPodsCreateBurnShare(),
+        ])
+        if (!cancelled) {
+          setCreationFee(fee)
+          setTreasurySharePct(Number(treasury))
+          setBurnSharePct(Number(burn))
+        }
+      } catch (err) {
+        console.error('Failed to fetch creation economics:', err)
+      } finally {
+        if (!cancelled) setLoadingEconomics(false)
+      }
+    }
+    fetchEconomics()
+    return () => { cancelled = true }
+  }, [])
+
+  // Derived display values
+  const feeDisplay = creationFee !== null ? formatExactAmount(creationFee) : '...'
+  const treasuryAmount = creationFee !== null && treasurySharePct !== null
+    ? formatExactAmount(creationFee * BigInt(treasurySharePct) / 100n)
+    : '...'
+  const burnAmount = creationFee !== null && burnSharePct !== null
+    ? formatExactAmount(creationFee * BigInt(burnSharePct) / 100n)
+    : '...'
 
   if (!isConnected) {
     return (
@@ -43,11 +78,11 @@ const CreatePodPage: React.FC = () => {
     )
   }
 
-  const canAfford = balance >= BigInt(CREATION_FEE) * BigInt(1e18)
+  const canAfford = creationFee !== null && balance >= creationFee
 
   const handleNext = () => {
     if (!canAfford) {
-      setError(`Insufficient balance. You need ${CREATION_FEE} QF to create a pod.`)
+      setError(`Insufficient balance. You need ${feeDisplay} QF to create a pod.`)
       return
     }
     if (name.trim().length < LIMITS.MIN_POD_NAME_LENGTH) {
@@ -120,7 +155,9 @@ const CreatePodPage: React.FC = () => {
           <p className="text-xs text-qx-text-muted text-center">
             Your balance: <span className="text-qx-text-primary font-medium">{formatBalance(balance)} QF</span>
             <span className="mx-2">|</span>
-            Creation fee: <span className="text-cyan-600 font-medium">{CREATION_FEE} QF</span>
+            Creation fee: <span className="text-cyan-600 font-medium">
+              {loadingEconomics ? '...' : `${feeDisplay} QF`}
+            </span>
           </p>
 
           <Input
@@ -213,15 +250,15 @@ const CreatePodPage: React.FC = () => {
             <div className="space-y-2 text-sm font-mono">
               <div className="flex justify-between">
                 <span className="text-qx-text-muted">Creation Fee</span>
-                <span className="text-qx-text-primary font-bold">{CREATION_FEE.toLocaleString()} QF</span>
+                <span className="text-qx-text-primary font-bold">{feeDisplay} QF</span>
               </div>
               <div className="flex justify-between">
-                <span className="text-qx-text-muted">→ Treasury (95%)</span>
-                <span className="text-qx-text-secondary">{TREASURY_AMOUNT.toLocaleString()} QF</span>
+                <span className="text-qx-text-muted"> Treasury ({treasurySharePct ?? '...'}%)</span>
+                <span className="text-qx-text-secondary">{treasuryAmount} QF</span>
               </div>
               <div className="flex justify-between">
-                <span className="text-qx-text-muted">→ Burned (5%)</span>
-                <span className="text-orange-400">{BURN_AMOUNT.toLocaleString()} QF</span>
+                <span className="text-qx-text-muted"> Burned ({burnSharePct ?? '...'}%)</span>
+                <span className="text-orange-400">{burnAmount} QF</span>
               </div>
               <div className="border-t border-qx-border-subtle pt-2 mt-2">
                 <div className="flex justify-between">
@@ -248,8 +285,8 @@ const CreatePodPage: React.FC = () => {
           {step < 2 ? (
             <Button onClick={handleNext}>Continue</Button>
           ) : (
-            <Button onClick={handleCreate} disabled={isCreating}>
-              {isCreating ? 'Creating...' : `Pay ${CREATION_FEE} QF & Create`}
+            <Button onClick={handleCreate} disabled={isCreating || loadingEconomics}>
+              {isCreating ? 'Creating...' : `Pay ${feeDisplay} QF & Create`}
             </Button>
           )}
         </div>

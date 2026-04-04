@@ -55,8 +55,8 @@ export const POD_TIER_INFO: Record<PodTier, {
   },
   pro: { 
     name: 'Pro', 
-    creationFee: BigInt('500000000000000000000'), // 500 QF
-    creationFeeDisplay: 500, 
+    creationFee: 0n, // Read from contract at runtime
+    creationFeeDisplay: 0, // Read from contract at runtime
     maxMembers: Infinity, 
     maxMods: 3,
     features: ['Unlimited members', '3 moderators', 'Entry fees allowed', 'All access types', 'Verified badge'] 

@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react'
-import { useNavigate, useLocation } from 'react-router-dom'
+import { useNavigate, useLocation, Navigate } from 'react-router-dom'
 import { useWalletStore } from '@/stores/wallet'
 import { useProfileStore } from '@/stores/profile'
 import { useUIStore } from '@/stores/ui'
@@ -204,15 +204,11 @@ const ConnectPage: React.FC = () => {
   // Detect if user is on mobile
   const isMobile = /Android|iPhone|iPad|iPod/i.test(navigator.userAgent)
 
-  // Show loading while rehydrating
-  if (isRehydrating) {
-    return (
-      <div className="h-dvh overflow-hidden bg-[#0D0D0D] flex flex-col items-center justify-center px-4">
-        <QFLinkWordmark size={56} variant="dark" className="mb-10" />
-        <Spinner size="lg" />
-        <p className="text-sm text-gray-500 mt-4">Reconnecting wallet...</p>
-      </div>
-    )
+  // If already connected and registered, redirect to home (or return-to location)
+  const returnTo = (location.state as any)?.from?.pathname || '/home'
+
+  if (isConnected && profile.isRegistered && !isRehydrating) {
+    return <Navigate to={returnTo} replace />
   }
 
   return (

@@ -1,7 +1,6 @@
 import React, { Suspense, lazy, useEffect } from 'react'
-import { BrowserRouter, Routes, Route, Navigate, Outlet } from 'react-router-dom'
+import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
 import { Layout } from '@/components/layout/Layout'
-import { AuthGuard } from '@/components/AuthGuard'
 import { Spinner } from '@/components/ui/Spinner'
 import { ConnectWalletModal } from '@/components/wallet/ConnectWalletModal'
 import { ToastContainer } from '@/components/ui/Toast'
@@ -31,12 +30,12 @@ const PageLoader: React.FC = () => (
   </div>
 )
 
-// Wrapper for protected routes that includes Layout and AuthGuard
-const ProtectedLayout: React.FC = () => (
-  <AuthGuard>
-    <Layout />
-  </AuthGuard>
-)
+// Redirect connected users from landing to home
+const LandingRedirect: React.FC = () => {
+  const address = useWalletStore((s) => s.address)
+  if (address) return <Navigate to="/home" replace />
+  return <LandingPage />
+}
 
 const App: React.FC = () => {
   const isConnected = useWalletStore((s) => s.isConnected)
@@ -54,24 +53,16 @@ const App: React.FC = () => {
     <BrowserRouter>
       <Suspense fallback={<PageLoader />}>
         <Routes>
-          {/* Landing page - public, no layout wrapper */}
-          <Route path="/" element={<LandingPage />} />
-          
-          {/* Connect page - public, no layout wrapper, no auth guard */}
+          {/* Public standalone pages — no Layout */}
+          <Route path="/" element={<LandingRedirect />} />
           <Route path="/connect" element={<ConnectPage />} />
-          
-          {/* Whitepaper - public, no layout wrapper, no auth guard */}
           <Route path="/whitepaper" element={<WhitepaperPage />} />
-          
-          {/* Marketing pages - public */}
           <Route path="/creators" element={<CreatorsPage />} />
           <Route path="/communities" element={<CommunitiesPage />} />
-          
-          {/* Admin - public (handles auth internally) */}
           <Route path="/admin" element={<AdminPage />} />
-          
-          {/* App routes - protected with AuthGuard and wrapped with Layout */}
-          <Route element={<ProtectedLayout />}>
+
+          {/* App pages — inside Layout, handle own auth state */}
+          <Route element={<Layout />}>
             <Route path="/home" element={<HomePage />} />
             <Route path="/explore" element={<ExplorePage />} />
             <Route path="/pods" element={<PodsPage />} />
@@ -85,7 +76,7 @@ const App: React.FC = () => {
             <Route path="/create-pod" element={<CreatePodPage />} />
             <Route path="/creator" element={<CreatorDashboardPage />} />
           </Route>
-          
+
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
       </Suspense>

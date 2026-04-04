@@ -8,6 +8,7 @@ import { useWalletStore } from '@/stores/wallet'
 import { Avatar } from '@/components/ui/Avatar'
 import { TokenGateBar } from '@/components/pods/TokenGateBar'
 import { GettingStartedBanner } from '@/components/ui/GettingStartedBanner'
+import { SkeletonCard } from '@/components/ui/Skeleton'
 import { truncateAddress, formatTimestamp, formatCompactBalance, cn } from '@/lib/utils'
 import { reverseResolve } from '@/lib/qns'
 import type { DefaultPod, Pod } from '@/types'
@@ -31,6 +32,7 @@ const HomePage: React.FC = () => {
   const conversations = useMessagesStore((s) => s.conversations)
   const fetchConversations = useMessagesStore((s) => s.fetchConversations)
   const evmAddress = useWalletStore((s) => s.evmAddress)
+  const qnsName = useWalletStore((s) => s.qnsName)
   const navigate = useNavigate()
   const [qfNames, setQfNames] = useState<Map<string, string>>(new Map())
   const qfNamesFetchedRef = React.useRef<Set<string>>(new Set())
@@ -84,23 +86,45 @@ const HomePage: React.FC = () => {
 
   if (!isConnected) {
     return (
-      <div className="flex flex-col items-center justify-center py-20 text-center px-6">
-        <h3 className="text-xl font-semibold text-gray-900 dark:text-white mb-2">Welcome to QFLink</h3>
-        <p className="text-gray-600 dark:text-gray-400 mb-6 max-w-md">
-          On-chain communities with permanent messages, encrypted DMs, and zero platform risk.
-        </p>
-        <button
-          onClick={() => setShowConnectWallet(true)}
-          className="bg-[#0991B2] text-white font-semibold px-6 py-3 hover:bg-[#0880A0] transition-colors"
-        >
-          Connect Wallet
-        </button>
+      <div className="p-6 md:p-8 max-w-5xl mx-auto">
+        <div className="border border-gray-200 dark:border-gray-800 p-12 text-center">
+          <h2 className="font-display text-2xl font-semibold text-qx-text-primary mb-3">
+            Welcome to QFLink
+          </h2>
+          <p className="text-sm text-qx-text-secondary mb-8 max-w-md mx-auto">
+            On-chain communities with permanent messages, encrypted DMs, and zero platform risk.
+          </p>
+          <button
+            onClick={() => setShowConnectWallet(true)}
+            className="bg-cyan-600 text-white font-semibold px-8 py-3 hover:bg-cyan-700 transition-colors"
+          >
+            Connect Wallet
+          </button>
+        </div>
       </div>
     )
   }
 
   return (
     <div className="p-6 md:p-8 space-y-8 max-w-5xl mx-auto">
+      {/* QNS Name Nudge — only show when connected but no .qf name */}
+      {isConnected && !qnsName && (
+        <div className="border border-cyan-600/30 bg-cyan-600/5 p-6 flex items-center justify-between gap-4">
+          <div>
+            <h3 className="text-sm font-semibold text-white mb-1">Claim your .qf name</h3>
+            <p className="text-xs text-gray-400">Your identity across every dApp on QF Network.</p>
+          </div>
+          <a
+            href="https://dotqf.xyz"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="flex-shrink-0 bg-cyan-600 px-4 py-2 text-sm font-semibold text-white hover:bg-cyan-700 transition-colors"
+          >
+            Register
+          </a>
+        </div>
+      )}
+
       {/* Getting Started Banner - only shows when user has no pods */}
       <GettingStartedBanner />
 
@@ -109,8 +133,8 @@ const HomePage: React.FC = () => {
         <h2 className="font-display text-xl font-semibold text-qx-text-primary mb-4">Your Pods</h2>
 
         {isLoadingPods ? (
-          <div className="border border-gray-200 dark:border-gray-800 bg-transparent p-8 text-center">
-            <p className="text-sm text-qx-text-secondary">Loading pods...</p>
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+            {[1, 2, 3].map((i) => <SkeletonCard key={i} />)}
           </div>
         ) : allDisplayPods.length === 0 ? (
           <div className="border border-gray-200 dark:border-gray-800 bg-transparent p-8">

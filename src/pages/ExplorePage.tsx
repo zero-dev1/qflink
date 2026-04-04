@@ -5,6 +5,7 @@ import { usePods } from '@/hooks/usePods'
 import { CategoryPills } from '@/components/ui/CategoryPills'
 import { SkeletonCard } from '@/components/ui/Skeleton'
 import { Button } from '@/components/ui/Button'
+import { useUIStore } from '@/stores/ui'
 
 import { POD_CATEGORIES } from '@/types'
 import type { Pod, DefaultPod, CustomPod } from '@/types'
@@ -18,6 +19,7 @@ const ExplorePage: React.FC = () => {
   const navigate = useNavigate()
   const { balance, address } = useWallet()
   const refreshBalance = useWalletStore((s) => s.refreshBalance)
+  const addToast = useUIStore((s) => s.addToast)
   const { 
     pods, 
     myPods, 
@@ -77,7 +79,7 @@ const ExplorePage: React.FC = () => {
         try {
           const isBanned = await cc.isBanned(pod.id, evmAddress as `0x${string}`)
           if (isBanned) {
-            alert('You are banned from this pod')
+            addToast('error', 'You are banned from this pod')
             setIsJoining(false)
             return
           }
@@ -90,7 +92,7 @@ const ExplorePage: React.FC = () => {
           navigate(`/pods/${pod.id}`)
         } catch (err) {
           console.error('Failed to rejoin pod:', err)
-          alert(`Failed to rejoin pod: ${err instanceof Error ? err.message : 'Unknown error'}`)
+          addToast('error', err instanceof Error ? err.message : 'Failed to rejoin pod')
           setIsJoining(false)
         }
         return
@@ -110,7 +112,7 @@ const ExplorePage: React.FC = () => {
         if (evmAddress) {
           const isBanned = await cc.isBanned(pod.id, evmAddress as `0x${string}`)
           if (isBanned) {
-            alert('You are banned from this pod')
+            addToast('error', 'You are banned from this pod')
             setIsJoining(false)
             return
           }
@@ -124,7 +126,7 @@ const ExplorePage: React.FC = () => {
         return
       } catch (err) {
         console.error('Failed to join free pod:', err)
-        alert(`Failed to join pod: ${err instanceof Error ? err.message : 'Unknown error'}`)
+        addToast('error', err instanceof Error ? err.message : 'Failed to join pod')
         setIsJoining(false)
         return
       }
@@ -151,7 +153,7 @@ const ExplorePage: React.FC = () => {
       if (evmAddress) {
         const isBanned = await cc.isBanned(paidPodModalPod.id, evmAddress as `0x${string}`)
         if (isBanned) {
-          alert('You are banned from this pod')
+          addToast('error', 'You are banned from this pod')
           setIsJoining(false)
           setPaidPodModalPod(null)
           return
@@ -169,7 +171,7 @@ const ExplorePage: React.FC = () => {
       navigate(`/pods/${paidPodModalPod.id}`)
     } catch (err) {
       console.error('❌ Failed to join pod:', err)
-      alert(`Failed to join pod: ${err instanceof Error ? err.message : 'Unknown error'}`)
+      addToast('error', err instanceof Error ? err.message : 'Failed to join pod')
     } finally {
       setIsJoining(false)
       setPaidPodModalPod(null)

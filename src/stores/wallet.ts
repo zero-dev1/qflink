@@ -160,22 +160,12 @@ export const useWalletStore = create<WalletState>()(
               : "Talisman not detected. Please install the Talisman browser extension.";
           }
           
-          const { _rehydrating } = get();
-          if (_rehydrating) {
-            // During rehydration, preserve persisted state on error
-            set({
-              walletError,
-              isConnected: false,
-              isConnecting: false,
-            });
-          } else {
-            disconnectWallet();
-            set({
-              walletError,
-              address: null, evmAddress: null, walletName: null,
-              isConnected: false, isConnecting: false,
-            });
-          }
+          disconnectWallet();
+          set({
+            walletError,
+            address: null, evmAddress: null, walletName: null,
+            isConnected: false, isConnecting: false,
+          });
         }
       },
 
@@ -187,14 +177,11 @@ export const useWalletStore = create<WalletState>()(
           address: null, evmAddress: null, balance: 0n,
           isConnected: false, walletSource: null, walletName: null,
           encryptionKeyPair: null, accountMapped: false,
-          walletError: null,
+          walletError: null, qnsName: null,  // ← also clear qnsName
         });
 
         import("./profile").then(({ useProfileStore }) => useProfileStore.getState().reset());
-
-        if (typeof window !== "undefined" && window.location.pathname !== "/connect" && window.location.pathname !== "/") {
-          window.location.href = "/connect";
-        }
+        // REMOVED: window.location.href redirect
       },
 
       setBalance: (balance) => set({ balance }),
@@ -261,7 +248,8 @@ export const useWalletStore = create<WalletState>()(
             import("../lib/papiClient").then(({ warmUpPapi }) =>
               Promise.all([warmUpPapi(), waitForExtension(walletId)]).then(([, extensionReady]) => {
                 if (!extensionReady) {
-                  useWalletStore.setState({ _rehydrating: false, isConnected: false, isConnecting: false });
+                  useWalletStore.setState({ _rehydrating: false });
+                  state.disconnect();  // ← CHANGED: was just setting flags, now full cleanup
                   return;
                 }
                 state
@@ -270,7 +258,8 @@ export const useWalletStore = create<WalletState>()(
                     useWalletStore.setState({ _rehydrating: false });
                   })
                   .catch(() => {
-                    useWalletStore.setState({ _rehydrating: false, isConnected: false, isConnecting: false });
+                    useWalletStore.setState({ _rehydrating: false });
+                    state.disconnect();  // ← CHANGED: was just setting flags, now full cleanup
                   });
               })
             );

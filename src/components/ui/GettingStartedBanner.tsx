@@ -1,7 +1,6 @@
 import React, { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useWalletStore } from '@/stores/wallet'
-import { useProfileStore } from '@/stores/profile'
 import { usePodsStore } from '@/stores/pods'
 
 interface Step {
@@ -19,7 +18,6 @@ export const GettingStartedBanner: React.FC = () => {
   const [dismissed, setDismissed] = useState(false)
   
   const isConnected = useWalletStore((s) => s.isConnected)
-  const isRegistered = useProfileStore((s) => s.isRegistered)
   const myPods = usePodsStore((s) => s.myPods)
   
   const hasPods = myPods.length > 0
@@ -31,16 +29,10 @@ export const GettingStartedBanner: React.FC = () => {
   
   // Determine which step is current
   let currentStep = 1
-  if (isConnected) {
-    if (!isRegistered) {
-      currentStep = 2
-    } else if (!hasPods) {
-      currentStep = 3
-    }
-  }
-  
-  const handleRegisterClick = () => {
-    navigate('/settings')
+  if (isConnected && !hasPods) {
+    currentStep = 2
+  } else if (isConnected && hasPods) {
+    currentStep = 3
   }
   
   const handleExploreClick = () => {
@@ -51,23 +43,23 @@ export const GettingStartedBanner: React.FC = () => {
     {
       number: 1,
       title: 'Connect Wallet',
-      description: 'Connect your MetaMask wallet to get started',
+      description: 'Connect your Talisman or SubWallet to get started',
       done: isConnected,
       isCurrent: currentStep === 1,
     },
     {
       number: 2,
-      title: 'Get your .qf name',
-      description: 'Register your identity on QF Network',
-      done: isRegistered,
+      title: 'Explore Pods',
+      description: 'Browse token-gated communities and find your tribe',
+      done: false, // becomes done when they navigate to explore (or we just keep it as next action)
       isCurrent: currentStep === 2,
-      action: handleRegisterClick,
-      actionLabel: 'Register',
+      action: handleExploreClick,
+      actionLabel: 'Explore',
     },
     {
       number: 3,
       title: 'Join or create a pod',
-      description: 'Find a community or start your own',
+      description: 'Start chatting in a community or launch your own',
       done: hasPods,
       isCurrent: currentStep === 3,
       action: handleExploreClick,
