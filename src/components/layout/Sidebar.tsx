@@ -2,6 +2,7 @@ import { NavLink, useNavigate } from "react-router-dom";
 import { motion } from "framer-motion";
 import { useWalletStore } from "@/stores/wallet";
 import { useUnreadStore } from "@/stores/unread";
+import { useSpotlightStore } from '@/stores/spotlight';
 import { Avatar } from "@/components/ui/Avatar";
 import { UnreadDot } from "@/components/ui/UnreadDot";
 import { cn } from "@/lib/utils";
@@ -31,6 +32,19 @@ export function Sidebar() {
           </span>
         </NavLink>
       </div>
+
+      {/* Spotlight trigger */}
+      <button
+        onClick={() => useSpotlightStore.getState().open()}
+        className="mx-3 mb-4 flex items-center gap-2 h-8 px-3 rounded-sm bg-white/[0.03] border border-white/[0.06] text-text-tertiary hover:text-text-secondary hover:bg-white/[0.05] transition-colors w-[calc(100%-24px)]"
+      >
+        <svg width="14" height="14" viewBox="0 0 14 14" fill="none" className="shrink-0">
+          <circle cx="6" cy="6" r="4.5" stroke="currentColor" strokeWidth="1.2" />
+          <path d="M9.5 9.5L13 13" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" />
+        </svg>
+        <span className="text-caption flex-1 text-left">Search...</span>
+        <kbd className="text-[10px] font-mono bg-white/[0.04] px-1 rounded">⌘K</kbd>
+      </button>
 
       {/* Navigation */}
       <nav className="flex-1 px-3 py-2 flex flex-col gap-1">

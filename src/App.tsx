@@ -2,6 +2,7 @@ import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import { Suspense, lazy } from "react";
 import { AppLayout } from "@/components/layout/AppLayout";
 import { ToastContainer } from "@/components/ui/Toast";
+import { Spotlight } from "@/components/spotlight/Spotlight";
 
 // Standalone pages (no sidebar)
 const Landing = lazy(() => import("@/pages/Landing"));
@@ -48,6 +49,7 @@ export default function App() {
         </Routes>
       </Suspense>
       <ToastContainer />
+      <Spotlight />
     </BrowserRouter>
   );
 }
