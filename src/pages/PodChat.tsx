@@ -138,7 +138,7 @@ export default function PodChat() {
         ) : (
           <>
             <h2 className="text-label text-text-primary truncate">{pod?.name}</h2>
-            <span className="text-caption text-text-tertiary ml-auto shrink-0">{pod?.memberCount || 0} members</span>
+            <span className="text-caption text-text-tertiary ml-auto shrink-0">{pod?.memberCount || 0} {pod?.memberCount === 1 ? 'member' : 'members'}</span>
           </>
         )}
       </div>

@@ -37,6 +37,7 @@ export interface RawPodMessage {
   content: string;
   timestamp: number;
   id: number;
+  isOptimistic?: boolean;
 }
 
 interface PodsStore {
@@ -171,14 +172,14 @@ export const usePodsStore = create<PodsStore>((set, get) => ({
     const evmAddress = useWalletStore.getState().evmAddress;
     if (!evmAddress) return false;
     
-    set({ isSending: true });
-    
-    // Add optimistic message
+    // 1. OPTIMISTIC INSERT — synchronous, happens BEFORE any await
+    const optimisticId = Date.now(); // large number = optimistic marker
     const optimisticMessage: RawPodMessage = {
-      id: Date.now(),
+      id: optimisticId,
       sender: evmAddress,
       content,
-      timestamp: Date.now(),
+      timestamp: Math.floor(Date.now() / 1000), // seconds for chain consistency
+      isOptimistic: true,
     };
     
     set(state => ({
@@ -191,9 +192,23 @@ export const usePodsStore = create<PodsStore>((set, get) => ({
     // Haptic feedback for message send
     hapticTap();
     
+    set({ isSending: true });
+    
     try {
+      // 2. Contract write — this is the slow part
       const result = await contractSendPodMessage(podId, content);
       await result.confirmation;
+      
+      // 3. Success — mark confirmed (remove isOptimistic or refetch)
+      set((state) => ({
+        messages: {
+          ...state.messages,
+          [podId]: (state.messages[podId] || []).map((m) =>
+            m.id === optimisticId ? { ...m, isOptimistic: false } : m
+          ),
+        },
+        isSending: false,
+      }));
       
       // Mark getting started step
       try {
@@ -201,18 +216,17 @@ export const usePodsStore = create<PodsStore>((set, get) => ({
         useGettingStartedStore.getState().markStep('hasSentMessage');
       } catch {}
       
-      set({ isSending: false });
       return true;
     } catch (error) {
       console.error('Failed to send message:', error);
       
-      // Remove optimistic message on failure
-      set(state => ({
+      // 4. Rollback — remove the optimistic message
+      set((state) => ({
         messages: {
           ...state.messages,
-          [podId]: state.messages[podId]?.filter(msg => msg.id !== optimisticMessage.id) || []
+          [podId]: (state.messages[podId] || []).filter((m) => m.id !== optimisticId),
         },
-        isSending: false
+        isSending: false,
       }));
       
       useToastStore.getState().addToast("error", "Failed to send message");

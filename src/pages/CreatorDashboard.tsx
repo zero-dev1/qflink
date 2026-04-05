@@ -119,7 +119,8 @@ export default function CreatorDashboard() {
   // ── Disconnected ──
   if (!isConnected) {
     return (
-      <div className="flex-1 flex flex-col items-center justify-center px-6 text-center">
+      <div className="h-full overflow-y-auto">
+        <div className="flex-1 flex flex-col items-center justify-center px-6 text-center">
         <p className="text-body text-text-secondary">
           Connect your wallet to manage your pod
         </p>
@@ -129,6 +130,7 @@ export default function CreatorDashboard() {
         >
           Connect →
         </Link>
+        </div>
       </div>
     );
   }
@@ -136,7 +138,8 @@ export default function CreatorDashboard() {
   // ── Invalid pod ID ──
   if (podId === null || isNaN(podId)) {
     return (
-      <div className="flex-1 flex flex-col items-center justify-center px-6 text-center">
+      <div className="h-full overflow-y-auto">
+        <div className="flex-1 flex flex-col items-center justify-center px-6 text-center">
         <p className="text-body text-text-secondary">Invalid pod ID</p>
         <Link
           to="/explore"
@@ -144,6 +147,7 @@ export default function CreatorDashboard() {
         >
           Explore pods →
         </Link>
+        </div>
       </div>
     );
   }
@@ -151,11 +155,13 @@ export default function CreatorDashboard() {
   // ── Loading ──
   if (isLoading) {
     return (
-      <div className="max-w-content mx-auto px-6 md:px-8 py-8">
-        <Skeleton className="h-5 w-32 mb-6" />
-        <Skeleton className="h-40 w-full rounded-lg mb-4" />
-        <Skeleton className="h-28 w-full rounded-lg mb-4" />
-        <Skeleton className="h-48 w-full rounded-lg" />
+      <div className="h-full overflow-y-auto">
+        <div className="max-w-content mx-auto px-6 md:px-8 py-8">
+          <Skeleton className="h-5 w-32 mb-6" />
+          <Skeleton className="h-40 w-full rounded-lg mb-4" />
+          <Skeleton className="h-28 w-full rounded-lg mb-4" />
+          <Skeleton className="h-48 w-full rounded-lg" />
+        </div>
       </div>
     );
   }
@@ -163,7 +169,8 @@ export default function CreatorDashboard() {
   // ── Not found ──
   if (!pod) {
     return (
-      <div className="flex-1 flex flex-col items-center justify-center px-6 text-center">
+      <div className="h-full overflow-y-auto">
+        <div className="flex-1 flex flex-col items-center justify-center px-6 text-center">
         <p className="text-body text-text-secondary">Pod not found</p>
         <Link
           to="/explore"
@@ -171,6 +178,7 @@ export default function CreatorDashboard() {
         >
           Explore pods →
         </Link>
+        </div>
       </div>
     );
   }
@@ -178,7 +186,8 @@ export default function CreatorDashboard() {
   // ── Not the creator ──
   if (isCreator === false) {
     return (
-      <div className="flex-1 flex flex-col items-center justify-center px-6 text-center">
+      <div className="h-full overflow-y-auto">
+        <div className="flex-1 flex flex-col items-center justify-center px-6 text-center">
         <p className="text-body text-text-secondary">
           You are not the creator of this pod
         </p>
@@ -188,6 +197,7 @@ export default function CreatorDashboard() {
         >
           Go to pod →
         </Link>
+        </div>
       </div>
     );
   }
@@ -200,12 +210,13 @@ export default function CreatorDashboard() {
   );
 
   return (
-    <motion.div
-      variants={stagger}
-      initial="hidden"
-      animate="visible"
-      className="max-w-content mx-auto px-6 md:px-8 py-8"
-    >
+    <div className="h-full overflow-y-auto">
+      <motion.div
+        variants={stagger}
+        initial="hidden"
+        animate="visible"
+        className="max-w-content mx-auto px-6 md:px-8 py-8"
+      >
       {/* Back link */}
       <Link
         to={`/pod/${podId}`}
@@ -361,7 +372,8 @@ export default function CreatorDashboard() {
           />
         </div>
       </motion.div>
-    </motion.div>
+      </motion.div>
+    </div>
   );
 }
 

@@ -94,7 +94,7 @@ export default function Connect() {
   }, []);
 
   return (
-    <div className="min-h-screen bg-base flex flex-col">
+    <div className="h-full overflow-y-auto min-h-screen bg-base flex flex-col">
       {/* Minimal nav — just logo */}
       <header className="flex items-center px-4 md:px-12 h-16">
         <Link to="/" className="text-h2 font-display text-text-primary">

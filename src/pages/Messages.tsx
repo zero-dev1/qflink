@@ -27,7 +27,8 @@ export default function Messages() {
   // Disconnected state
   if (!isConnected) {
     return (
-      <div className="flex-1 flex flex-col items-center justify-center px-6 text-center">
+      <div className="h-full overflow-y-auto">
+        <div className="flex-1 flex flex-col items-center justify-center px-6 text-center">
         <p className="text-body text-text-secondary">
           Connect your wallet to view messages
         </p>
@@ -37,6 +38,7 @@ export default function Messages() {
         >
           Connect →
         </Link>
+        </div>
       </div>
     );
   }
@@ -44,6 +46,7 @@ export default function Messages() {
   return (
     <>
       {isLoadingConversations ? (
+      <div className="h-full overflow-y-auto">
         <div className="max-w-content mx-auto px-4 md:px-8 py-8">
           <div className="flex items-center justify-between mb-6">
             <Skeleton className="h-7 w-32" />
@@ -55,8 +58,10 @@ export default function Messages() {
             ))}
           </div>
         </div>
+      </div>
       ) : (
-        <div className="max-w-content mx-auto px-6 md:px-8 py-8">
+        <div className="h-full overflow-y-auto">
+          <div className="max-w-content mx-auto px-6 md:px-8 py-8">
           {/* Header */}
           <div className="flex items-center justify-between">
             <h1 className="font-display text-h1 text-text-primary">Messages</h1>
@@ -120,6 +125,7 @@ export default function Messages() {
             )}
           </AnimatePresence>
         </div>
+      </div>
       )}
     </>
   );

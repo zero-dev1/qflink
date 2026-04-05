@@ -67,7 +67,8 @@ export default function Profile() {
   // ── Disconnected ──
   if (!isConnected) {
     return (
-      <div className="flex-1 flex flex-col items-center justify-center px-6 text-center">
+      <div className="h-full overflow-y-auto">
+        <div className="flex-1 flex flex-col items-center justify-center px-6 text-center">
         <p className="text-body text-text-secondary">
           Connect your wallet to view your profile
         </p>
@@ -77,18 +78,20 @@ export default function Profile() {
         >
           Connect →
         </Link>
+        </div>
       </div>
     );
   }
 
   // ── Connected ──
   return (
-    <motion.div
-      variants={stagger}
-      initial="hidden"
-      animate="visible"
-      className="max-w-content mx-auto px-6 md:px-8 py-8"
-    >
+    <div className="h-full overflow-y-auto">
+      <motion.div
+        variants={stagger}
+        initial="hidden"
+        animate="visible"
+        className="max-w-content mx-auto px-6 md:px-8 py-8"
+      >
       {/* ─── Identity Card ───────────────────────────────────── */}
       <motion.div
         variants={fadeUp}
@@ -296,6 +299,7 @@ export default function Profile() {
           </div>
         </motion.div>
       )}
-    </motion.div>
+      </motion.div>
+    </div>
   );
 }

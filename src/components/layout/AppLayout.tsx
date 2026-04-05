@@ -18,7 +18,7 @@ export function AppLayout() {
       </a>
       
       <Sidebar />
-      <main id="main-content" className="flex-1 overflow-y-auto pb-14 md:pb-0">
+      <main id="main-content" className="flex-1 flex flex-col overflow-hidden pb-14 md:pb-0">
         <AnimatePresence mode="wait">
           <PageTransition key={location.pathname}>
             <Outlet />

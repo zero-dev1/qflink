@@ -127,7 +127,8 @@ export default function Home() {
   // ── Loading State ──
   if (isLoadingUserPods || isLoadingConversations) {
     return (
-      <div className="max-w-content mx-auto px-6 md:px-8 py-8 space-y-8">
+      <div className="h-full overflow-y-auto">
+        <div className="max-w-content mx-auto px-6 md:px-8 py-8 space-y-8">
         {/* Greeting skeleton */}
         <Skeleton className="h-8 w-48" />
         
@@ -148,13 +149,15 @@ export default function Home() {
           ))}
         </div>
       </div>
+    </div>
     );
   }
 
   // ── Disconnected State ──
   if (!isConnected) {
     return (
-      <div className="flex-1 flex flex-col items-center justify-center px-6 text-center">
+      <div className="h-full overflow-y-auto">
+        <div className="flex-1 flex flex-col items-center justify-center px-6 text-center">
         <h1 className="font-display text-h1 text-text-primary">Welcome to QFLink</h1>
         <p className="mt-2 text-body text-text-secondary">
           Connect your wallet to get started
@@ -165,21 +168,23 @@ export default function Home() {
         >
           Connect Wallet
         </Link>
+        </div>
       </div>
     );
   }
 
   // ── Connected State ──
   return (
-    <motion.div
-      initial="hidden"
-      animate="visible"
-      variants={{
-        hidden: {},
-        visible: { transition: { staggerChildren: 0.08 } },
-      }}
-      className="max-w-content mx-auto px-6 md:px-8 py-8 space-y-8"
-    >
+    <div className="h-full overflow-y-auto">
+      <motion.div
+        initial="hidden"
+        animate="visible"
+        variants={{
+          hidden: {},
+          visible: { transition: { staggerChildren: 0.08 } },
+        }}
+        className="max-w-content mx-auto px-6 md:px-8 py-8 space-y-8"
+      >
       {/* Greeting */}
       <motion.div variants={{ hidden: { opacity: 0, y: 12 }, visible: { opacity: 1, y: 0 } }}>
         <motion.h1
@@ -314,6 +319,7 @@ export default function Home() {
           </div>
         )}
       </motion.div>
-    </motion.div>
+      </motion.div>
+    </div>
   );
 }

@@ -97,6 +97,7 @@ export default function Explore() {
   return (
     <>
       {isLoadingPods ? (
+      <div className="h-full overflow-y-auto">
         <div className="max-w-content-wide mx-auto px-4 md:px-8 py-8">
           <Skeleton className="h-10 w-full rounded-default mb-6" /> {/* search bar */}
           <Skeleton className="h-6 w-32 mb-4" /> {/* section title */}
@@ -106,7 +107,9 @@ export default function Explore() {
             ))}
           </div>
         </div>
+      </div>
       ) : (
+      <div className="h-full overflow-y-auto">
         <div className="max-w-content-wide mx-auto px-6 md:px-8 py-8">
           <h1 className="font-display text-h1 text-text-primary">Explore</h1>
 
@@ -212,6 +215,7 @@ export default function Explore() {
             )}
           </AnimatePresence>
         </div>
+      </div>
       )}
     </>
   );
