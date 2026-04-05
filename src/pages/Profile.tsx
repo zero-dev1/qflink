@@ -92,24 +92,39 @@ export default function Profile() {
       {/* ─── Identity Card ───────────────────────────────────── */}
       <motion.div
         variants={fadeUp}
+        whileHover={{ y: -2 }}
+        transition={{ y: { duration: 0.2 } }}
         className="rounded-lg bg-surface-2 border border-border-subtle p-6"
       >
-        <div className="flex items-start gap-5">
-          <Avatar address={evmAddress || ''} size={80} />
-          <div className="flex-1 min-w-0">
-            <h1 className="font-display text-h1 text-text-primary">
-              {displayName}{displaySuffix}
-            </h1>
+        <div className="flex flex-col md:flex-row items-center md:items-start gap-4 md:gap-5">
+          {isLoadingProfile ? (
+            <Skeleton className="h-20 w-20 rounded-full" />
+          ) : (
+            <Avatar address={evmAddress || ''} size={80} />
+          )}
+          <div className="flex-1 min-w-0 text-center md:text-left">
+            {isLoadingProfile ? (
+              <div className="space-y-2">
+                <Skeleton className="h-7 w-40" />
+                <Skeleton className="h-4 w-24" />
+              </div>
+            ) : (
+              <>
+                <h1 className="font-display text-h1 text-text-primary">
+                  {displayName}{displaySuffix}
+                </h1>
 
-            {/* On-chain display name if different from QNS */}
-            {profile?.displayName && profile.displayName !== qnsName?.replace('.qf', '') && (
-              <p className="mt-0.5 text-body-sm text-text-secondary">
-                {profile.displayName}
-              </p>
+                {/* On-chain display name if different from QNS */}
+                {profile?.displayName && profile.displayName !== qnsName?.replace('.qf', '') && (
+                  <p className="mt-0.5 text-body-sm text-text-secondary">
+                    {profile.displayName}
+                  </p>
+                )}
+              </>
             )}
 
             {/* Bio placeholder — QNS text records not yet available */}
-            {!qnsName ? (
+            {!isLoadingProfile && !qnsName ? (
               <a
                 href="https://dotqf.xyz"
                 target="_blank"
@@ -118,7 +133,7 @@ export default function Profile() {
               >
                 Claim your .qf name →
               </a>
-            ) : (
+            ) : !isLoadingProfile && qnsName ? (
               <a
                 href="https://dotqf.xyz"
                 target="_blank"
@@ -127,14 +142,16 @@ export default function Profile() {
               >
                 Edit profile on dotqf.xyz →
               </a>
-            )}
+            ) : null}
 
             {/* Badges */}
-            <div className="mt-3 flex flex-wrap gap-2">
-              {profile && <BadgePill label="Registered" variant="cyan" />}
-              {createdPods.length > 0 && <BadgePill label="Creator" variant="success" />}
-              {userPodIds.length > 0 && <BadgePill label="Member" variant="cyan" />}
-            </div>
+            {!isLoadingProfile && (
+              <div className="mt-3 flex flex-wrap gap-2">
+                {profile && <BadgePill label="Registered" variant="cyan" />}
+                {createdPods.length > 0 && <BadgePill label="Creator" variant="success" />}
+                {userPodIds.length > 0 && <BadgePill label="Member" variant="cyan" />}
+              </div>
+            )}
           </div>
         </div>
       </motion.div>
@@ -142,6 +159,8 @@ export default function Profile() {
       {/* ─── Addresses Card ──────────────────────────────────── */}
       <motion.div
         variants={fadeUp}
+        whileHover={{ y: -2 }}
+        transition={{ y: { duration: 0.2 } }}
         className="mt-4 rounded-lg bg-surface-2 border border-border-subtle p-6"
       >
         <h2 className="font-display text-h2 text-text-primary mb-4">Addresses</h2>
@@ -151,7 +170,7 @@ export default function Profile() {
           <div>
             <p className="text-caption text-text-tertiary mb-1">Substrate (SS58)</p>
             <div className="flex items-center gap-2 bg-surface-3 rounded-sm px-3 py-2">
-              <p className="text-mono text-text-secondary truncate flex-1 select-all">
+              <p className="text-mono text-text-secondary truncate flex-1 select-all text-[11px] md:text-body-sm">
                 {address || '—'}
               </p>
               {address && (
@@ -164,7 +183,7 @@ export default function Profile() {
           <div>
             <p className="text-caption text-text-tertiary mb-1">EVM (Derived)</p>
             <div className="flex items-center gap-2 bg-surface-3 rounded-sm px-3 py-2">
-              <p className="text-mono text-text-secondary truncate flex-1 select-all">
+              <p className="text-mono text-text-secondary truncate flex-1 select-all text-[11px] md:text-body-sm">
                 {evmAddress || '—'}
               </p>
               {evmAddress && (
@@ -178,6 +197,8 @@ export default function Profile() {
       {/* ─── Stats Card ──────────────────────────────────────── */}
       <motion.div
         variants={fadeUp}
+        whileHover={{ y: -2 }}
+        transition={{ y: { duration: 0.2 } }}
         className="mt-4 rounded-lg bg-surface-2 border border-border-subtle p-6"
       >
         <div className="grid grid-cols-3 gap-4">
@@ -204,6 +225,8 @@ export default function Profile() {
       {userPodIds.length > 0 && (
         <motion.div
           variants={fadeUp}
+          whileHover={{ y: -2 }}
+          transition={{ y: { duration: 0.2 } }}
           className="mt-4 rounded-lg bg-surface-2 border border-border-subtle p-6"
         >
           <div className="flex items-center justify-between mb-3">
@@ -238,6 +261,8 @@ export default function Profile() {
       {createdPods.length > 0 && (
         <motion.div
           variants={fadeUp}
+          whileHover={{ y: -2 }}
+          transition={{ y: { duration: 0.2 } }}
           className="mt-4 rounded-lg bg-surface-2 border border-border-subtle p-6"
         >
           <h2 className="font-display text-h2 text-text-primary mb-3">Created Pods</h2>

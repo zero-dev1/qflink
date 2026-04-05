@@ -25,7 +25,7 @@ function StaggerText({ text, className }: { text: string; className?: string }) 
     visible: {
       opacity: 1,
       y: 0,
-      transition: { type: 'spring', damping: 12, stiffness: 200 },
+      transition: { type: 'spring' as const, damping: 12, stiffness: 200 },
     },
   };
 
@@ -95,7 +95,7 @@ export default function Landing() {
   return (
     <div className="min-h-screen bg-base flex flex-col">
       {/* ─── Sticky Nav ──────────────────────────────────────────── */}
-      <header className="sticky top-0 z-30 flex items-center justify-between px-6 md:px-12 h-16 bg-base/80 backdrop-blur-sm border-b border-border-subtle">
+      <header className="sticky top-0 z-30 flex items-center justify-between px-4 md:px-12 h-16 bg-base/80 backdrop-blur-sm border-b border-border-subtle">
         <Link to="/" className="text-h2 font-display text-text-primary">
           QF<span className="text-cyan-primary">Link</span>
         </Link>
@@ -108,8 +108,8 @@ export default function Landing() {
       </header>
 
       {/* ─── Hero ────────────────────────────────────────────────── */}
-      <section className="flex-1 flex flex-col items-center justify-center px-6 text-center min-h-[calc(100vh-64px)]">
-        <h1 className="font-display text-display md:text-[48px] md:leading-[1.1] text-text-primary max-w-3xl">
+      <section className="flex-1 flex flex-col items-center justify-center px-4 md:px-6 text-center min-h-[calc(100vh-64px)]">
+        <h1 className="font-display text-[28px] sm:text-[32px] md:text-[36px] lg:text-[48px] leading-tight text-text-primary max-w-3xl">
           <StaggerText text="Every message, on-chain, forever" />
         </h1>
 
@@ -117,7 +117,7 @@ export default function Landing() {
           initial={{ opacity: 0, y: 12 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 1.2, duration: 0.5 }}
-          className="mt-5 text-body text-text-secondary max-w-lg"
+          className="mt-5 text-body text-text-secondary max-w-lg px-4 md:px-0"
         >
           Token-gated group chats, encrypted direct messages, no database, no server, just the chain.
         </motion.p>
@@ -176,15 +176,29 @@ export default function Landing() {
           </h2>
         </FadeUp>
 
-        <div className="mt-16 grid grid-cols-1 md:grid-cols-3 gap-12 md:gap-8">
+        <div className="mt-16 grid grid-cols-1 md:grid-cols-3 gap-8 md:gap-12">
           {STEPS.map((step, i) => (
-            <FadeUp key={step.num} delay={i * 0.15}>
+            <motion.div
+              key={step.num}
+              variants={{
+                hidden: { opacity: 0, y: 20 },
+                visible: (i: number) => ({
+                  opacity: 1,
+                  y: 0,
+                  transition: { delay: i * 0.15, duration: 0.4 },
+                }),
+              }}
+              initial="hidden"
+              whileInView="visible"
+              viewport={{ once: true, margin: '-60px' }}
+              custom={i}
+            >
               <div className="flex flex-col">
                 <span className="text-caption text-cyan-primary">{step.num}</span>
                 <h3 className="mt-2 text-h2 font-display text-text-primary">{step.title}</h3>
                 <p className="mt-3 text-body text-text-secondary">{step.desc}</p>
               </div>
-            </FadeUp>
+            </motion.div>
           ))}
         </div>
       </section>
@@ -201,16 +215,18 @@ export default function Landing() {
             </p>
           </FadeUp>
 
-          <div className="mt-12 grid grid-cols-1 md:grid-cols-3 gap-4">
+          <div className="mt-12 flex md:grid md:grid-cols-3 gap-4 overflow-x-auto md:overflow-visible snap-x snap-mandatory pb-4 md:pb-0 -mx-4 px-4 md:mx-0 md:px-0">
             {pods.map((pod, i) => (
               <FadeUp key={Number(pod.id)} delay={i * 0.1}>
-                <Link to={isConnected ? `/pod/${pod.id}` : '/connect'}>
-                  <PodCard
-                    pod={pod}
-                    isOfficial={Number(pod.id) <= 3}
-                    onClick={() => {}}
-                  />
-                </Link>
+                <div className="snap-start shrink-0 w-[280px] md:w-auto">
+                  <Link to={isConnected ? `/pod/${pod.id}` : '/connect'}>
+                    <PodCard
+                      pod={pod}
+                      isOfficial={Number(pod.id) <= 3}
+                      onClick={() => {}}
+                    />
+                  </Link>
+                </div>
               </FadeUp>
             ))}
           </div>
@@ -237,7 +253,7 @@ export default function Landing() {
       </section>
 
       {/* ─── Footer ──────────────────────────────────────────────── */}
-      <footer className="px-6 md:px-12 py-6 border-t border-border-subtle flex flex-col md:flex-row items-center justify-between gap-2">
+      <footer className="px-4 md:px-12 py-6 border-t border-border-subtle flex flex-col md:flex-row items-center justify-between gap-2">
         <p className="text-caption text-text-tertiary">
           Built on <a href="https://qfnetwork.xyz" target="_blank" rel="noopener noreferrer" className="hover:text-text-secondary transition-colors">QF Network</a>
         </p>

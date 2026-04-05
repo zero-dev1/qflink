@@ -1,6 +1,7 @@
 import { create } from 'zustand';
 import { useWalletStore } from '@/stores/wallet';
 import { useToastStore } from '@/stores/toast';
+import { useUnreadStore } from '@/stores/unread';
 import {
   getConversations,
   getMessages,
@@ -8,6 +9,7 @@ import {
 } from '@/lib/contractCalls';
 import type { DirectMessageData } from '@/lib/contractCalls';
 import { reverseResolve } from '@/lib/qns';
+import { hapticTap, hapticError } from '@/lib/feedback';
 
 export interface ConversationItem {
   address: string;
@@ -75,6 +77,15 @@ export const useMessagesStore = create<MessagesStore>((set, get) => ({
             1
           );
           const lastMsg = msgs[0];
+          
+          // Update unread tracking
+          if (lastMsg) {
+            const lastSeen = useUnreadStore.getState().lastSeenDM[lower] || 0;
+            const timestamp = Number(lastMsg.timestamp);
+            if (timestamp > lastSeen) {
+              useUnreadStore.getState().updateDMUnread(lower, timestamp, 1);
+            }
+          }
           
           // Resolve QNS name
           let displayName: string | null = null;
@@ -164,6 +175,9 @@ export const useMessagesStore = create<MessagesStore>((set, get) => ({
       },
     }));
     
+    // Haptic feedback for message send
+    hapticTap();
+    
     try {
       const result = await contractSendMessage(lower as `0x${string}`, content);
       await result.confirmation;
@@ -210,6 +224,10 @@ export const useMessagesStore = create<MessagesStore>((set, get) => ({
       }));
       
       useToastStore.getState().addToast('error', 'Failed to send message');
+      
+      // Haptic feedback for error
+      hapticError();
+      
       return false;
     }
   },

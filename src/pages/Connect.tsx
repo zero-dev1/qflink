@@ -6,6 +6,7 @@ import { useWalletStore } from '@/stores/wallet';
 import { useToastStore } from '@/stores/toast';
 import { Button } from '@/components/ui/Button';
 import { cn } from '@/lib/utils';
+import { hapticSuccess, chimeSuccess } from '@/lib/feedback';
 
 // ── Wallet options ──────────────────────────────────────────────────
 const WALLETS = [
@@ -74,6 +75,11 @@ export default function Connect() {
     const state = useWalletStore.getState();
     if (state.isConnected) {
       addToast('success', 'Connected successfully');
+      
+      // Haptic and sound feedback
+      hapticSuccess();
+      chimeSuccess();
+      
       // Brief pause to let the connected state render before crossfading
       setTimeout(() => setShowPostConnect(true), 600);
     }
@@ -90,15 +96,15 @@ export default function Connect() {
   return (
     <div className="min-h-screen bg-base flex flex-col">
       {/* Minimal nav — just logo */}
-      <header className="flex items-center px-6 md:px-12 h-16">
+      <header className="flex items-center px-4 md:px-12 h-16">
         <Link to="/" className="text-h2 font-display text-text-primary">
           QF<span className="text-cyan-primary">Link</span>
         </Link>
       </header>
 
       {/* Main content — centered */}
-      <div className="flex-1 flex flex-col items-center justify-center px-6 pb-16">
-        <div className="w-full max-w-connect">
+      <div className="flex-1 flex flex-col items-center justify-center px-4 md:px-6 pb-16">
+        <div className="w-full max-w-connect mx-auto md:px-0">
 
           {/* ─── Heading with crossfade ────────────────────────── */}
           <AnimatePresence mode="wait">
@@ -111,7 +117,7 @@ export default function Connect() {
                 transition={{ duration: 0.3 }}
                 className="text-center"
               >
-                <h1 className="font-display text-h1 text-text-primary">
+                <h1 className="font-display text-h1 md:text-display text-text-primary text-center">
                   Welcome, {displayName}{displaySuffix}
                 </h1>
                 <motion.div
@@ -134,7 +140,7 @@ export default function Connect() {
                 transition={{ duration: 0.3 }}
                 className="text-center"
               >
-                <h1 className="font-display text-h1 text-text-primary">
+                <h1 className="font-display text-h1 md:text-display text-text-primary text-center">
                   {isReturning ? 'Welcome back' : 'Connect to QFLink'}
                 </h1>
                 {isReturning && qnsName && (
@@ -170,7 +176,7 @@ export default function Connect() {
                       onClick={() => handleConnect(persistedWallet as WalletId)}
                       disabled={isConnecting}
                       className={cn(
-                        'w-full flex items-center gap-4 p-5 rounded-lg bg-surface-2 border border-border-subtle',
+                        'w-full flex items-center gap-4 p-4 md:p-5 rounded-lg bg-surface-2 border border-border-subtle',
                         'transition-all duration-200',
                         'hover:border-cyan-border',
                         'disabled:opacity-50 disabled:pointer-events-none'
@@ -225,7 +231,7 @@ export default function Connect() {
                           whileHover={!isConnecting ? { y: -2 } : undefined}
                           transition={{ duration: 0.2 }}
                           className={cn(
-                            'relative w-full flex items-center gap-4 p-5 rounded-lg border transition-colors duration-200',
+                            'relative w-full flex items-center gap-4 p-4 md:p-5 rounded-lg border transition-colors duration-200',
                             isSelected && isConnecting
                               ? 'bg-surface-2 animate-border-pulse'
                               : isSelected && isConnected

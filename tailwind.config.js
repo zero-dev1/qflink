@@ -98,6 +98,18 @@ export default {
           '0%': { backgroundPosition: '-100% 0' },
           '100%': { backgroundPosition: '200% 0' },
         },
+        'unread-pulse': {
+          '0%, 100%': { transform: 'scale(1)', opacity: '1' },
+          '50%': { transform: 'scale(1.15)', opacity: '0.85' },
+        },
+        'toast-enter': {
+          '0%': { transform: 'translateX(100%)', opacity: '0' },
+          '100%': { transform: 'translateX(0)', opacity: '1' },
+        },
+        'toast-exit': {
+          '0%': { transform: 'translateX(0)', opacity: '1' },
+          '100%': { transform: 'translateX(100%)', opacity: '0' },
+        },
       },
       animation: {
         'shimmer': 'shimmer 2s ease-in-out infinite',
@@ -106,6 +118,9 @@ export default {
         'border-pulse': 'border-pulse 1.5s ease-in-out infinite',
         'check-draw': 'check-draw 0.3s ease-out forwards',
         'badge-shimmer': 'badge-shimmer 1.5s ease-in-out 1',
+        'unread-pulse': 'unread-pulse 2s ease-in-out infinite',
+        'toast-enter': 'toast-enter 300ms ease-out',
+        'toast-exit': 'toast-exit 200ms ease-in',
       },
     },
   },

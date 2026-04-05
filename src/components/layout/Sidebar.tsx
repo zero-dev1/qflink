@@ -1,6 +1,9 @@
 import { NavLink, useNavigate } from "react-router-dom";
+import { motion } from "framer-motion";
 import { useWalletStore } from "@/stores/wallet";
+import { useUnreadStore } from "@/stores/unread";
 import { Avatar } from "@/components/ui/Avatar";
+import { UnreadDot } from "@/components/ui/UnreadDot";
 import { cn } from "@/lib/utils";
 
 const navItems = [
@@ -13,6 +16,8 @@ const navItems = [
 export function Sidebar() {
   const { isConnected, qnsName, evmAddress, disconnect } = useWalletStore();
   const navigate = useNavigate();
+  const totalUnreadDMs = useUnreadStore((s) => s.getTotalUnreadDMs());
+  const totalUnreadPods = useUnreadStore((s) => s.getTotalUnreadPods());
 
   const displayName = qnsName || (evmAddress ? `${evmAddress.slice(0, 6)}...${evmAddress.slice(-4)}` : null);
 
@@ -35,20 +40,30 @@ export function Sidebar() {
             to={item.to}
             className={({ isActive }) =>
               cn(
-                "flex items-center gap-3 h-9 px-3 rounded-sm text-label transition-colors duration-150 relative",
+                "relative flex items-center gap-3 h-9 px-3 rounded-sm w-full text-label transition-colors duration-150",
                 isActive
                   ? "bg-surface-3 text-text-primary"
-                  : "text-text-secondary hover:bg-surface-2 hover:text-text-primary"
+                  : "text-text-secondary hover:text-text-primary hover:bg-surface-2"
               )
             }
           >
             {({ isActive }) => (
               <>
                 {isActive && (
-                  <div className="absolute left-0 top-1/2 -translate-y-1/2 w-0.5 h-4 bg-cyan-primary rounded-full" />
+                  <motion.div
+                    layoutId="sidebar-active"
+                    className="absolute left-0 top-1/2 -translate-y-1/2 w-0.5 h-5 bg-cyan-primary rounded-full"
+                    transition={{ type: 'spring', stiffness: 350, damping: 30 }}
+                  />
                 )}
                 <span className="text-[18px] w-4.5 text-center">{item.icon}</span>
                 <span>{item.label}</span>
+                {item.to === '/messages' && totalUnreadDMs > 0 && (
+                  <UnreadDot count={totalUnreadDMs} showCount size="sm" className="ml-auto" />
+                )}
+                {item.to === '/home' && totalUnreadPods > 0 && (
+                  <UnreadDot className="ml-auto" />
+                )}
               </>
             )}
           </NavLink>

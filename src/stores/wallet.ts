@@ -15,6 +15,7 @@ import {
 } from "@/lib/accountMapping";
 import { warmUpPapi, getTypedApi } from "@/lib/papiClient";
 import { reverseResolve, clearNameCache } from "@/lib/qns";
+import { hapticSuccess, chimeSuccess } from "@/lib/feedback";
 
 // ─── Types ───────────────────────────────────────────────────────────
 
@@ -152,6 +153,10 @@ export const useWalletStore = create<WalletState>()(
 
           // Success
           set({ isConnected: true, isConnecting: false });
+          
+          // Haptic and sound feedback
+          hapticSuccess();
+          chimeSuccess();
 
           // Mark getting started step
           try {

@@ -2,6 +2,7 @@ import { useEffect, useRef, useMemo, useCallback } from 'react';
 import { useParams, Link, useNavigate } from 'react-router-dom';
 import { usePodsStore } from '@/stores/pods';
 import { useWalletStore } from '@/stores/wallet';
+import { useUnreadStore } from '@/stores/unread';
 import { MessageBubble } from '@/components/chat/MessageBubble';
 import { ChatInput } from '@/components/chat/ChatInput';
 import { Skeleton } from '@/components/ui/Skeleton';
@@ -15,6 +16,7 @@ export default function PodChat() {
     getPodById, 
     messages, 
     isLoadingMessages, 
+    messageFetchErrors,
     isSending, 
     fetchMessages, 
     fetchPods, 
@@ -47,12 +49,18 @@ export default function PodChat() {
     if (podId === null) return;
     fetchMessages(podId);
     if (!pod) fetchPods();
+    // Mark pod as seen when opened
+    useUnreadStore.getState().markPodSeen(podId.toString());
   }, [podId, fetchMessages, fetchPods, pod]);
 
   // Poll for new messages
   useEffect(() => {
     if (podId === null) return;
-    const interval = setInterval(() => fetchMessages(podId), 8000);
+    const interval = setInterval(() => {
+      fetchMessages(podId);
+      // Mark pod as seen during polling (user is actively viewing)
+      useUnreadStore.getState().markPodSeen(podId.toString());
+    }, 8000);
     return () => clearInterval(interval);
   }, [podId, fetchMessages]);
 
@@ -116,59 +124,78 @@ export default function PodChat() {
   return (
     <div className="flex flex-col h-full">
       {/* Header */}
-      <div className="h-14 px-4 md:px-6 flex items-center gap-3 border-b border-border-subtle shrink-0">
-        <Button
-          variant="icon"
-          onClick={() => navigate('/explore')}
-          className="md:hidden"
-        >
-          ←
-        </Button>
-        <h2 className="text-h3 font-sans font-semibold text-text-primary">
-          {pod?.name || `Pod ${podId}`}
-        </h2>
-        <div className="ml-auto text-caption text-text-tertiary">
-          {pod?.memberCount || 0} members
-        </div>
-      </div>
-
-      {/* Messages area */}
-      <div
-        ref={messagesContainerRef}
-        onScroll={handleScroll}
-        className="flex-1 overflow-y-auto px-4 md:px-6 py-4"
-      >
+      <div className="flex items-center gap-3 px-4 md:px-6 h-14 border-b border-border-subtle shrink-0">
+        {/* Back arrow — always visible on mobile */}
+        <Link to="/explore" className="md:hidden">
+          <Button variant="icon" aria-label="Back to explore">
+            <svg width="20" height="20" viewBox="0 0 20 20" fill="none">
+              <path d="M12.5 15L7.5 10L12.5 5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+            </svg>
+          </Button>
+        </Link>
         {isLoadingMessages[podId] ? (
-          <>
-            {[1, 2, 3, 4, 5].map((i) => (
-              <div
-                key={i}
-                className={`flex ${i % 2 === 0 ? 'justify-end' : 'justify-start'} mt-4`}
-              >
-                <div className="max-w-[85%] md:max-w-[75%]">
-                  <Skeleton className="h-4 w-32 mb-1" />
-                  <Skeleton className="h-8 w-48" />
-                </div>
-              </div>
-            ))}
-          </>
-        ) : podMessages.length === 0 ? (
-          <div className="flex items-center justify-center h-full">
-            <p className="text-body-sm text-text-tertiary text-center">
-              No messages yet. Start the conversation
-            </p>
-          </div>
+          <Skeleton className="h-5 w-32" />
         ) : (
           <>
-            {renderedMessages}
-            <div ref={messagesEndRef} />
+            <h2 className="text-label text-text-primary truncate">{pod?.name}</h2>
+            <span className="text-caption text-text-tertiary ml-auto shrink-0">{pod?.memberCount || 0} members</span>
           </>
         )}
       </div>
 
+      {/* Messages area */}
+      {messageFetchErrors[podId] && !isLoadingMessages[podId] ? (
+        <div className="flex-1 flex flex-col items-center justify-center">
+          <p className="text-body-sm text-text-secondary">Could not load messages</p>
+          <button
+            onClick={() => fetchMessages(podId)}
+            className="mt-3 text-label text-cyan-primary hover:text-cyan-hover transition-colors"
+          >
+            Retry
+          </button>
+        </div>
+      ) : isLoadingMessages[podId] ? (
+        <div className="flex-1 px-4 md:px-6 py-4 space-y-4">
+          {/* Alternate left/right aligned skeletons to mimic chat */}
+          <div className="flex gap-2">
+            <Skeleton className="h-6 w-6 rounded-full shrink-0" />
+            <Skeleton className="h-12 w-48 rounded-lg" />
+          </div>
+          <div className="flex gap-2 justify-end">
+            <Skeleton className="h-10 w-40 rounded-lg" />
+          </div>
+          <div className="flex gap-2">
+            <Skeleton className="h-6 w-6 rounded-full shrink-0" />
+            <Skeleton className="h-16 w-56 rounded-lg" />
+          </div>
+          <div className="flex gap-2 justify-end">
+            <Skeleton className="h-10 w-36 rounded-lg" />
+          </div>
+        </div>
+      ) : (
+        <div
+          ref={messagesContainerRef}
+          onScroll={handleScroll}
+          className="flex-1 overflow-y-auto px-4 md:px-6 py-4"
+        >
+          {podMessages.length === 0 ? (
+            <div className="flex items-center justify-center h-full">
+              <p className="text-body-sm text-text-tertiary text-center">
+                No messages yet. Start the conversation
+              </p>
+            </div>
+          ) : (
+            <>
+              {renderedMessages}
+              <div ref={messagesEndRef} />
+            </>
+          )}
+        </div>
+      )}
+
       {/* Bottom area — connect / join / input */}
       {!isConnected ? (
-        <div className="px-6 py-4 border-t border-border-subtle text-center">
+        <div className="shrink-0 px-4 md:px-6 py-3 pb-[calc(0.75rem+env(safe-area-inset-bottom))] border-t border-border-subtle text-center">
           <Link
             to="/connect"
             className="text-label text-cyan-primary hover:text-cyan-hover"
@@ -177,7 +204,7 @@ export default function PodChat() {
           </Link>
         </div>
       ) : !isUserMember(podId) ? (
-        <div className="px-6 py-3 bg-surface-2 border-t border-border-subtle text-center">
+        <div className="shrink-0 px-4 md:px-6 py-3 pb-[calc(0.75rem+env(safe-area-inset-bottom))] bg-surface-2 border-t border-border-subtle text-center">
           <p className="text-body-sm text-text-secondary mb-2">
             Join this pod to send messages
           </p>
@@ -189,12 +216,14 @@ export default function PodChat() {
           </Link>
         </div>
       ) : (
-        <ChatInput
-          placeholder={`Message ${pod?.name || 'pod'}...`}
-          onSend={handleSend}
-          disabled={!isConnected}
-          isSending={isSending}
-        />
+        <div className="shrink-0 px-4 md:px-6 py-3 pb-[calc(0.75rem+env(safe-area-inset-bottom))] border-t border-border-subtle bg-surface-1">
+          <ChatInput
+            placeholder={`Message ${pod?.name || 'pod'}...`}
+            onSend={handleSend}
+            disabled={!isConnected}
+            isSending={isSending}
+          />
+        </div>
       )}
     </div>
   );

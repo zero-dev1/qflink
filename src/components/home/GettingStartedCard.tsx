@@ -41,6 +41,7 @@ export function GettingStartedCard() {
         variant="icon"
         onClick={dismiss}
         className="absolute top-3 right-3"
+        aria-label="Dismiss"
       >
         ×
       </Button>

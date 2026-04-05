@@ -2,6 +2,7 @@ import { useEffect, useRef, useMemo, useCallback, useState } from 'react';
 import { useParams, Link, useNavigate } from 'react-router-dom';
 import { useMessagesStore } from '@/stores/messages';
 import { useWalletStore } from '@/stores/wallet';
+import { useUnreadStore } from '@/stores/unread';
 import { MessageBubble } from '@/components/chat/MessageBubble';
 import { ChatInput } from '@/components/chat/ChatInput';
 import { Avatar } from '@/components/ui/Avatar';
@@ -52,12 +53,18 @@ export default function DMChat() {
   useEffect(() => {
     if (!otherAddress || !isConnected) return;
     fetchMessages(otherAddress);
+    // Mark DM as seen when opened
+    useUnreadStore.getState().markDMSeen(otherAddress);
   }, [otherAddress, isConnected, fetchMessages]);
 
   // Poll every 8 seconds
   useEffect(() => {
     if (!otherAddress || !isConnected) return;
-    const interval = setInterval(() => fetchMessages(otherAddress), 8000);
+    const interval = setInterval(() => {
+      fetchMessages(otherAddress);
+      // Mark DM as seen during polling (user is actively viewing)
+      useUnreadStore.getState().markDMSeen(otherAddress);
+    }, 8000);
     return () => clearInterval(interval);
   }, [otherAddress, isConnected, fetchMessages]);
 
@@ -139,21 +146,18 @@ export default function DMChat() {
   return (
     <div className="flex flex-col h-full">
       {/* Header */}
-      <div className="h-14 px-4 md:px-6 flex items-center gap-3 border-b border-border-subtle shrink-0">
-        <Button variant="icon" onClick={() => navigate('/messages')}>
-          ←
-        </Button>
+      <div className="flex items-center gap-3 px-4 md:px-6 h-14 border-b border-border-subtle shrink-0">
+        <Link to="/messages">
+          <Button variant="icon" aria-label="Back to messages">
+            <svg width="20" height="20" viewBox="0 0 20 20" fill="none">
+              <path d="M12.5 15L7.5 10L12.5 5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+            </svg>
+          </Button>
+        </Link>
         <Avatar address={otherAddress} size={32} />
-        <h2 className="text-h3 font-sans font-semibold text-text-primary">
-          {recipientName && recipientName.endsWith('.qf') ? (
-            <>
-              {recipientName.slice(0, -3)}
-              <span className="text-cyan-primary">.qf</span>
-            </>
-          ) : (
-            headerName
-          )}
-        </h2>
+        <span className="text-label text-text-primary truncate">
+          {recipientName?.replace('.qf', '')}{recipientName && <span className="text-cyan-primary">.qf</span>}
+        </span>
       </div>
 
       {/* Messages area */}
@@ -205,12 +209,14 @@ export default function DMChat() {
       </div>
 
       {/* Chat input */}
-      <ChatInput
-        placeholder={`Message ${recipientName || headerName}...`}
-        onSend={handleSend}
-        disabled={!isConnected}
-        isSending={isSending}
-      />
+      <div className="shrink-0 px-4 md:px-6 py-3 pb-[calc(0.75rem+env(safe-area-inset-bottom))] border-t border-border-subtle bg-surface-1">
+        <ChatInput
+          placeholder={`Message ${recipientName || headerName}...`}
+          onSend={handleSend}
+          disabled={!isConnected}
+          isSending={isSending}
+        />
+      </div>
     </div>
   );
 }

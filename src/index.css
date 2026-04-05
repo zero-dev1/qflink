@@ -44,6 +44,7 @@
   body {
     min-height: 100vh;
     overflow-x: hidden;
+    overscroll-behavior: none;
   }
 
   /* Scrollbar */
@@ -52,16 +53,38 @@
   }
 
   ::-webkit-scrollbar-track {
-    background: #050505;
+    background: hsl(var(--surface-1));
   }
 
   ::-webkit-scrollbar-thumb {
-    background: #1A1A1A;
+    background: hsl(var(--border-medium));
     border-radius: 3px;
   }
 
   ::-webkit-scrollbar-thumb:hover {
-    background: #222222;
+    background: hsl(var(--border-subtle));
+  }
+
+  /* Safe area support for iOS */
+  @supports (padding: env(safe-area-inset-bottom)) {
+    .safe-bottom {
+      padding-bottom: env(safe-area-inset-bottom);
+    }
+  }
+
+  /* Smooth scrolling for chat containers */
+  .scroll-smooth {
+    scroll-behavior: smooth;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  /* Hide scrollbar on horizontal scroll containers (pod previews) */
+  .scrollbar-hide {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+  }
+  .scrollbar-hide::-webkit-scrollbar {
+    display: none;
   }
 
   /* Hide number input spinners */
@@ -73,5 +96,16 @@
 
   input[type="number"] {
     -moz-appearance: textfield;
+  }
+
+  /* Focus rings — cyan border, consistent across all interactive elements */
+  *:focus-visible {
+    outline: 2px solid #06B6D4;
+    outline-offset: 2px;
+  }
+
+  /* Remove default focus for mouse users */
+  *:focus:not(:focus-visible) {
+    outline: none;
   }
 }

@@ -43,6 +43,7 @@ export function QnsNudgeCard() {
         variant="icon"
         onClick={handleDismiss}
         className="absolute top-2 right-2"
+        aria-label="Dismiss"
       >
         ×
       </Button>

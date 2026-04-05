@@ -12,6 +12,7 @@ import { ConversationRow } from '@/components/messages/ConversationRow';
 import { Skeleton } from '@/components/ui/Skeleton';
 import { formatBalance } from '@/lib/utils';
 import { getPodMessages } from '@/lib/contractCalls';
+import { useIsMobile } from '@/hooks/useIsMobile';
 
 function getGreeting(): string {
   const hour = new Date().getHours();
@@ -38,6 +39,7 @@ export default function Home() {
     isLoadingConversations,
     fetchConversations,
   } = useMessagesStore();
+  const isMobile = useIsMobile();
 
   const [podPreviews, setPodPreviews] = useState<PodPreview[]>([]);
   const [isLoadingPreviews, setIsLoadingPreviews] = useState(false);
@@ -122,6 +124,33 @@ export default function Home() {
 
   const isLoadingUserPods = isLoadingPods || isLoadingPreviews;
 
+  // ── Loading State ──
+  if (isLoadingUserPods || isLoadingConversations) {
+    return (
+      <div className="max-w-content mx-auto px-6 md:px-8 py-8 space-y-8">
+        {/* Greeting skeleton */}
+        <Skeleton className="h-8 w-48" />
+        
+        {/* Getting started card skeleton */}
+        <Skeleton className="h-32 w-full rounded-lg" />
+        
+        {/* Pod list skeleton */}
+        <div className="space-y-2">
+          {[1, 2, 3].map((i) => (
+            <Skeleton key={i} className="h-14 w-full rounded-lg" />
+          ))}
+        </div>
+        
+        {/* Conversations skeleton */}
+        <div className="space-y-2">
+          {[1, 2, 3].map((i) => (
+            <Skeleton key={i} className="h-16 w-full rounded-lg" />
+          ))}
+        </div>
+      </div>
+    );
+  }
+
   // ── Disconnected State ──
   if (!isConnected) {
     return (
@@ -142,36 +171,48 @@ export default function Home() {
 
   // ── Connected State ──
   return (
-    <div className="max-w-content mx-auto px-6 md:px-8 py-8">
+    <motion.div
+      initial="hidden"
+      animate="visible"
+      variants={{
+        hidden: {},
+        visible: { transition: { staggerChildren: 0.08 } },
+      }}
+      className="max-w-content mx-auto px-6 md:px-8 py-8 space-y-8"
+    >
       {/* Greeting */}
-      <motion.h1
-        initial={{ opacity: 0, y: 8 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.25 }}
-        className="font-display text-h1 text-text-primary"
-      >
-        {getGreeting()}, {displayName}
-      </motion.h1>
+      <motion.div variants={{ hidden: { opacity: 0, y: 12 }, visible: { opacity: 1, y: 0 } }}>
+        <motion.h1
+          initial={{ opacity: 0, y: 8 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.25 }}
+          className="font-display text-h1 md:text-display text-text-primary"
+        >
+          {getGreeting()}, {displayName}
+        </motion.h1>
 
-      {/* Balance subtext */}
-      {balance > 0n && (
-        <p className="mt-1 text-body-sm text-text-secondary">
-          {formatBalance(balance)} QF
-        </p>
-      )}
+        {/* Balance subtext */}
+        {balance > 0n && (
+          <p className="mt-1 text-body-sm text-text-secondary">
+            {formatBalance(balance)} QF
+          </p>
+        )}
+      </motion.div>
 
       {/* Getting Started + QNS Nudge cards */}
-      <div className="mt-6 flex flex-col gap-4">
-        <AnimatePresence>
-          <GettingStartedCard key="getting-started" />
-        </AnimatePresence>
-        <AnimatePresence>
-          {!qnsName && <QnsNudgeCard key="qns-nudge" />}
-        </AnimatePresence>
-      </div>
+      <motion.div variants={{ hidden: { opacity: 0, y: 12 }, visible: { opacity: 1, y: 0 } }}>
+        <div className="flex flex-col gap-4">
+          <AnimatePresence>
+            <GettingStartedCard key="getting-started" />
+          </AnimatePresence>
+          <AnimatePresence>
+            {!qnsName && <QnsNudgeCard key="qns-nudge" />}
+          </AnimatePresence>
+        </div>
+      </motion.div>
 
       {/* Your Pods */}
-      <section className="mt-8">
+      <motion.div variants={{ hidden: { opacity: 0, y: 12 }, visible: { opacity: 1, y: 0 } }}>
         <div className="flex items-center justify-between mb-4">
           <h2 className="font-display text-h2 text-text-primary">Your Pods</h2>
           {podPreviews.length > 0 && (
@@ -223,10 +264,10 @@ export default function Home() {
             </Link>
           </div>
         )}
-      </section>
+      </motion.div>
 
       {/* Recent Messages */}
-      <section className="mt-8">
+      <motion.div variants={{ hidden: { opacity: 0, y: 12 }, visible: { opacity: 1, y: 0 } }}>
         <div className="flex items-center justify-between mb-4">
           <h2 className="font-display text-h2 text-text-primary">Recent Messages</h2>
           {conversations.length > 0 && (
@@ -253,7 +294,7 @@ export default function Home() {
           </div>
         ) : conversations.length > 0 ? (
           <div className="flex flex-col gap-1">
-            {conversations.slice(0, 5).map((conv) => (
+            {conversations.slice(0, isMobile ? 3 : 5).map((conv) => (
               <ConversationRow
                 key={conv.address}
                 conversation={conv}
@@ -272,7 +313,7 @@ export default function Home() {
             </Link>
           </div>
         )}
-      </section>
-    </div>
+      </motion.div>
+    </motion.div>
   );
 }

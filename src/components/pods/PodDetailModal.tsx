@@ -29,24 +29,29 @@ export function PodDetailModal({
 
   return (
     <motion.div
-      initial={{ opacity: 0 }}
-      animate={{ opacity: 1 }}
-      exit={{ opacity: 0 }}
+      initial={{ opacity: 0, backdropFilter: 'blur(0px)' }}
+      animate={{ opacity: 1, backdropFilter: 'blur(4px)' }}
+      exit={{ opacity: 0, backdropFilter: 'blur(0px)' }}
+      transition={{ duration: 0.2 }}
       className="fixed inset-0 bg-overlay z-50"
       onClick={onClose}
     >
-      <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+      <div className="fixed inset-0 z-50 flex items-end justify-center md:items-center md:justify-center p-0 md:p-4">
         <motion.div
-          initial={{ opacity: 0, scale: 0.95 }}
-          animate={{ opacity: 1, scale: 1 }}
-          exit={{ opacity: 0, scale: 0.95 }}
-          transition={{ type: 'spring', damping: 25, stiffness: 300 }}
-          className="bg-surface-4 border border-border-medium rounded-lg max-w-modal w-full p-6"
+          initial={{ opacity: 0, scale: 0.93, y: 16 }}
+          animate={{ opacity: 1, scale: 1, y: 0 }}
+          exit={{ opacity: 0, scale: 0.95, y: 8 }}
+          transition={{ type: 'spring', stiffness: 350, damping: 28 }}
+          className="bg-surface-4 border border-border-medium rounded-lg z-50 w-full p-6 max-h-[85vh] overflow-y-auto md:max-w-modal md:rounded-b-lg rounded-b-none md:rounded-b-lg fixed bottom-0 left-0 right-0 md:bottom-auto md:left-auto md:right-auto md:fixed md:top-1/2 md:left-1/2 md:-translate-x-1/2 md:-translate-y-1/2"
           onClick={(e) => e.stopPropagation()}
         >
+          {/* Mobile drag handle */}
+          <div className="md:hidden flex justify-center mb-4">
+            <div className="w-10 h-1 rounded-full bg-border-medium" />
+          </div>
           {/* Close button */}
           <div className="flex justify-end mb-4">
-            <Button variant="icon" onClick={onClose}>
+            <Button variant="icon" onClick={onClose} aria-label="Close">
               ×
             </Button>
           </div>

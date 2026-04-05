@@ -1,6 +1,8 @@
 // src/components/home/PodListItem.tsx
 import { Link } from 'react-router-dom';
 import { formatTimestamp } from '@/lib/utils';
+import { useUnreadStore } from '@/stores/unread';
+import { UnreadDot } from '@/components/ui/UnreadDot';
 
 interface PodListItemProps {
   podId: number;
@@ -19,6 +21,8 @@ export function PodListItem({
   lastMessage,
   lastMessageTime,
 }: PodListItemProps) {
+  const hasUnread = useUnreadStore((s) => s.hasPodUnread(podId.toString()));
+
   return (
     <Link
       to={`/pod/${podId}`}
@@ -47,6 +51,7 @@ export function PodListItem({
           <p className="text-body-sm text-text-secondary truncate">
             {lastMessage || `${memberCount} members`}
           </p>
+          {hasUnread && <UnreadDot className="ml-auto flex-shrink-0" />}
         </div>
       </div>
     </Link>

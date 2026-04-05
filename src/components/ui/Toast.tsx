@@ -22,10 +22,15 @@ function ToastItem({ toast }: { toast: ToastData }) {
   return (
     <motion.div
       layout
-      initial={{ opacity: 0, x: 40 }}
-      animate={{ opacity: 1, x: 0 }}
-      exit={{ opacity: 0, x: 40 }}
-      transition={{ duration: 0.2 }}
+      initial={{ x: 80, opacity: 0, scale: 0.95 }}
+      animate={{ x: 0, opacity: 1, scale: 1 }}
+      exit={{ x: 80, opacity: 0, scale: 0.95 }}
+      transition={{
+        type: 'spring',
+        stiffness: 400,
+        damping: 30,
+        opacity: { duration: 0.15 },
+      }}
       className="flex items-start gap-3 max-w-toast bg-surface-4 border border-border-medium rounded-[12px] px-4 py-3 shadow-none"
     >
       <span className={cn("text-label font-semibold shrink-0 mt-0.5", iconColors[toast.type])}>

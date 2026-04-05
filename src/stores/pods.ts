@@ -1,6 +1,7 @@
 import { create } from 'zustand';
 import { useWalletStore } from '@/stores/wallet';
 import { useToastStore } from '@/stores/toast';
+import { useUnreadStore } from '@/stores/unread';
 import { deriveEVMAddress, getCurrentConnection } from '@/lib/wallet';
 import {
   getAllPods,
@@ -12,6 +13,7 @@ import {
   sendPodMessage as contractSendPodMessage,
   getPodMessageCount,
 } from '@/lib/contractCalls';
+import { hapticSuccess, chimeSuccess, hapticTap, hapticError } from '@/lib/feedback';
 
 export interface PodData {
   id: bigint;
@@ -49,6 +51,10 @@ interface PodsStore {
   isJoining: number | null;
   isSending: boolean;
   
+  // Error states
+  podFetchError: boolean;
+  messageFetchErrors: Record<number, boolean>;
+  
   // Actions
   fetchPods: () => Promise<void>;
   fetchUserPods: () => Promise<void>;
@@ -73,15 +79,19 @@ export const usePodsStore = create<PodsStore>((set, get) => ({
   isJoining: null,
   isSending: false,
   
+  // Error states
+  podFetchError: false,
+  messageFetchErrors: {},
+  
   // Actions
   fetchPods: async () => {
-    set({ isLoadingPods: true });
+    set({ isLoadingPods: true, podFetchError: false });
     try {
       const pods = await getAllPods();
       set({ pods, isLoadingPods: false });
     } catch (error) {
       console.error('Failed to fetch pods:', error);
-      set({ isLoadingPods: false });
+      set({ isLoadingPods: false, podFetchError: true });
     }
   },
   
@@ -99,11 +109,21 @@ export const usePodsStore = create<PodsStore>((set, get) => ({
   
   fetchMessages: async (podId: number) => {
     set(state => ({
-      isLoadingMessages: { ...state.isLoadingMessages, [podId]: true }
+      isLoadingMessages: { ...state.isLoadingMessages, [podId]: true },
+      messageFetchErrors: { ...state.messageFetchErrors, [podId]: false }
     }));
     
     try {
       const messages = await getPodMessages(podId);
+      
+      // Update unread tracking
+      if (messages.length > 0) {
+        const latestTimestamp = Math.max(...messages.map(m => Number(m.timestamp)));
+        const lastSeen = useUnreadStore.getState().lastSeenPod[podId.toString()] || 0;
+        const newCount = messages.filter(m => Number(m.timestamp) > lastSeen).length;
+        useUnreadStore.getState().updatePodUnread(podId.toString(), latestTimestamp, newCount);
+      }
+      
       set(state => ({
         messages: { ...state.messages, [podId]: messages },
         isLoadingMessages: { ...state.isLoadingMessages, [podId]: false }
@@ -111,7 +131,8 @@ export const usePodsStore = create<PodsStore>((set, get) => ({
     } catch (error) {
       console.error('Failed to fetch messages:', error);
       set(state => ({
-        isLoadingMessages: { ...state.isLoadingMessages, [podId]: false }
+        isLoadingMessages: { ...state.isLoadingMessages, [podId]: false },
+        messageFetchErrors: { ...state.messageFetchErrors, [podId]: true }
       }));
     }
   },
@@ -124,6 +145,10 @@ export const usePodsStore = create<PodsStore>((set, get) => ({
       await result.confirmation;
       
       useToastStore.getState().addToast("success", "You're in");
+      
+      // Haptic and sound feedback
+      hapticSuccess();
+      chimeSuccess();
       
       // Mark getting started step
       try {
@@ -163,6 +188,9 @@ export const usePodsStore = create<PodsStore>((set, get) => ({
       }
     }));
     
+    // Haptic feedback for message send
+    hapticTap();
+    
     try {
       const result = await contractSendPodMessage(podId, content);
       await result.confirmation;
@@ -188,6 +216,10 @@ export const usePodsStore = create<PodsStore>((set, get) => ({
       }));
       
       useToastStore.getState().addToast("error", "Failed to send message");
+      
+      // Haptic feedback for error
+      hapticError();
+      
       return false;
     }
   },

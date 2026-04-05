@@ -44,7 +44,8 @@ export function ChatInput({
           onKeyDown={handleKeyDown}
           placeholder={placeholder}
           disabled={disabled}
-          className="flex-1 bg-transparent outline-none text-body text-text-primary placeholder:text-text-tertiary"
+          autoFocus
+          className="flex-1 bg-transparent outline-none text-[16px] md:text-body text-text-primary placeholder:text-text-tertiary"
           maxLength={LIMITS.MAX_MESSAGE_LENGTH}
         />
         
@@ -53,7 +54,8 @@ export function ChatInput({
           <button
             onClick={handleSend}
             disabled={!canSend}
-            className="text-cyan-primary hover:text-cyan-hover transition-colors disabled:text-text-tertiary disabled:cursor-not-allowed"
+            aria-label="Send message"
+            className="h-10 w-10 md:h-8 md:w-8 rounded-sm flex items-center justify-center text-cyan-primary hover:text-cyan-hover transition-colors disabled:text-text-tertiary disabled:cursor-not-allowed"
           >
             {isSending ? (
               <div className="h-4 w-4 border-2 border-border-medium border-t-cyan-primary rounded-full animate-spin"></div>

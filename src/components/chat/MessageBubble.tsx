@@ -23,9 +23,18 @@ export function MessageBubble({
 }: MessageBubbleProps) {
   return (
     <motion.div
-      initial={{ opacity: 0, scale: 0.97, y: 4 }}
-      animate={{ opacity: isOptimistic ? 0.7 : 1, scale: 1, y: 0 }}
-      transition={{ duration: 0.15, ease: 'easeOut' }}
+      initial={{ opacity: 0, scale: 0.95, y: 6 }}
+      animate={{
+        opacity: isOptimistic ? 0.7 : 1,
+        scale: 1,
+        y: 0,
+      }}
+      transition={{
+        type: 'spring',
+        stiffness: 400,
+        damping: 25,
+        opacity: { duration: 0.2 },
+      }}
       className={`flex ${isMine ? 'justify-end' : 'justify-start'} ${!showSender ? 'mt-0.5' : 'mt-4'}`}
     >
       <div className="max-w-[85%] md:max-w-[75%]">

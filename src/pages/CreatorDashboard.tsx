@@ -5,6 +5,7 @@ import { motion } from 'framer-motion';
 import { useWalletStore } from '@/stores/wallet';
 import { usePodsStore } from '@/stores/pods';
 import { useToastStore } from '@/stores/toast';
+import { useCountUp } from '@/hooks/useCountUp';
 import { Avatar } from '@/components/ui/Avatar';
 import { StatCard } from '@/components/ui/StatCard';
 import { BadgePill } from '@/components/ui/BadgePill';
@@ -192,6 +193,12 @@ export default function CreatorDashboard() {
   }
 
   // ── Creator Dashboard ──
+  const animatedBalance = useCountUp(
+    revenue ? Number(revenue.contractBalance) / 1e18 : 0,
+    800,
+    !isLoading && revenue !== null,
+  );
+
   return (
     <motion.div
       variants={stagger}
@@ -219,7 +226,7 @@ export default function CreatorDashboard() {
       {/* ─── Overview Card ───────────────────────────────────── */}
       <motion.div
         variants={fadeUp}
-        className="mt-6 rounded-lg bg-surface-2 border border-border-subtle p-6"
+        className="mt-6 rounded-lg bg-surface-2 border border-border-subtle p-4 md:p-6"
       >
         <div className="flex items-start justify-between gap-4">
           <div className="min-w-0">
@@ -249,15 +256,15 @@ export default function CreatorDashboard() {
       {/* ─── Revenue Card ────────────────────────────────────── */}
       <motion.div
         variants={fadeUp}
-        className="mt-4 rounded-lg bg-surface-2 border border-border-subtle p-6"
+        className="mt-4 rounded-lg bg-surface-2 border border-border-subtle p-4 md:p-6"
       >
         <h2 className="font-display text-h2 text-text-primary mb-4">Revenue</h2>
 
-        <div className="grid grid-cols-3 gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
           <StatCard
             value={
               revenue
-                ? formatCompactBalance(revenue.contractBalance)
+                ? formatCompactBalance(BigInt(Math.floor(animatedBalance * 1e18)))
                 : '—'
             }
             label="Contract Balance"
@@ -294,7 +301,7 @@ export default function CreatorDashboard() {
       {/* ─── Members Card ────────────────────────────────────── */}
       <motion.div
         variants={fadeUp}
-        className="mt-4 rounded-lg bg-surface-2 border border-border-subtle p-6"
+        className="mt-4 rounded-lg bg-surface-2 border border-border-subtle p-4 md:p-6"
       >
         <div className="flex items-center justify-between mb-4">
           <h2 className="font-display text-h2 text-text-primary">Members</h2>
@@ -311,7 +318,7 @@ export default function CreatorDashboard() {
       {/* ─── Settings Card (read-only from chain) ────────────── */}
       <motion.div
         variants={fadeUp}
-        className="mt-4 rounded-lg bg-surface-2 border border-border-subtle p-6"
+        className="mt-4 rounded-lg bg-surface-2 border border-border-subtle p-4 md:p-6"
       >
         <h2 className="font-display text-h2 text-text-primary mb-4">Settings</h2>
 
@@ -361,11 +368,11 @@ export default function CreatorDashboard() {
 // ── SettingRow sub-component ────────────────────────────────────────
 function SettingRow({ label, value }: { label: string; value: string }) {
   return (
-    <div className="flex items-center justify-between py-2">
+    <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between py-2 gap-1">
       <p className="text-body-sm text-text-secondary">{label}</p>
       <div className="flex items-center gap-2">
-        <p className="text-label text-text-primary">{value}</p>
-        <span className="text-caption text-text-tertiary">from chain</span>
+        <p className="text-label text-text-primary break-all sm:break-normal">{value}</p>
+        <span className="text-caption text-text-tertiary whitespace-nowrap">from chain</span>
       </div>
     </div>
   );

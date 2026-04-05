@@ -42,71 +42,85 @@ export default function Messages() {
   }
 
   return (
-    <div className="max-w-content mx-auto px-6 md:px-8 py-8">
-      {/* Header */}
-      <div className="flex items-center justify-between">
-        <h1 className="font-display text-h1 text-text-primary">Messages</h1>
-        <Button
-          variant="secondary"
-          onClick={() => setShowNewMessage(true)}
-        >
-          New message
-        </Button>
-      </div>
-
-      {/* Conversation list */}
-      <div className="mt-6">
-        {isLoadingConversations ? (
-          <div className="flex flex-col gap-2">
+    <>
+      {isLoadingConversations ? (
+        <div className="max-w-content mx-auto px-4 md:px-8 py-8">
+          <div className="flex items-center justify-between mb-6">
+            <Skeleton className="h-7 w-32" />
+            <Skeleton className="h-10 w-28 rounded-default" />
+          </div>
+          <div className="space-y-2">
             {[1, 2, 3, 4].map((i) => (
-              <div
-                key={i}
-                className="flex items-center gap-3 px-4 py-3 rounded-lg"
+              <Skeleton key={i} className="h-16 w-full rounded-lg" />
+            ))}
+          </div>
+        </div>
+      ) : (
+        <div className="max-w-content mx-auto px-6 md:px-8 py-8">
+          {/* Header */}
+          <div className="flex items-center justify-between">
+            <h1 className="font-display text-h1 text-text-primary">Messages</h1>
+            {/* Desktop new message button in header */}
+            <div className="hidden md:block">
+              <Button
+                variant="secondary"
+                onClick={() => setShowNewMessage(true)}
               >
-                <Skeleton className="h-12 w-12 rounded-full" />
-                <div className="flex-1">
-                  <Skeleton className="h-4 w-28 mb-2" />
-                  <Skeleton className="h-3 w-48" />
-                </div>
-                <Skeleton className="h-3 w-12" />
-              </div>
-            ))}
+                New message
+              </Button>
+            </div>
           </div>
-        ) : conversations.length > 0 ? (
-          <div className="flex flex-col gap-1">
-            {conversations.map((conv) => (
-              <ConversationRow
-                key={conv.address}
-                conversation={conv}
-                onClick={() => navigate(`/dm/${conv.address}`)}
-              />
-            ))}
-          </div>
-        ) : (
-          <div className="rounded-lg bg-surface-2 border border-border-subtle p-8 text-center">
-            <p className="text-body text-text-secondary">No conversations yet</p>
-            <p className="mt-2 text-body-sm text-text-tertiary">
-              Start a conversation by sending a message to any .qf name or address
-            </p>
-            <button
-              onClick={() => setShowNewMessage(true)}
-              className="mt-4 text-label text-cyan-primary hover:text-cyan-hover transition-colors"
-            >
-              Start a conversation →
-            </button>
-          </div>
-        )}
-      </div>
 
-      {/* New message modal */}
-      <AnimatePresence>
-        {showNewMessage && (
-          <NewMessageModal
-            onClose={() => setShowNewMessage(false)}
-            recentConversations={conversations}
-          />
-        )}
-      </AnimatePresence>
-    </div>
+          {/* Mobile FAB */}
+          <button
+            onClick={() => setShowNewMessage(true)}
+            className="md:hidden fixed bottom-20 right-4 z-40 w-14 h-14 rounded-full bg-cyan-primary text-on-cyan flex items-center justify-center shadow-none active:bg-cyan-pressed transition-colors"
+            aria-label="New message"
+          >
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none">
+              <path d="M12 5V19M5 12H19" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+            </svg>
+          </button>
+
+          {/* Conversation list */}
+          <div className="mt-6">
+            {conversations.length > 0 ? (
+              <div className="flex flex-col gap-1">
+                {conversations.map((conv) => (
+                  <ConversationRow
+                    key={conv.address}
+                    conversation={conv}
+                    onClick={() => navigate(`/dm/${conv.address}`)}
+                  />
+                ))}
+              </div>
+            ) : (
+              <div className="rounded-lg bg-surface-2 border border-border-subtle p-8 text-center">
+                <p className="text-body text-text-secondary">No conversations yet</p>
+                <p className="mt-2 text-body-sm text-text-tertiary">
+                  Start a conversation by sending a message to any .qf name or address
+                </p>
+                <button
+                  onClick={() => setShowNewMessage(true)}
+                  className="mt-4 text-label text-cyan-primary hover:text-cyan-hover transition-colors"
+                >
+                  Start a conversation →
+                </button>
+              </div>
+            )}
+          </div>
+
+          {/* New message modal */}
+          <AnimatePresence>
+            {showNewMessage && (
+              <NewMessageModal
+                onClose={() => setShowNewMessage(false)}
+                recentConversations={conversations}
+              />
+            )}
+          </AnimatePresence>
+        </div>
+      )}
+    </>
   );
 }

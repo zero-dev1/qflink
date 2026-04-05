@@ -1,5 +1,6 @@
 import { formatTimestamp } from '@/lib/utils';
 import { Avatar } from '@/components/ui/Avatar';
+import { UnreadDot } from '@/components/ui/UnreadDot';
 import type { ConversationItem } from '@/stores/messages';
 
 interface ConversationRowProps {
@@ -46,11 +47,7 @@ export function ConversationRow({ conversation, isActive = false, onClick }: Con
             {lastMessage || 'No messages yet'}
           </p>
           {unreadCount > 0 && (
-            <div className="shrink-0 h-5 min-w-[20px] px-1.5 rounded-pill bg-cyan-primary flex items-center justify-center">
-              <span className="text-caption text-text-on-cyan font-medium">
-                {unreadCount > 99 ? '99+' : unreadCount}
-              </span>
-            </div>
+            <UnreadDot count={unreadCount} showCount size="sm" />
           )}
         </div>
       </div>
