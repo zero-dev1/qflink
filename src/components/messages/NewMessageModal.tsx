@@ -1,3 +1,4 @@
+// src/components/messages/NewMessageModal.tsx
 import { useState, useEffect, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useNavigate } from 'react-router-dom';
@@ -64,7 +65,7 @@ export function NewMessageModal({ onClose, recentConversations }: NewMessageModa
       onClose();
       navigate(`/dm/${address.toLowerCase()}`);
     },
-    [onClose, navigate]
+    [onClose, navigate],
   );
 
   return (
@@ -81,12 +82,12 @@ export function NewMessageModal({ onClose, recentConversations }: NewMessageModa
           animate={{ opacity: 1, scale: 1, y: 0 }}
           exit={{ opacity: 0, scale: 0.95, y: 8 }}
           transition={{ type: 'spring', damping: 25, stiffness: 300 }}
-          className="bg-surface-4 border border-border-medium rounded-lg z-50 w-full p-6 max-h-[85vh] overflow-y-auto md:max-w-modal md:rounded-b-lg rounded-b-none md:rounded-b-lg fixed bottom-0 left-0 right-0 md:bottom-auto md:left-auto md:right-auto md:fixed md:top-1/2 md:left-1/2 md:-translate-x-1/2 md:-translate-y-1/2"
+          className="bg-surface-4 border border-white/[0.06] rounded-t-xl md:rounded-xl z-50 w-full p-6 pb-[calc(1.5rem+env(safe-area-inset-bottom))] md:pb-6 max-h-[85vh] overflow-y-auto md:max-w-modal fixed bottom-0 left-0 right-0 md:bottom-auto md:left-auto md:right-auto md:fixed md:top-1/2 md:left-1/2 md:-translate-x-1/2 md:-translate-y-1/2"
           onClick={(e) => e.stopPropagation()}
         >
           {/* Mobile drag handle */}
           <div className="md:hidden flex justify-center mb-4">
-            <div className="w-10 h-1 rounded-full bg-border-medium" />
+            <div className="w-10 h-1 rounded-full bg-white/[0.10]" />
           </div>
           {/* Header */}
           <div className="flex items-center justify-between mb-4">
@@ -103,14 +104,14 @@ export function NewMessageModal({ onClose, recentConversations }: NewMessageModa
             value={input}
             onChange={(e) => setInput(e.target.value)}
             autoFocus
-            className="w-full h-11 rounded-md bg-surface-2 border border-border-medium px-4 text-body text-text-primary placeholder:text-text-tertiary outline-none focus:border-cyan-border transition-colors"
+            className="w-full h-11 rounded-xl bg-white/[0.03] border border-white/[0.06] px-4 text-body text-text-primary placeholder:text-text-tertiary outline-none focus:border-cyan-primary/30 transition-colors"
           />
 
           {/* Resolution feedback */}
           <div className="mt-3 min-h-[40px]">
             {isResolving && (
               <div className="flex items-center gap-2">
-                <div className="h-4 w-4 border-2 border-border-medium border-t-cyan-primary rounded-full animate-spin" />
+                <div className="h-4 w-4 border-2 border-white/[0.10] border-t-cyan-primary rounded-full animate-spin" />
                 <span className="text-body-sm text-text-tertiary">Resolving...</span>
               </div>
             )}
@@ -130,7 +131,7 @@ export function NewMessageModal({ onClose, recentConversations }: NewMessageModa
                 >
                   <button
                     onClick={() => handleStart(resolvedAddress)}
-                    className="w-full flex items-center gap-3 px-3 py-2 rounded-lg hover:bg-surface-3 transition-colors"
+                    className="w-full flex items-center gap-3 px-3 py-2 rounded-lg hover:bg-white/[0.02] transition-colors"
                   >
                     <Avatar address={resolvedAddress} size={32} />
                     <div className="flex-1 min-w-0 text-left">
@@ -166,7 +167,7 @@ export function NewMessageModal({ onClose, recentConversations }: NewMessageModa
                   <button
                     key={conv.address}
                     onClick={() => handleStart(conv.address)}
-                    className="flex items-center gap-3 px-3 py-2 rounded-lg hover:bg-surface-3 transition-colors"
+                    className="flex items-center gap-3 px-3 py-2 rounded-lg hover:bg-white/[0.02] transition-colors"
                   >
                     <Avatar address={conv.address} size={32} />
                     <p className="text-label text-text-primary truncate">

@@ -1,3 +1,4 @@
+// src/components/pods/PodCard.tsx
 import { motion, useMotionValue, useSpring, useTransform } from 'framer-motion';
 import { useRef } from 'react';
 import { PodData } from '@/stores/pods';
@@ -37,7 +38,7 @@ export function PodCard({ pod, isOfficial = false, onClick }: PodCardProps) {
       style={{ rotateX, rotateY, transformPerspective: 800 }}
       whileHover={{ scale: 1.01 }}
       transition={{ duration: 0.2, scale: { duration: 0.2 } }}
-      className={`bg-surface-2 border border-border-subtle rounded-lg cursor-pointer transition-colors duration-150 ${
+      className={`bg-white/[0.02] border border-white/[0.06] rounded-xl cursor-pointer transition-colors duration-150 hover:border-cyan-primary/20 ${
         isOfficial ? 'border-t-2 border-t-cyan-primary p-6' : 'p-4'
       }`}
       onClick={onClick}
@@ -47,23 +48,23 @@ export function PodCard({ pod, isOfficial = false, onClick }: PodCardProps) {
         <div className="text-caption text-text-tertiary mb-2">
           {pod.category.charAt(0).toUpperCase() + pod.category.slice(1)}
         </div>
-        
+
         {/* Pod name */}
         <h3 className="text-h3 font-sans font-semibold text-text-primary mb-2">
           {pod.name}
         </h3>
-        
+
         {/* Description */}
         <p className="text-body-sm text-text-secondary line-clamp-2 flex-grow mb-4">
           {pod.description}
         </p>
-        
+
         {/* Bottom row */}
         <div className="flex items-center justify-between">
           <div className="text-caption text-text-tertiary">
             {pod.memberCount} members
           </div>
-          
+
           {/* Threshold badge if > 0 */}
           {pod.threshold > 0n && (
             <div className="bg-cyan-muted text-cyan-primary text-caption px-2 py-0.5 rounded-pill">

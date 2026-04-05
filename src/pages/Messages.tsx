@@ -98,7 +98,7 @@ export default function Messages() {
                 ))}
               </div>
             ) : (
-              <div className="rounded-lg bg-surface-2 border border-border-subtle p-8 text-center">
+              <div className="rounded-xl bg-white/[0.02] border border-white/[0.06] p-8 text-center">
                 <p className="text-body text-text-secondary">No conversations yet</p>
                 <p className="mt-2 text-body-sm text-text-tertiary">
                   Start a conversation by sending a message to any .qf name or address

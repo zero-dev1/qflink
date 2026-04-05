@@ -1,5 +1,6 @@
+// src/pages/DMChat.tsx
 import { useEffect, useRef, useMemo, useCallback, useState } from 'react';
-import { useParams, Link, useNavigate } from 'react-router-dom';
+import { useParams, Link } from 'react-router-dom';
 import { useMessagesStore } from '@/stores/messages';
 import { useWalletStore } from '@/stores/wallet';
 import { useUnreadStore } from '@/stores/unread';
@@ -12,7 +13,6 @@ import { reverseResolve } from '@/lib/qns';
 
 export default function DMChat() {
   const { address } = useParams<{ address: string }>();
-  const navigate = useNavigate();
   const { isConnected, evmAddress } = useWalletStore();
   const {
     messages,
@@ -49,20 +49,18 @@ export default function DMChat() {
     wasAtBottomRef.current = checkIsAtBottom();
   }, [checkIsAtBottom]);
 
-  // Fetch messages
+  // Fetch messages on mount
   useEffect(() => {
     if (!otherAddress || !isConnected) return;
     fetchMessages(otherAddress);
-    // Mark DM as seen when opened
     useUnreadStore.getState().markDMSeen(otherAddress);
   }, [otherAddress, isConnected, fetchMessages]);
 
-  // Poll every 8 seconds
+  // Poll every 8s
   useEffect(() => {
     if (!otherAddress || !isConnected) return;
     const interval = setInterval(() => {
       fetchMessages(otherAddress);
-      // Mark DM as seen during polling (user is actively viewing)
       useUnreadStore.getState().markDMSeen(otherAddress);
     }, 8000);
     return () => clearInterval(interval);
@@ -109,13 +107,17 @@ export default function DMChat() {
     });
   }, [dmMessages, evmAddress, recipientName]);
 
-  // Display name for header
-  const headerName = recipientName || (otherAddress ? `${otherAddress.slice(0, 6)}...${otherAddress.slice(-4)}` : 'Unknown');
+  // Display name for header — FIX: always show something
+  const headerDisplayName = recipientName
+    ? recipientName
+    : otherAddress
+      ? `${otherAddress.slice(0, 6)}...${otherAddress.slice(-4)}` 
+      : 'Unknown';
 
   // Disconnected state
   if (!isConnected) {
     return (
-      <div className="flex-1 flex flex-col items-center justify-center px-6 text-center">
+      <div className="h-full flex flex-col items-center justify-center px-6 text-center">
         <p className="text-body text-text-secondary">
           Connect your wallet to view this conversation
         </p>
@@ -131,7 +133,7 @@ export default function DMChat() {
 
   if (!otherAddress) {
     return (
-      <div className="flex-1 flex flex-col items-center justify-center px-6 text-center">
+      <div className="h-full flex flex-col items-center justify-center px-6 text-center">
         <p className="text-body text-text-secondary">Invalid address</p>
         <Link
           to="/messages"
@@ -146,7 +148,7 @@ export default function DMChat() {
   return (
     <div className="flex flex-col h-full">
       {/* Header */}
-      <div className="flex items-center gap-3 px-4 md:px-6 h-14 border-b border-border-subtle shrink-0">
+      <div className="flex items-center gap-3 px-4 md:px-6 h-14 border-b border-white/[0.04] shrink-0">
         <Link to="/messages">
           <Button variant="icon" aria-label="Back to messages">
             <svg width="20" height="20" viewBox="0 0 20 20" fill="none">
@@ -156,7 +158,14 @@ export default function DMChat() {
         </Link>
         <Avatar address={otherAddress} size={32} />
         <span className="text-label text-text-primary truncate">
-          {recipientName?.replace('.qf', '')}{recipientName && <span className="text-cyan-primary">.qf</span>}
+          {recipientName ? (
+            <>
+              {recipientName.replace('.qf', '')}
+              <span className="text-cyan-primary">.qf</span>
+            </>
+          ) : (
+            headerDisplayName
+          )}
         </span>
       </div>
 
@@ -192,7 +201,7 @@ export default function DMChat() {
                     <span className="text-cyan-primary">.qf</span>
                   </>
                 ) : (
-                  headerName
+                  headerDisplayName
                 )}
               </p>
               <p className="mt-1 text-body-sm text-text-tertiary">
@@ -209,9 +218,9 @@ export default function DMChat() {
       </div>
 
       {/* Chat input */}
-      <div className="shrink-0 px-4 md:px-6 py-3 pb-[calc(0.75rem+env(safe-area-inset-bottom))] border-t border-border-subtle bg-base">
+      <div className="shrink-0 px-4 md:px-6 py-3 pb-[calc(0.75rem+env(safe-area-inset-bottom))] border-t border-white/[0.04] bg-base">
         <ChatInput
-          placeholder={`Message ${recipientName || headerName}...`}
+          placeholder={`Message ${recipientName || headerDisplayName}...`}
           onSend={handleSend}
           disabled={!isConnected}
           isSending={isSending}

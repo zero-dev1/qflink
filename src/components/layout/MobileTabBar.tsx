@@ -14,6 +14,7 @@ const tabs = [
 
 export function MobileTabBar() {
   const totalUnreadDMs = useUnreadStore((s) => s.getTotalUnreadDMs());
+  const totalUnreadPods = useUnreadStore((s) => s.getTotalUnreadPods());
 
   return (
     <nav className="md:hidden fixed bottom-0 left-0 right-0 bg-base/80 backdrop-blur-xl border-t border-white/[0.04] z-50 pb-[env(safe-area-inset-bottom)]">
@@ -39,6 +40,11 @@ export function MobileTabBar() {
                       showCount
                       size="sm"
                       className="absolute -top-1 -right-2"
+                    />
+                  )}
+                  {tab.to === '/home' && totalUnreadPods > 0 && (
+                    <UnreadDot
+                      className="absolute -top-0.5 -right-0.5"
                     />
                   )}
                 </div>

@@ -460,9 +460,11 @@ export default function Landing() {
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             {pods.map((pod, i) => (
               <FadeIn key={pod.id.toString()} delay={i * 0.1}>
-                <Link to={isConnected ? `/pod/${pod.id}` : '/connect'}>
-                  <PodCard pod={pod} isOfficial={Number(pod.id) <= 3} onClick={() => navigate(isConnected ? `/pod/${pod.id}` : '/connect')} />
-                </Link>
+                <PodCard
+                  pod={pod}
+                  isOfficial={Number(pod.id) <= 3}
+                  onClick={() => navigate(isConnected ? `/pod/${pod.id}` : '/connect')}
+                />
               </FadeIn>
             ))}
           </div>

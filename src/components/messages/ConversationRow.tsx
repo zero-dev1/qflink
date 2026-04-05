@@ -1,3 +1,4 @@
+// src/components/messages/ConversationRow.tsx
 import { formatTimestamp } from '@/lib/utils';
 import { Avatar } from '@/components/ui/Avatar';
 import { UnreadDot } from '@/components/ui/UnreadDot';
@@ -16,7 +17,7 @@ export function ConversationRow({ conversation, isActive = false, onClick }: Con
     <button
       onClick={onClick}
       className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg transition-colors duration-150 text-left ${
-        isActive ? 'bg-surface-3' : 'hover:bg-surface-2'
+        isActive ? 'bg-white/[0.04]' : 'hover:bg-white/[0.02]'
       }`}
     >
       <Avatar address={address} size={48} />

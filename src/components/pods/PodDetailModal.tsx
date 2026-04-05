@@ -1,3 +1,4 @@
+// src/components/pods/PodDetailModal.tsx
 import { motion } from 'framer-motion';
 import { useNavigate } from 'react-router-dom';
 import { PodData } from '@/stores/pods';
@@ -42,12 +43,12 @@ export function PodDetailModal({
           animate={{ opacity: 1, scale: 1, y: 0 }}
           exit={{ opacity: 0, scale: 0.95, y: 8 }}
           transition={{ type: 'spring', stiffness: 350, damping: 28 }}
-          className="bg-surface-4 border border-border-medium rounded-lg z-50 w-full p-6 max-h-[85vh] overflow-y-auto md:max-w-modal md:rounded-b-lg rounded-b-none md:rounded-b-lg fixed bottom-0 left-0 right-0 md:bottom-auto md:left-auto md:right-auto md:fixed md:top-1/2 md:left-1/2 md:-translate-x-1/2 md:-translate-y-1/2"
+          className="bg-surface-4 border border-white/[0.06] rounded-t-xl md:rounded-xl z-50 w-full p-6 pb-[calc(1.5rem+env(safe-area-inset-bottom))] md:pb-6 max-h-[85vh] overflow-y-auto md:max-w-modal fixed bottom-0 left-0 right-0 md:bottom-auto md:left-auto md:right-auto md:fixed md:top-1/2 md:left-1/2 md:-translate-x-1/2 md:-translate-y-1/2"
           onClick={(e) => e.stopPropagation()}
         >
           {/* Mobile drag handle */}
           <div className="md:hidden flex justify-center mb-4">
-            <div className="w-10 h-1 rounded-full bg-border-medium" />
+            <div className="w-10 h-1 rounded-full bg-white/[0.10]" />
           </div>
           {/* Close button */}
           <div className="flex justify-end mb-4">
@@ -112,7 +113,7 @@ export function PodDetailModal({
             ) : isJoining ? (
               <Button variant="primary" disabled className="w-full">
                 <div className="flex items-center justify-center gap-2">
-                  <div className="animate-shimmer bg-gradient-to-r from-cyan-primary via-cyan-hover to-cyan-primary bg-[length:200%_100%] w-16 h-4 rounded" />
+                  <div className="h-4 w-4 border-2 border-white/[0.10] border-t-text-on-cyan rounded-full animate-spin" />
                   Joining...
                 </div>
               </Button>

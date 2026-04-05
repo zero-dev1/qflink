@@ -1,3 +1,4 @@
+// src/components/chat/MessageBubble.tsx
 import { motion } from 'framer-motion';
 import { formatMessageTime } from '@/lib/utils';
 import { Avatar } from '@/components/ui/Avatar';
@@ -25,7 +26,7 @@ export function MessageBubble({
     <motion.div
       initial={{ opacity: 0, scale: 0.95, y: 6 }}
       animate={{
-        opacity: isOptimistic ? 0.7 : 1,
+        opacity: isOptimistic ? 0.6 : 1,
         scale: 1,
         y: 0,
       }}
@@ -60,10 +61,19 @@ export function MessageBubble({
           <p className="text-body text-text-primary">{content}</p>
         </div>
 
-        {/* Timestamp */}
+        {/* Timestamp + optimistic status */}
         {showSender && (
-          <div className={`text-caption text-text-tertiary mt-0.5 ${isMine ? 'text-right' : ''}`}>
-            {formatMessageTime(timestamp)}
+          <div className={`flex items-center gap-1.5 mt-0.5 ${isMine ? 'justify-end' : ''}`}>
+            <span className="text-caption text-text-tertiary">
+              {formatMessageTime(timestamp)}
+            </span>
+            {isOptimistic && isMine && (
+              <span className="text-caption text-text-tertiary" title="Confirming on-chain...">
+                <svg width="12" height="12" viewBox="0 0 12 12" fill="none" className="inline animate-spin">
+                  <circle cx="6" cy="6" r="4.5" stroke="currentColor" strokeWidth="1" strokeDasharray="14 14" />
+                </svg>
+              </span>
+            )}
           </div>
         )}
       </div>

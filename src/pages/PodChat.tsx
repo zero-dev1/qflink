@@ -1,5 +1,6 @@
+// src/pages/PodChat.tsx
 import { useEffect, useRef, useMemo, useCallback } from 'react';
-import { useParams, Link, useNavigate } from 'react-router-dom';
+import { useParams, Link } from 'react-router-dom';
 import { usePodsStore } from '@/stores/pods';
 import { useWalletStore } from '@/stores/wallet';
 import { useUnreadStore } from '@/stores/unread';
@@ -10,18 +11,17 @@ import { Button } from '@/components/ui/Button';
 
 export default function PodChat() {
   const { id } = useParams<{ id: string }>();
-  const navigate = useNavigate();
   const { isConnected, evmAddress } = useWalletStore();
-  const { 
-    getPodById, 
-    messages, 
-    isLoadingMessages, 
+  const {
+    getPodById,
+    messages,
+    isLoadingMessages,
     messageFetchErrors,
-    isSending, 
-    fetchMessages, 
-    fetchPods, 
+    isSending,
+    fetchMessages,
+    fetchPods,
     sendMessage,
-    isUserMember 
+    isUserMember,
   } = usePodsStore();
   
   const messagesEndRef = useRef<HTMLDivElement>(null);
@@ -58,7 +58,6 @@ export default function PodChat() {
     if (podId === null) return;
     const interval = setInterval(() => {
       fetchMessages(podId);
-      // Mark pod as seen during polling (user is actively viewing)
       useUnreadStore.getState().markPodSeen(podId.toString());
     }, 8000);
     return () => clearInterval(interval);
@@ -73,7 +72,6 @@ export default function PodChat() {
 
   const handleSend = async (content: string) => {
     if (podId === null) return;
-    // Force scroll to bottom on own send
     wasAtBottomRef.current = true;
     await sendMessage(podId, content);
   };
@@ -90,8 +88,7 @@ export default function PodChat() {
         message.timestamp - prev.timestamp > 5 * 60 * 1000;
 
       const isMine = message.sender === evmAddress;
-      // Optimistic messages use Date.now() as id which is always > 1_000_000_000_000
-      const isOptimistic = message.id > 1_000_000_000_000;
+      const isOptimistic = message.isOptimistic || message.id > 1_000_000_000_000;
 
       return (
         <MessageBubble
@@ -109,7 +106,7 @@ export default function PodChat() {
 
   if (podId === null) {
     return (
-      <div className="flex-1 flex flex-col items-center justify-center px-6 text-center">
+      <div className="h-full flex flex-col items-center justify-center px-6 text-center">
         <p className="text-body text-text-secondary">Invalid pod ID</p>
         <Link
           to="/explore"
@@ -124,9 +121,9 @@ export default function PodChat() {
   return (
     <div className="flex flex-col h-full">
       {/* Header */}
-      <div className="flex items-center gap-3 px-4 md:px-6 h-14 border-b border-border-subtle shrink-0">
-        {/* Back arrow — always visible on mobile */}
-        <Link to="/explore" className="md:hidden">
+      <div className="flex items-center gap-3 px-4 md:px-6 h-14 border-b border-white/[0.04] shrink-0">
+        {/* Back arrow — visible on all sizes */}
+        <Link to="/explore">
           <Button variant="icon" aria-label="Back to explore">
             <svg width="20" height="20" viewBox="0 0 20 20" fill="none">
               <path d="M12.5 15L7.5 10L12.5 5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
@@ -138,7 +135,9 @@ export default function PodChat() {
         ) : (
           <>
             <h2 className="text-label text-text-primary truncate">{pod?.name}</h2>
-            <span className="text-caption text-text-tertiary ml-auto shrink-0">{pod?.memberCount || 0} {pod?.memberCount === 1 ? 'member' : 'members'}</span>
+            <span className="text-caption text-text-tertiary ml-auto shrink-0">
+              {pod?.memberCount || 0} {pod?.memberCount === 1 ? 'member' : 'members'}
+            </span>
           </>
         )}
       </div>
@@ -156,7 +155,6 @@ export default function PodChat() {
         </div>
       ) : isLoadingMessages[podId] ? (
         <div className="flex-1 px-4 md:px-6 py-4 space-y-4">
-          {/* Alternate left/right aligned skeletons to mimic chat */}
           <div className="flex gap-2">
             <Skeleton className="h-6 w-6 rounded-full shrink-0" />
             <Skeleton className="h-12 w-48 rounded-lg" />
@@ -195,7 +193,7 @@ export default function PodChat() {
 
       {/* Bottom area — connect / join / input */}
       {!isConnected ? (
-        <div className="shrink-0 px-4 md:px-6 py-3 pb-[calc(0.75rem+env(safe-area-inset-bottom))] border-t border-border-subtle text-center">
+        <div className="shrink-0 px-4 md:px-6 py-3 pb-[calc(0.75rem+env(safe-area-inset-bottom))] border-t border-white/[0.04] text-center">
           <Link
             to="/connect"
             className="text-label text-cyan-primary hover:text-cyan-hover"
@@ -204,7 +202,7 @@ export default function PodChat() {
           </Link>
         </div>
       ) : !isUserMember(podId) ? (
-        <div className="shrink-0 px-4 md:px-6 py-3 pb-[calc(0.75rem+env(safe-area-inset-bottom))] bg-surface-2 border-t border-border-subtle text-center">
+        <div className="shrink-0 px-4 md:px-6 py-3 pb-[calc(0.75rem+env(safe-area-inset-bottom))] bg-white/[0.02] border-t border-white/[0.04] text-center">
           <p className="text-body-sm text-text-secondary mb-2">
             Join this pod to send messages
           </p>
@@ -216,7 +214,7 @@ export default function PodChat() {
           </Link>
         </div>
       ) : (
-        <div className="shrink-0 px-4 md:px-6 py-3 pb-[calc(0.75rem+env(safe-area-inset-bottom))] border-t border-border-subtle bg-base">
+        <div className="shrink-0 px-4 md:px-6 py-3 pb-[calc(0.75rem+env(safe-area-inset-bottom))] border-t border-white/[0.04] bg-base">
           <ChatInput
             placeholder={`Message ${pod?.name || 'pod'}...`}
             onSend={handleSend}
