@@ -94,6 +94,10 @@ export default {
           '0%': { strokeDashoffset: '24' },
           '100%': { strokeDashoffset: '0' },
         },
+        'badge-shimmer': {
+          '0%': { backgroundPosition: '-100% 0' },
+          '100%': { backgroundPosition: '200% 0' },
+        },
       },
       animation: {
         'shimmer': 'shimmer 2s ease-in-out infinite',
@@ -101,6 +105,7 @@ export default {
         'slide-up': 'slide-up 200ms ease',
         'border-pulse': 'border-pulse 1.5s ease-in-out infinite',
         'check-draw': 'check-draw 0.3s ease-out forwards',
+        'badge-shimmer': 'badge-shimmer 1.5s ease-in-out 1',
       },
     },
   },
