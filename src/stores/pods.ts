@@ -124,6 +124,13 @@ export const usePodsStore = create<PodsStore>((set, get) => ({
       await result.confirmation;
       
       useToastStore.getState().addToast("success", "You're in");
+      
+      // Mark getting started step
+      try {
+        const { useGettingStartedStore } = await import('@/stores/gettingStarted');
+        useGettingStartedStore.getState().markStep('hasJoinedPod');
+      } catch {}
+      
       await get().fetchUserPods();
       set({ isJoining: null });
       return true;
@@ -159,6 +166,13 @@ export const usePodsStore = create<PodsStore>((set, get) => ({
     try {
       const result = await contractSendPodMessage(podId, content);
       await result.confirmation;
+      
+      // Mark getting started step
+      try {
+        const { useGettingStartedStore } = await import('@/stores/gettingStarted');
+        useGettingStartedStore.getState().markStep('hasSentMessage');
+      } catch {}
+      
       set({ isSending: false });
       return true;
     } catch (error) {

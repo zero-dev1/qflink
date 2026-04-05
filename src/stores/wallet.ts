@@ -153,6 +153,12 @@ export const useWalletStore = create<WalletState>()(
           // Success
           set({ isConnected: true, isConnecting: false });
 
+          // Mark getting started step
+          try {
+            const { useGettingStartedStore } = await import('@/stores/gettingStarted');
+            useGettingStartedStore.getState().markStep('hasConnected');
+          } catch {}
+
           // Resolve QNS name in background
           get().refreshName().catch(() => {});
 

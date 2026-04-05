@@ -168,6 +168,12 @@ export const useMessagesStore = create<MessagesStore>((set, get) => ({
       const result = await contractSendMessage(lower as `0x${string}`, content);
       await result.confirmation;
       
+      // Mark getting started step
+      try {
+        const { useGettingStartedStore } = await import('@/stores/gettingStarted');
+        useGettingStartedStore.getState().markStep('hasSentMessage');
+      } catch {}
+      
       // Mark as confirmed by removing optimistic flag
       set((state) => ({
         messages: {
