@@ -14,7 +14,7 @@ export function PodCard({ pod, isOfficial = false, onClick }: PodCardProps) {
       initial={{ opacity: 0, y: 8 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.2 }}
-      whileHover={{ backgroundColor: 'var(--color-surface-3)' }}
+      whileHover={{ backgroundColor: '#1A1A1A' }}
       className={`bg-surface-2 border border-border-subtle rounded-lg cursor-pointer transition-colors duration-150 ${
         isOfficial ? 'border-t-2 border-t-cyan-primary p-6' : 'p-4'
       }`}

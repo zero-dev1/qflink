@@ -159,6 +159,7 @@ export default function Explore() {
           <PodDetailModal
             pod={selectedPod}
             onClose={() => setSelectedPod(null)}
+            isConnected={isConnected}
             isUserMember={isUserMember(Number(selectedPod.id))}
             isJoining={isJoining === Number(selectedPod.id)}
             onJoin={handleJoin}

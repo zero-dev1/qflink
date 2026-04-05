@@ -1,10 +1,9 @@
-import { useEffect, useRef, useMemo } from 'react';
+import { useEffect, useRef, useMemo, useCallback } from 'react';
 import { useParams, Link, useNavigate } from 'react-router-dom';
 import { usePodsStore } from '@/stores/pods';
 import { useWalletStore } from '@/stores/wallet';
 import { MessageBubble } from '@/components/chat/MessageBubble';
 import { ChatInput } from '@/components/chat/ChatInput';
-import { Avatar } from '@/components/ui/Avatar';
 import { Skeleton } from '@/components/ui/Skeleton';
 import { Button } from '@/components/ui/Button';
 
@@ -25,63 +24,67 @@ export default function PodChat() {
   
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const messagesContainerRef = useRef<HTMLDivElement>(null);
-  
+  const wasAtBottomRef = useRef(true);
+
   const podId = id ? Number(id) : null;
-  const pod = podId ? getPodById(podId) : null;
-  const podMessages = podId ? (messages[podId] || []) : [];
+  const pod = podId !== null ? getPodById(podId) : null;
+  const podMessages = podId !== null ? messages[podId] || [] : [];
+
+  // Check if user is scrolled to bottom
+  const checkIsAtBottom = useCallback(() => {
+    if (!messagesContainerRef.current) return true;
+    const { scrollTop, scrollHeight, clientHeight } = messagesContainerRef.current;
+    return scrollHeight - scrollTop - clientHeight < 100;
+  }, []);
+
+  // Track scroll position
+  const handleScroll = useCallback(() => {
+    wasAtBottomRef.current = checkIsAtBottom();
+  }, [checkIsAtBottom]);
 
   // Fetch initial data
   useEffect(() => {
-    if (!podId) return;
-    
+    if (podId === null) return;
     fetchMessages(podId);
-    if (!pod) {
-      fetchPods();
-    }
+    if (!pod) fetchPods();
   }, [podId, fetchMessages, fetchPods, pod]);
 
-  // Polling for new messages
+  // Poll for new messages
   useEffect(() => {
-    if (!podId) return;
-    
-    const interval = setInterval(() => {
-      fetchMessages(podId);
-    }, 8000);
-    
+    if (podId === null) return;
+    const interval = setInterval(() => fetchMessages(podId), 8000);
     return () => clearInterval(interval);
   }, [podId, fetchMessages]);
 
-  // Auto-scroll to bottom
+  // Auto-scroll only when user was already at bottom
   useEffect(() => {
-    if (messagesEndRef.current) {
+    if (wasAtBottomRef.current && messagesEndRef.current) {
       messagesEndRef.current.scrollIntoView({ behavior: 'smooth' });
     }
   }, [podMessages]);
 
   const handleSend = async (content: string) => {
-    if (!podId) return;
+    if (podId === null) return;
+    // Force scroll to bottom on own send
+    wasAtBottomRef.current = true;
     await sendMessage(podId, content);
   };
 
-  // Check if user is at bottom for auto-scroll decisions
-  const isAtBottom = () => {
-    if (!messagesContainerRef.current) return false;
-    const { scrollTop, scrollHeight, clientHeight } = messagesContainerRef.current;
-    return scrollHeight - scrollTop - clientHeight < 100;
-  };
+  // Build sorted messages with collapse logic
+  const renderedMessages = useMemo(() => {
+    const sorted = [...podMessages].sort((a, b) => a.timestamp - b.timestamp);
 
-  // Render messages with consecutive sender collapse
-  const renderMessages = () => {
-    const sortedMessages = [...podMessages].sort((a, b) => a.timestamp - b.timestamp);
-    
-    return sortedMessages.map((message, index) => {
-      const prevMessage = sortedMessages[index - 1];
-      const showSender = !prevMessage || 
-        prevMessage.sender !== message.sender || 
-        (message.timestamp - prevMessage.timestamp) > 5 * 60 * 1000; // 5 minutes
-      
+    return sorted.map((message, index) => {
+      const prev = sorted[index - 1];
+      const showSender =
+        !prev ||
+        prev.sender !== message.sender ||
+        message.timestamp - prev.timestamp > 5 * 60 * 1000;
+
       const isMine = message.sender === evmAddress;
-      
+      // Optimistic messages use Date.now() as id which is always > 1_000_000_000_000
+      const isOptimistic = message.id > 1_000_000_000_000;
+
       return (
         <MessageBubble
           key={message.id}
@@ -90,16 +93,20 @@ export default function PodChat() {
           timestamp={message.timestamp}
           isMine={isMine}
           showSender={showSender}
+          isOptimistic={isOptimistic}
         />
       );
     });
-  };
+  }, [podMessages, evmAddress]);
 
-  if (!podId) {
+  if (podId === null) {
     return (
       <div className="flex-1 flex flex-col items-center justify-center px-6 text-center">
         <p className="text-body text-text-secondary">Invalid pod ID</p>
-        <Link to="/explore" className="mt-4 text-label text-cyan-primary hover:text-cyan-hover transition-colors">
+        <Link
+          to="/explore"
+          className="mt-4 text-label text-cyan-primary hover:text-cyan-hover transition-colors"
+        >
           Back to Explore →
         </Link>
       </div>
@@ -110,37 +117,35 @@ export default function PodChat() {
     <div className="flex flex-col h-full">
       {/* Header */}
       <div className="h-14 px-4 md:px-6 flex items-center gap-3 border-b border-border-subtle shrink-0">
-        {/* Back button on mobile */}
-        <Button 
-          variant="icon" 
+        <Button
+          variant="icon"
           onClick={() => navigate('/explore')}
           className="md:hidden"
         >
           ←
         </Button>
-        
-        {/* Pod name */}
         <h2 className="text-h3 font-sans font-semibold text-text-primary">
           {pod?.name || `Pod ${podId}`}
         </h2>
-        
-        {/* Member count */}
         <div className="ml-auto text-caption text-text-tertiary">
           {pod?.memberCount || 0} members
         </div>
       </div>
 
       {/* Messages area */}
-      <div 
+      <div
         ref={messagesContainerRef}
+        onScroll={handleScroll}
         className="flex-1 overflow-y-auto px-4 md:px-6 py-4"
       >
         {isLoadingMessages[podId] ? (
-          // Loading skeletons
           <>
             {[1, 2, 3, 4, 5].map((i) => (
-              <div key={i} className={`flex ${i % 2 === 0 ? 'justify-end' : 'justify-start'} mt-4`}>
-                <div className="max-w-[75%] md:max-w-[85%]">
+              <div
+                key={i}
+                className={`flex ${i % 2 === 0 ? 'justify-end' : 'justify-start'} mt-4`}
+              >
+                <div className="max-w-[85%] md:max-w-[75%]">
                   <Skeleton className="h-4 w-32 mb-1" />
                   <Skeleton className="h-8 w-48" />
                 </div>
@@ -148,25 +153,26 @@ export default function PodChat() {
             ))}
           </>
         ) : podMessages.length === 0 ? (
-          // Empty state
           <div className="flex items-center justify-center h-full">
             <p className="text-body-sm text-text-tertiary text-center">
               No messages yet. Start the conversation
             </p>
           </div>
         ) : (
-          // Messages
           <>
-            {renderMessages()}
+            {renderedMessages}
             <div ref={messagesEndRef} />
           </>
         )}
       </div>
 
-      {/* Chat input or connect prompt */}
+      {/* Bottom area — connect / join / input */}
       {!isConnected ? (
         <div className="px-6 py-4 border-t border-border-subtle text-center">
-          <Link to="/connect" className="text-label text-cyan-primary hover:text-cyan-hover">
+          <Link
+            to="/connect"
+            className="text-label text-cyan-primary hover:text-cyan-hover"
+          >
             Connect wallet to chat →
           </Link>
         </div>
@@ -175,7 +181,10 @@ export default function PodChat() {
           <p className="text-body-sm text-text-secondary mb-2">
             Join this pod to send messages
           </p>
-          <Link to="/explore" className="text-label text-cyan-primary hover:text-cyan-hover">
+          <Link
+            to="/explore"
+            className="text-label text-cyan-primary hover:text-cyan-hover"
+          >
             Back to Explore →
           </Link>
         </div>

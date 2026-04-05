@@ -1,4 +1,6 @@
+import { motion } from 'framer-motion';
 import { formatMessageTime } from '@/lib/utils';
+import { Avatar } from '@/components/ui/Avatar';
 
 interface MessageBubbleProps {
   sender: string;
@@ -7,24 +9,30 @@ interface MessageBubbleProps {
   isMine: boolean;
   showSender: boolean;
   senderName?: string;
+  isOptimistic?: boolean;
 }
 
-export function MessageBubble({ 
-  sender, 
-  content, 
-  timestamp, 
-  isMine, 
-  showSender, 
-  senderName 
+export function MessageBubble({
+  sender,
+  content,
+  timestamp,
+  isMine,
+  showSender,
+  senderName,
+  isOptimistic = false,
 }: MessageBubbleProps) {
   return (
-    <div className={`flex ${isMine ? 'justify-end' : 'justify-start'} ${!showSender ? 'mt-0.5' : 'mt-4'}`}>
-      <div className={`max-w-[75%] md:max-w-[85%]`}>
-        {/* Show sender info for their messages */}
+    <motion.div
+      initial={{ opacity: 0, scale: 0.97, y: 4 }}
+      animate={{ opacity: isOptimistic ? 0.7 : 1, scale: 1, y: 0 }}
+      transition={{ duration: 0.15, ease: 'easeOut' }}
+      className={`flex ${isMine ? 'justify-end' : 'justify-start'} ${!showSender ? 'mt-0.5' : 'mt-4'}`}
+    >
+      <div className="max-w-[85%] md:max-w-[75%]">
+        {/* Sender info for their messages */}
         {showSender && !isMine && (
           <div className="flex items-center gap-2 mb-1">
-            {/* Avatar placeholder - 24px */}
-            <div className="w-6 h-6 bg-surface-3 rounded-full flex-shrink-0"></div>
+            <Avatar address={sender} size={24} />
             <div className="text-caption text-text-tertiary">
               {senderName && senderName.endsWith('.qf') ? (
                 <>
@@ -32,24 +40,24 @@ export function MessageBubble({
                   <span className="text-cyan-primary">.qf</span>
                 </>
               ) : (
-                senderName || `${sender.slice(0, 6)}...${sender.slice(-4)}`
+                senderName || `${sender.slice(0, 6)}...${sender.slice(-4)}` 
               )}
             </div>
           </div>
         )}
-        
+
         {/* Message content */}
         <div className={isMine ? 'bg-cyan-muted rounded-lg px-3 py-2' : ''}>
           <p className="text-body text-text-primary">{content}</p>
         </div>
-        
+
         {/* Timestamp */}
         {showSender && (
-          <div className="text-caption text-text-tertiary mt-0.5">
+          <div className={`text-caption text-text-tertiary mt-0.5 ${isMine ? 'text-right' : ''}`}>
             {formatMessageTime(timestamp)}
           </div>
         )}
       </div>
-    </div>
+    </motion.div>
   );
 }
