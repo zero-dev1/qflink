@@ -86,11 +86,21 @@ export default {
           '0%': { opacity: '0', transform: 'translateY(8px)' },
           '100%': { opacity: '1', transform: 'translateY(0)' },
         },
+        'border-pulse': {
+          '0%, 100%': { borderColor: 'rgba(6,182,212,0.25)' },
+          '50%': { borderColor: 'rgba(6,182,212,0.6)' },
+        },
+        'check-draw': {
+          '0%': { strokeDashoffset: '24' },
+          '100%': { strokeDashoffset: '0' },
+        },
       },
       animation: {
         'shimmer': 'shimmer 2s ease-in-out infinite',
         'fade-in': 'fade-in 200ms ease',
         'slide-up': 'slide-up 200ms ease',
+        'border-pulse': 'border-pulse 1.5s ease-in-out infinite',
+        'check-draw': 'check-draw 0.3s ease-out forwards',
       },
     },
   },
