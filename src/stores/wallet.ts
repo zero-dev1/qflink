@@ -16,6 +16,7 @@ import {
 import { warmUpPapi, getTypedApi } from "@/lib/papiClient";
 import { reverseResolve, clearNameCache } from "@/lib/qns";
 import { hapticSuccess, chimeSuccess } from "@/lib/feedback";
+import { deriveEncryptionKeypair, type EncryptionKeyPair } from '@/lib/encryption';
 
 // ─── Types ───────────────────────────────────────────────────────────
 
@@ -32,6 +33,7 @@ export interface WalletState extends PersistedState {
   isConnected: boolean;
   isConnecting: boolean;
   walletError: string | null;
+  encryptionKeyPair: EncryptionKeyPair | null;
 
   connect: (walletType: "talisman" | "subwallet") => Promise<void>;
   disconnect: () => void;
@@ -85,6 +87,7 @@ export const useWalletStore = create<WalletState>()(
       isConnected: false,
       isConnecting: false,
       walletError: null,
+      encryptionKeyPair: null,
 
       connect: async (walletType) => {
         set({ isConnecting: true, walletError: null });
@@ -154,6 +157,51 @@ export const useWalletStore = create<WalletState>()(
           // Success
           set({ isConnected: true, isConnecting: false });
           
+          // Derive encryption keypair (requires one wallet signature)
+          let encryptionKeyPair: EncryptionKeyPair | null = null;
+          try {
+            const signer = getCurrentConnection()?.signer;
+            if (signer) {
+              const signMessage = async (message: string): Promise<Uint8Array> => {
+                // Use the polkadot signer to sign a raw message
+                const encoder = new TextEncoder();
+                const messageBytes = encoder.encode(message);
+                const result = await signer.polkadotSigner.signBytes(messageBytes);
+                return new Uint8Array(result);
+              };
+              encryptionKeyPair = await deriveEncryptionKeypair(signMessage);
+              set({ encryptionKeyPair });
+            }
+          } catch (encErr) {
+            // Non-fatal — DMs will fall back to plaintext warning
+            console.warn('[wallet] Encryption keypair derivation failed:', encErr);
+          }
+          
+          // If user has no on-chain profile yet, register with encryption pubkey
+          if (encryptionKeyPair) {
+            try {
+              const { getProfile, registerProfile, updateProfile } = await import('@/lib/contractCalls');
+              const { publicKeyToBase64 } = await import('@/lib/encryption');
+              const profile = await getProfile(evmAddr as `0x${string}`);
+              const pubkeyHex = ('0x' + Array.from(encryptionKeyPair.publicKey)
+                .map((b: number) => b.toString(16).padStart(2, '0'))
+                .join('')) as `0x${string}`;
+
+              if (!profile) {
+                // User not registered — will register when they claim a .qf name
+                // Store pubkey for later use during registration
+              } else if (
+                profile.encryptionPubkey === '0x' ||
+                /^0x0+$/.test(profile.encryptionPubkey)
+              ) {
+                // Profile exists but no encryption pubkey — update it
+                await updateProfile(profile.displayName, pubkeyHex);
+              }
+            } catch (pubkeyErr) {
+              console.warn('[wallet] Failed to update encryption pubkey on profile:', pubkeyErr);
+            }
+          }
+          
           // Haptic and sound feedback
           hapticSuccess();
           chimeSuccess();
@@ -207,6 +255,7 @@ export const useWalletStore = create<WalletState>()(
           accountMapped: false,
           walletError: null,
           qnsName: null,
+          encryptionKeyPair: null,
         });
       },
 
@@ -252,7 +301,16 @@ export const useWalletStore = create<WalletState>()(
           // QNS gold standard: warmUpPapi → connect → on fail, disconnect
           warmUpPapi()
             .then(() => state.connect(walletType))
-            .catch(() => state.disconnect());
+            .catch((err) => {
+              console.warn('[wallet] Silent reconnect failed:', err);
+              state.disconnect();
+              // Show feedback after a tick so the toast store is ready
+              setTimeout(() => {
+                import('@/stores/toast').then(({ useToastStore }) => {
+                  useToastStore.getState().addToast('info', 'Session expired — please reconnect your wallet');
+                }).catch(() => {});
+              }, 500);
+            });
         };
       },
     }

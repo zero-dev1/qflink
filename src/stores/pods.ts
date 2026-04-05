@@ -9,11 +9,15 @@ import {
   getUserPods,
   joinPod as contractJoinPod,
   isMember,
+  isBanned,
+  checkPodAccess,
+  getEntryFee,
   getPodMessages,
   sendPodMessage as contractSendPodMessage,
   getPodMessageCount,
 } from '@/lib/contractCalls';
 import { hapticSuccess, chimeSuccess, hapticTap, hapticError } from '@/lib/feedback';
+import { getContractErrorMessage } from '@/lib/contractErrors';
 
 export interface PodData {
   id: bigint;
@@ -139,30 +143,87 @@ export const usePodsStore = create<PodsStore>((set, get) => ({
   },
   
   joinPod: async (podId: number) => {
+    const evmAddress = useWalletStore.getState().evmAddress;
+    if (!evmAddress) {
+      useToastStore.getState().addToast("error", "Wallet not connected");
+      return false;
+    }
+
     set({ isJoining: podId });
-    
+
     try {
+      // Pre-flight checks before spending gas
+      const addr = evmAddress as `0x${string}`;
+
+      // 1. Already a member?
+      const alreadyMember = await isMember(podId, addr);
+      if (alreadyMember) {
+        useToastStore.getState().addToast("info", "You're already a member");
+        set({ isJoining: null });
+        return true;
+      }
+
+      // 2. Banned?
+      const banned = await isBanned(podId, addr);
+      if (banned) {
+        useToastStore.getState().addToast("error", "You are banned from this pod");
+        hapticError();
+        set({ isJoining: null });
+        return false;
+      }
+
+      // 3. Access check (token gate / balance threshold)
+      const access = await checkPodAccess(podId, addr);
+      if (!access.granted) {
+        const pod = get().getPodById(podId);
+        const threshold = pod?.threshold ?? 0n;
+        if (threshold > 0n) {
+          const balance = useWalletStore.getState().balance;
+          if (balance < threshold) {
+            useToastStore.getState().addToast(
+              "error",
+              `Requires ${Number(threshold) / 1e18} QF — you have ${Number(balance) / 1e18} QF` 
+            );
+            hapticError();
+            set({ isJoining: null });
+            return false;
+          }
+        }
+        useToastStore.getState().addToast("error", "Access denied — check pod requirements");
+        hapticError();
+        set({ isJoining: null });
+        return false;
+      }
+
+      // All checks passed — submit tx
       const result = await contractJoinPod(podId);
-      await result.confirmation;
-      
+      const confirmation = await result.confirmation;
+
+      if (!confirmation.confirmed) {
+        const errorMsg = confirmation.error || 'Transaction failed';
+        useToastStore.getState().addToast("error", errorMsg);
+        hapticError();
+        set({ isJoining: null });
+        return false;
+      }
+
       useToastStore.getState().addToast("success", "You're in");
-      
-      // Haptic and sound feedback
       hapticSuccess();
       chimeSuccess();
-      
-      // Mark getting started step
+
       try {
         const { useGettingStartedStore } = await import('@/stores/gettingStarted');
         useGettingStartedStore.getState().markStep('hasJoinedPod');
       } catch {}
-      
+
       await get().fetchUserPods();
       set({ isJoining: null });
       return true;
     } catch (error) {
       console.error('Failed to join pod:', error);
-      useToastStore.getState().addToast("error", "Failed to join pod");
+      const errorMsg = getContractErrorMessage(error);
+      useToastStore.getState().addToast("error", errorMsg);
+      hapticError();
       set({ isJoining: null });
       return false;
     }
@@ -197,7 +258,11 @@ export const usePodsStore = create<PodsStore>((set, get) => ({
     try {
       // 2. Contract write — this is the slow part
       const result = await contractSendPodMessage(podId, content);
-      await result.confirmation;
+      const confirmation = await result.confirmation;
+
+      if (!confirmation.confirmed) {
+        throw new Error(confirmation.error || 'Transaction not confirmed');
+      }
       
       // 3. Success — mark confirmed (remove isOptimistic or refetch)
       set((state) => ({
@@ -229,7 +294,7 @@ export const usePodsStore = create<PodsStore>((set, get) => ({
         isSending: false,
       }));
       
-      useToastStore.getState().addToast("error", "Failed to send message");
+      useToastStore.getState().addToast("error", getContractErrorMessage(error));
       
       // Haptic feedback for error
       hapticError();

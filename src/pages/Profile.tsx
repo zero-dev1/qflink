@@ -13,6 +13,7 @@ import { PodListItem } from '@/components/home/PodListItem';
 import { formatBalance, formatCompactBalance } from '@/lib/utils';
 import { getProfile } from '@/lib/contractCalls';
 import type { UserProfile } from '@/lib/contractCalls';
+import { getBadgesForName, type UserBadge, BADGE_TYPES } from '@/lib/badges';
 
 // ── Stagger container for card entrance ─────────────────────────────
 const stagger = {
@@ -33,6 +34,8 @@ export default function Profile() {
 
   const [profile, setProfile] = useState<UserProfile | null>(null);
   const [isLoadingProfile, setIsLoadingProfile] = useState(true);
+  const [badges, setBadges] = useState<UserBadge[]>([]);
+  const [isLoadingBadges, setIsLoadingBadges] = useState(false);
 
   // Fetch on-chain profile + user pods
   useEffect(() => {
@@ -47,6 +50,19 @@ export default function Profile() {
     fetchPods();
     fetchUserPods();
   }, [isConnected, evmAddress, fetchPods, fetchUserPods]);
+
+  // Fetch QNS on-chain badges
+  useEffect(() => {
+    if (!qnsName) {
+      setBadges([]);
+      return;
+    }
+    setIsLoadingBadges(true);
+    getBadgesForName(qnsName)
+      .then(setBadges)
+      .catch(() => setBadges([]))
+      .finally(() => setIsLoadingBadges(false));
+  }, [qnsName]);
 
   // Compute created pods
   const createdPods = pods.filter(
@@ -145,12 +161,26 @@ export default function Profile() {
               </a>
             ) : null}
 
-            {/* Badges */}
-            {!isLoadingProfile && (
+            {/* QNS On-Chain Badges — only show if user has real badges */}
+            {!isLoadingProfile && !isLoadingBadges && badges.length > 0 && (
               <div className="mt-3 flex flex-wrap gap-2">
-                {profile && <BadgePill label="Registered" variant="cyan" />}
-                {createdPods.length > 0 && <BadgePill label="Creator" variant="success" />}
-                {userPodIds.length > 0 && <BadgePill label="Member" variant="cyan" />}
+                {badges.map((badge) => (
+                  <span
+                    key={badge.type}
+                    className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-caption font-medium"
+                    style={{
+                      backgroundColor: `${badge.color}15`,
+                      color: badge.color,
+                      border: `1px solid ${badge.color}30`,
+                    }}
+                  >
+                    {badge.icon === 'crown' && '👑'}
+                    {badge.icon === 'shield' && '🛡️'}
+                    {badge.icon === 'flask' && '🧪'}
+                    {badge.icon === 'megaphone' && '📣'}
+                    {badge.label}
+                  </span>
+                ))}
               </div>
             )}
           </div>

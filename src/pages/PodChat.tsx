@@ -1,5 +1,5 @@
 // src/pages/PodChat.tsx
-import { useEffect, useRef, useMemo, useCallback } from 'react';
+import { useEffect, useRef, useMemo, useCallback, useState } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { usePodsStore } from '@/stores/pods';
 import { useWalletStore } from '@/stores/wallet';
@@ -27,6 +27,7 @@ export default function PodChat() {
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const messagesContainerRef = useRef<HTMLDivElement>(null);
   const wasAtBottomRef = useRef(true);
+  const [isBannedFromPod, setIsBannedFromPod] = useState(false);
 
   const podId = id ? Number(id) : null;
   const pod = podId !== null ? getPodById(podId) : null;
@@ -62,6 +63,14 @@ export default function PodChat() {
     }, 8000);
     return () => clearInterval(interval);
   }, [podId, fetchMessages]);
+
+  // Check ban status
+  useEffect(() => {
+    if (podId === null || !isConnected || !evmAddress) return;
+    import('@/lib/contractCalls').then(({ isBanned }) => {
+      isBanned(podId, evmAddress as `0x${string}`).then(setIsBannedFromPod).catch(() => {});
+    });
+  }, [podId, isConnected, evmAddress]);
 
   // Auto-scroll only when user was already at bottom
   useEffect(() => {
@@ -191,7 +200,7 @@ export default function PodChat() {
         </div>
       )}
 
-      {/* Bottom area — connect / join / input */}
+      {/* Bottom area — connect / join / banned / input */}
       {!isConnected ? (
         <div className="shrink-0 px-4 md:px-6 py-3 pb-[calc(0.75rem+env(safe-area-inset-bottom))] border-t border-white/[0.04] text-center">
           <Link
@@ -200,6 +209,12 @@ export default function PodChat() {
           >
             Connect wallet to chat →
           </Link>
+        </div>
+      ) : isBannedFromPod ? (
+        <div className="shrink-0 px-4 md:px-6 py-3 pb-[calc(0.75rem+env(safe-area-inset-bottom))] bg-red-500/5 border-t border-red-500/20 text-center">
+          <p className="text-body-sm text-red-400">
+            You are banned from this pod
+          </p>
         </div>
       ) : !isUserMember(podId) ? (
         <div className="shrink-0 px-4 md:px-6 py-3 pb-[calc(0.75rem+env(safe-area-inset-bottom))] bg-white/[0.02] border-t border-white/[0.04] text-center">

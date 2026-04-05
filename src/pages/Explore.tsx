@@ -57,6 +57,13 @@ export default function Explore() {
   }, [pods, debouncedQuery]);
 
   // Split into official and community
+  // TODO: Once QNS badge contract is live, determine Official status by
+  // checking if the pod creator holds a 'team' or 'dapplab' badge.
+  // Implementation should:
+  // 1. When pods are fetched, also fetch creator's badges (batch or cache)
+  // 2. Tag each pod with isOfficial: boolean based on team/dapplab badges
+  // 3. Split in Explore based on the isOfficial flag
+  // For now, first 3 pods are treated as Official.
   const { officialPods, communityPods } = useMemo(() => {
     const sorted = [...filteredPods].sort((a, b) => Number(a.id) - Number(b.id));
     return {

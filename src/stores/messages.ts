@@ -6,10 +6,18 @@ import {
   getConversations,
   getMessages,
   sendMessage as contractSendMessage,
+  getProfile,
 } from '@/lib/contractCalls';
 import type { DirectMessageData } from '@/lib/contractCalls';
 import { reverseResolve } from '@/lib/qns';
 import { hapticTap, hapticError } from '@/lib/feedback';
+import {
+  encryptMessage,
+  decryptMessage,
+  base64ToPublicKey,
+  publicKeyToBase64,
+} from '@/lib/encryption';
+import { getContractErrorMessage } from '@/lib/contractErrors';
 
 export interface ConversationItem {
   address: string;
@@ -26,6 +34,7 @@ export interface DMMessage {
   timestamp: number;
   id: string;
   isOptimistic?: boolean;
+  isEncrypted?: boolean;
 }
 
 interface MessagesStore {
@@ -131,13 +140,60 @@ export const useMessagesStore = create<MessagesStore>((set, get) => ({
         100
       );
       
-      const mapped: DMMessage[] = raw.map((m, i) => ({
-        sender: m.sender.toLowerCase(),
-        recipient: m.recipient.toLowerCase(),
-        content: m.content,
-        timestamp: m.timestamp,
-        id: `${m.sender}-${m.timestamp}-${i}`,
-      }));
+      const encryptionKeyPair = useWalletStore.getState().encryptionKeyPair;
+
+      const mapped: DMMessage[] = await Promise.all(
+        raw.map(async (m, i) => {
+          let content = m.content;
+          let decryptionFailed = false;
+
+          // Detect encrypted messages by prefix
+          if (content.startsWith('enc:') && encryptionKeyPair) {
+            try {
+              const encryptedBase64 = content.slice(4); // strip 'enc:' prefix
+              const encryptedBytes = new Uint8Array(
+                atob(encryptedBase64).split('').map(c => c.charCodeAt(0))
+              );
+
+              // We need the sender's pubkey to decrypt
+              // If we're the sender, use recipient's pubkey; if we're the recipient, use sender's pubkey
+              const myAddress = useWalletStore.getState().evmAddress?.toLowerCase();
+              const otherParty = m.sender.toLowerCase() === myAddress
+                ? lower // the other address we're chatting with
+                : m.sender.toLowerCase();
+
+              const otherProfile = await getProfile(otherParty as `0x${string}`);
+              const otherPubkeyHex = otherProfile?.encryptionPubkey;
+
+              if (otherPubkeyHex && !/^0x0+$/.test(otherPubkeyHex)) {
+                const pubkeyBytes = new Uint8Array(
+                  (otherPubkeyHex.slice(2).match(/.{2}/g) || []).map(b => parseInt(b, 16))
+                );
+                const otherPubkey = pubkeyBytes.slice(0, 32);
+
+                content = decryptMessage(encryptedBytes, otherPubkey, encryptionKeyPair.secretKey);
+              } else {
+                decryptionFailed = true;
+                content = '[Encrypted message — recipient key unavailable]';
+              }
+            } catch {
+              decryptionFailed = true;
+              content = '[Encrypted message — decryption failed]';
+            }
+          } else if (content.startsWith('enc:') && !encryptionKeyPair) {
+            content = '[Encrypted message — connect wallet to decrypt]';
+          }
+
+          return {
+            sender: m.sender.toLowerCase(),
+            recipient: m.recipient.toLowerCase(),
+            content,
+            timestamp: m.timestamp,
+            id: `${m.sender}-${m.timestamp}-${i}`,
+            isEncrypted: content.startsWith('enc:') || false,
+          };
+        })
+      );
       
       set((state) => ({
         messages: { ...state.messages, [lower]: mapped },
@@ -179,8 +235,48 @@ export const useMessagesStore = create<MessagesStore>((set, get) => ({
     hapticTap();
     
     try {
-      const result = await contractSendMessage(lower as `0x${string}`, content);
-      await result.confirmation;
+      // Attempt encryption if we have a keypair
+      const encryptionKeyPair = useWalletStore.getState().encryptionKeyPair;
+      let messageToSend = content;
+      let isEncrypted = false;
+
+      if (encryptionKeyPair) {
+        try {
+          // Fetch recipient's encryption pubkey from their on-chain profile
+          const recipientProfile = await getProfile(lower as `0x${string}`);
+          const recipientPubkeyHex = recipientProfile?.encryptionPubkey;
+
+          // Check if recipient has a real encryption pubkey (not zero)
+          const hasRealPubkey = recipientPubkeyHex &&
+            recipientPubkeyHex !== '0x' &&
+            recipientPubkeyHex !== '0x0000000000000000000000000000000000000000000000000000000000000000' &&
+            !/^0x0+$/.test(recipientPubkeyHex);
+
+          if (hasRealPubkey) {
+            // Decode recipient pubkey — stored as hex on-chain, need Uint8Array
+            const pubkeyBytes = new Uint8Array(
+              (recipientPubkeyHex.slice(2).match(/.{2}/g) || []).map(b => parseInt(b, 16))
+            );
+            // NaCl box pubkey is 32 bytes
+            const recipientPubkey = pubkeyBytes.slice(0, 32);
+
+            const encrypted = encryptMessage(content, recipientPubkey, encryptionKeyPair.secretKey);
+            // Encode as base64 with prefix so we can detect encrypted messages on read
+            messageToSend = 'enc:' + btoa(String.fromCharCode(...encrypted));
+            isEncrypted = true;
+          }
+        } catch (encErr) {
+          console.warn('[messages] Encryption failed, sending plaintext:', encErr);
+          // Fall through to send plaintext
+        }
+      }
+
+      const result = await contractSendMessage(lower as `0x${string}`, messageToSend);
+      const confirmation = await result.confirmation;
+
+      if (!confirmation.confirmed) {
+        throw new Error(confirmation.error || 'Transaction not confirmed');
+      }
       
       // Mark getting started step
       try {
@@ -223,7 +319,7 @@ export const useMessagesStore = create<MessagesStore>((set, get) => ({
         isSending: false,
       }));
       
-      useToastStore.getState().addToast('error', 'Failed to send message');
+      useToastStore.getState().addToast('error', getContractErrorMessage(error));
       
       // Haptic feedback for error
       hapticError();

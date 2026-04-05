@@ -26,6 +26,7 @@ export default function DMChat() {
   const messagesContainerRef = useRef<HTMLDivElement>(null);
   const wasAtBottomRef = useRef(true);
   const [recipientName, setRecipientName] = useState<string | null>(null);
+  const [recipientEncryptionReady, setRecipientEncryptionReady] = useState<boolean>(true);
 
   const otherAddress = address?.toLowerCase() || '';
   const dmMessages = messages[otherAddress] || [];
@@ -36,6 +37,19 @@ export default function DMChat() {
     reverseResolve(otherAddress)
       .then((name) => setRecipientName(name))
       .catch(() => {});
+  }, [otherAddress]);
+
+  // Check recipient encryption readiness
+  useEffect(() => {
+    if (!otherAddress) return;
+    import('@/lib/contractCalls').then(({ getProfile }) => {
+      getProfile(otherAddress as `0x${string}`).then((profile) => {
+        const hasPubkey = profile?.encryptionPubkey &&
+          profile.encryptionPubkey !== '0x' &&
+          !/^0x0+$/.test(profile.encryptionPubkey);
+        setRecipientEncryptionReady(!!hasPubkey);
+      }).catch(() => {});
+    });
   }, [otherAddress]);
 
   // Scroll tracking
@@ -216,6 +230,14 @@ export default function DMChat() {
           </>
         )}
       </div>
+
+      {!recipientEncryptionReady && isConnected && (
+        <div className="px-4 md:px-6 py-2 bg-yellow-500/10 border-t border-yellow-500/20">
+          <p className="text-caption text-yellow-400/80 text-center">
+            Messages to this user are not encrypted — they haven't set up encryption yet
+          </p>
+        </div>
+      )}
 
       {/* Chat input */}
       <div className="shrink-0 px-4 md:px-6 py-3 pb-[calc(0.75rem+env(safe-area-inset-bottom))] border-t border-white/[0.04] bg-base">

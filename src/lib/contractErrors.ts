@@ -42,10 +42,25 @@ export const CONTRACT_ERRORS: Record<string, string> = {
   SelfMessage: "Cannot send a message to yourself",
   EmptyContent: "Message content cannot be empty",
   InsufficientCreationFee: "Insufficient creation fee — 500 QF required",
+  InsufficientBalance: "Insufficient QF balance for this action",
+  NotAuthorized: "You are not authorized to perform this action",
+  PodFull: "This pod is full",
+  AlreadyBanned: "This user is already banned",
+  NotBanned: "This user is not banned",
+  AlreadyMod: "This user is already a moderator",
+  NotMod: "This user is not a moderator",
+  InsufficientEntryFee: "Entry fee amount is incorrect",
+  ContentTooLong: "Message content exceeds maximum length",
 };
 
 export function getContractErrorMessage(error: unknown): string {
+  // Check for user rejection first
+  const errStr = String(error);
+  if (errStr.includes('Cancelled') || errStr.includes('Rejected') || errStr.includes('rejected')) {
+    return 'Transaction cancelled';
+  }
+
   const raw = decodeContractError(error);
-  if (!raw) return "Transaction failed";
+  if (!raw) return "Transaction failed — please try again";
   return CONTRACT_ERRORS[raw] ?? `Contract error: ${raw}`;
 }

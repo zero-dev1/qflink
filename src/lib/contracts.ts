@@ -22,4 +22,5 @@ export const CONTRACT_ADDRESSES = {
   messageReader: (import.meta.env.VITE_MESSAGE_READER_ADDRESS || '0x0000000000000000000000000000000000000000') as `0x${string}`,
   qnsResolver: (import.meta.env.VITE_QNS_RESOLVER_ADDRESS || '0x0000000000000000000000000000000000000000') as `0x${string}`,
   qnsRegistrar: (import.meta.env.VITE_QNS_REGISTRAR_ADDRESS || '0x0000000000000000000000000000000000000000') as `0x${string}`,
+  qnsBadgeRegistry: (import.meta.env.VITE_QNS_BADGE_REGISTRY_ADDRESS || '0x0000000000000000000000000000000000000000') as `0x${string}`,
 } as const;
