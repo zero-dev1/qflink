@@ -82,7 +82,7 @@ export default function Explore() {
   // Error state handling
   if (podFetchError && !isLoadingPods) {
     return (
-      <div className="flex-1 flex flex-col items-center justify-center px-6 text-center">
+      <div className="h-full flex flex-col items-center justify-center px-6 text-center">
         <p className="text-body text-text-secondary">Failed to load pods</p>
         <button
           onClick={() => fetchPods()}
@@ -120,7 +120,7 @@ export default function Explore() {
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
             autoFocus
-            className="mt-6 h-10 w-full rounded-default bg-surface-2 border border-border-medium px-4 text-body text-text-primary placeholder:text-text-tertiary focus:border-cyan-primary focus:outline-none transition-colors"
+            className="mt-6 h-10 w-full rounded-xl bg-white/[0.03] border border-white/[0.06] px-4 text-body text-text-primary placeholder:text-text-tertiary focus:border-cyan-primary/30 focus:outline-none transition-colors"
           />
 
           {/* Official section */}

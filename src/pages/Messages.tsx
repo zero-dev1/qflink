@@ -27,8 +27,7 @@ export default function Messages() {
   // Disconnected state
   if (!isConnected) {
     return (
-      <div className="h-full overflow-y-auto">
-        <div className="flex-1 flex flex-col items-center justify-center px-6 text-center">
+      <div className="h-full flex flex-col items-center justify-center px-6 text-center">
         <p className="text-body text-text-secondary">
           Connect your wallet to view messages
         </p>
@@ -38,7 +37,6 @@ export default function Messages() {
         >
           Connect →
         </Link>
-        </div>
       </div>
     );
   }

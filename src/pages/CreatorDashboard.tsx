@@ -119,8 +119,7 @@ export default function CreatorDashboard() {
   // ── Disconnected ──
   if (!isConnected) {
     return (
-      <div className="h-full overflow-y-auto">
-        <div className="flex-1 flex flex-col items-center justify-center px-6 text-center">
+      <div className="h-full flex flex-col items-center justify-center px-6 text-center">
         <p className="text-body text-text-secondary">
           Connect your wallet to manage your pod
         </p>
@@ -130,7 +129,6 @@ export default function CreatorDashboard() {
         >
           Connect →
         </Link>
-        </div>
       </div>
     );
   }
@@ -138,8 +136,7 @@ export default function CreatorDashboard() {
   // ── Invalid pod ID ──
   if (podId === null || isNaN(podId)) {
     return (
-      <div className="h-full overflow-y-auto">
-        <div className="flex-1 flex flex-col items-center justify-center px-6 text-center">
+      <div className="h-full flex flex-col items-center justify-center px-6 text-center">
         <p className="text-body text-text-secondary">Invalid pod ID</p>
         <Link
           to="/explore"
@@ -147,7 +144,6 @@ export default function CreatorDashboard() {
         >
           Explore pods →
         </Link>
-        </div>
       </div>
     );
   }
@@ -169,8 +165,7 @@ export default function CreatorDashboard() {
   // ── Not found ──
   if (!pod) {
     return (
-      <div className="h-full overflow-y-auto">
-        <div className="flex-1 flex flex-col items-center justify-center px-6 text-center">
+      <div className="h-full flex flex-col items-center justify-center px-6 text-center">
         <p className="text-body text-text-secondary">Pod not found</p>
         <Link
           to="/explore"
@@ -178,7 +173,6 @@ export default function CreatorDashboard() {
         >
           Explore pods →
         </Link>
-        </div>
       </div>
     );
   }
@@ -186,8 +180,7 @@ export default function CreatorDashboard() {
   // ── Not the creator ──
   if (isCreator === false) {
     return (
-      <div className="h-full overflow-y-auto">
-        <div className="flex-1 flex flex-col items-center justify-center px-6 text-center">
+      <div className="h-full flex flex-col items-center justify-center px-6 text-center">
         <p className="text-body text-text-secondary">
           You are not the creator of this pod
         </p>
@@ -197,7 +190,6 @@ export default function CreatorDashboard() {
         >
           Go to pod →
         </Link>
-        </div>
       </div>
     );
   }

@@ -21,7 +21,7 @@ export function QnsNudgeCard() {
       animate={{ opacity: 1, y: 0 }}
       exit={{ opacity: 0, y: -8 }}
       transition={{ duration: 0.2 }}
-      className="bg-surface-2 border border-border-subtle border-l-2 border-l-cyan-primary rounded-lg p-4 flex items-center gap-4 relative"
+      className="bg-white/[0.02] border border-white/[0.06] border-l-2 border-l-cyan-primary rounded-xl p-4 flex items-center gap-4 relative"
     >
       <div className="flex-1 min-w-0">
         <p className="text-body text-text-primary">
@@ -35,7 +35,7 @@ export function QnsNudgeCard() {
         href="https://dotqf.xyz"
         target="_blank"
         rel="noopener noreferrer"
-        className="shrink-0 h-8 px-4 rounded-md bg-cyan-muted text-cyan-primary text-label font-medium inline-flex items-center hover:bg-cyan-primary hover:text-text-on-cyan transition-colors"
+        className="shrink-0 h-8 px-4 rounded-lg bg-cyan-muted text-cyan-primary text-label font-medium inline-flex items-center hover:bg-cyan-primary hover:text-text-on-cyan transition-colors"
       >
         Get a name
       </a>

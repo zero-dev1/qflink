@@ -67,8 +67,7 @@ export default function Profile() {
   // ── Disconnected ──
   if (!isConnected) {
     return (
-      <div className="h-full overflow-y-auto">
-        <div className="flex-1 flex flex-col items-center justify-center px-6 text-center">
+      <div className="h-full flex flex-col items-center justify-center px-6 text-center">
         <p className="text-body text-text-secondary">
           Connect your wallet to view your profile
         </p>
@@ -78,7 +77,6 @@ export default function Profile() {
         >
           Connect →
         </Link>
-        </div>
       </div>
     );
   }

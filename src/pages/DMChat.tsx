@@ -209,7 +209,7 @@ export default function DMChat() {
       </div>
 
       {/* Chat input */}
-      <div className="shrink-0 px-4 md:px-6 py-3 pb-[calc(0.75rem+env(safe-area-inset-bottom))] border-t border-border-subtle bg-surface-1">
+      <div className="shrink-0 px-4 md:px-6 py-3 pb-[calc(0.75rem+env(safe-area-inset-bottom))] border-t border-border-subtle bg-base">
         <ChatInput
           placeholder={`Message ${recipientName || headerName}...`}
           onSend={handleSend}

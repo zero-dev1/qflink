@@ -1,3 +1,4 @@
+// src/components/layout/MobileTabBar.tsx
 import { NavLink } from "react-router-dom";
 import { motion } from "framer-motion";
 import { useUnreadStore } from "@/stores/unread";
@@ -15,15 +16,15 @@ export function MobileTabBar() {
   const totalUnreadDMs = useUnreadStore((s) => s.getTotalUnreadDMs());
 
   return (
-    <nav className="md:hidden fixed bottom-0 left-0 right-0 bg-surface-1 border-t border-border-subtle z-50 pb-[env(safe-area-inset-bottom)]">
-      <div className="flex items-center justify-around h-16">
+    <nav className="md:hidden fixed bottom-0 left-0 right-0 bg-base/80 backdrop-blur-xl border-t border-white/[0.04] z-50 pb-[env(safe-area-inset-bottom)]">
+      <div className="flex items-center justify-around h-14">
         {tabs.map((tab) => (
           <NavLink
             key={tab.to}
             to={tab.to}
             className={({ isActive }) =>
               cn(
-                "flex flex-col items-center gap-1 px-4 py-2 relative",
+                "flex flex-col items-center gap-0.5 px-4 py-2 relative",
                 isActive ? "text-cyan-primary" : "text-text-tertiary"
               )
             }
