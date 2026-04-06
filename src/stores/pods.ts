@@ -42,6 +42,7 @@ export interface RawPodMessage {
   timestamp: number;
   id: number;
   isOptimistic?: boolean;
+  isConfirming?: boolean;
   isFailed?: boolean;
 }
 
@@ -93,15 +94,32 @@ export const usePodsStore = create<PodsStore>((set, get) => ({
   
   // Actions
   fetchPods: async () => {
-    set({ isLoadingPods: true, podFetchError: false });
-    try {
-      const pods = await getAllPods();
-      set({ pods, isLoadingPods: false });
-    } catch (error) {
-      console.error('Failed to fetch pods:', error);
-      set({ isLoadingPods: false, podFetchError: true });
+  const current = get().pods;
+  const isFirstLoad = current.length === 0;
+  if (isFirstLoad) set({ isLoadingPods: true, podFetchError: false });
+
+  try {
+    const pods = await getAllPods();
+
+    // Compare before set: skip if identical (prevents re-renders)
+    if (
+      pods.length === current.length &&
+      pods.every((p, i) =>
+        Number(p.id) === Number(current[i].id) &&
+        p.memberCount === current[i].memberCount &&
+        p.name === current[i].name
+      )
+    ) {
+      if (isFirstLoad) set({ isLoadingPods: false });
+      return;
     }
-  },
+
+    set({ pods, isLoadingPods: false, podFetchError: false });
+  } catch (error) {
+    console.error('Failed to fetch pods:', error);
+    if (isFirstLoad) set({ isLoadingPods: false, podFetchError: true });
+  }
+},
   
   fetchUserPods: async () => {
     try {
@@ -117,7 +135,7 @@ export const usePodsStore = create<PodsStore>((set, get) => ({
   
   fetchMessages: async (podId: number) => {
     const existing = get().messages[podId] || [];
-    const nonOptimistic = existing.filter(m => !m.isOptimistic && !m.isFailed);
+    const nonOptimistic = existing.filter(m => !m.isOptimistic && !m.isConfirming && !m.isFailed);
     const isFirstLoad = nonOptimistic.length === 0;
 
     // Only show loading spinner on first load, not on polls
@@ -154,20 +172,20 @@ export const usePodsStore = create<PodsStore>((set, get) => ({
         ? [...nonOptimistic, ...newOnChain]
         : newOnChain;
 
-      // De-duplicate: remove optimistic messages that now have a chain counterpart
-      const optimistic = existing.filter(m => m.isOptimistic || m.isFailed);
-      const remainingOptimistic = optimistic.filter((opt) => {
-        if (opt.isFailed) return true; // Failed messages persist until retry/dismiss
-        return !allOnChain.some(
-          (chain: RawPodMessage) =>
-            chain.sender.toLowerCase() === opt.sender.toLowerCase() &&
-            chain.content === opt.content &&
-            Math.abs(chain.timestamp - opt.timestamp) < 60_000,
-        );
-      });
+      // De-duplicate: remove optimistic/confirming messages that now have a chain counterpart
+    const pending = existing.filter(m => m.isOptimistic || m.isConfirming || m.isFailed);
+    const remainingPending = pending.filter((opt) => {
+      if (opt.isFailed) return true; // Failed messages persist until retry/dismiss
+      return !allOnChain.some(
+        (chain: RawPodMessage) =>
+          chain.sender.toLowerCase() === opt.sender.toLowerCase() &&
+          chain.content === opt.content &&
+          Math.abs(chain.timestamp - opt.timestamp) < 60_000,
+      );
+    });
 
-      const finalMessages = [...allOnChain, ...remainingOptimistic]
-        .sort((a, b) => a.timestamp - b.timestamp);
+    const finalMessages = [...allOnChain, ...remainingPending]
+      .sort((a, b) => a.timestamp - b.timestamp);
 
       // Compare before set: if same length and last message ID matches, skip update
       if (
@@ -256,41 +274,51 @@ export const usePodsStore = create<PodsStore>((set, get) => ({
       }
 
       // All checks passed — submit tx
-      const result = await contractJoinPod(podId);
-      const confirmation = await result.confirmation;
+    const result = await contractJoinPod(podId);
 
-      if (!confirmation.confirmed) {
-        const errorMsg = confirmation.error || 'Transaction failed';
-        useToastStore.getState().addToast("error", errorMsg);
-        hapticError();
-        set({ isJoining: false });
-        return false;
+    // Broadcast received — show success immediately (QNS pattern)
+    const pod = get().getPodById(podId);
+    useToastStore.getState().addToast('success', `Joined ${pod?.name || 'pod'}`);
+    hapticSuccess();
+    chimeSuccess();
+    set({ isJoining: false });
+
+    // Mark getting started step
+    try {
+      const { useGettingStartedStore } = await import('@/stores/gettingStarted');
+      useGettingStartedStore.getState().markStep('hasJoinedPod');
+    } catch {}
+
+    // Refresh pod list immediately — membership may show on next poll
+    get().fetchUserPods();
+
+    // Background confirmation — verify and warn only on actual failure
+    result.confirmation.then(async (confirmation) => {
+      if (confirmation.confirmed) {
+        // Perfect — nothing to do, user already saw success
+        return;
       }
 
-      // Verify on-chain that we're actually a member now
+      // Verify on-chain: is the user actually a member now?
       try {
-        const { isMember: checkMember } = await import('@/lib/contractCalls');
-        const verified = await checkMember(podId, evmAddress as `0x${string}`);
-        if (!verified) {
-          useToastStore.getState().addToast('warning', 'Join transaction confirmed but membership not detected yet. Please refresh.');
-        }
-      } catch {
-        // Non-fatal — membership will be picked up on next fetch
-      }
-
-      const pod = get().getPodById(podId);
-      useToastStore.getState().addToast("success", `Joined ${pod?.name || 'pod'}`);
-      hapticSuccess();
-      chimeSuccess();
-
-      try {
-        const { useGettingStartedStore } = await import('@/stores/gettingStarted');
-        useGettingStartedStore.getState().markStep('hasJoinedPod');
+        const verified = await isMember(podId, evmAddress as `0x${string}`);
+        if (verified) return; // On-chain confirms membership, all good
       } catch {}
 
-      await get().fetchUserPods();
-      set({ isJoining: false });
-      return true;
+      // Only warn on actual revert, not subscription timeout
+      const isActualFailure = confirmation.error &&
+        confirmation.error !== 'not_confirmed' &&
+        confirmation.error !== 'verification_failed';
+
+      if (isActualFailure) {
+        useToastStore.getState().addToast('warning', 'Join may not have completed — please check your membership');
+      }
+      // For "not_confirmed" — silent, the poll will reconcile
+    }).catch(() => {
+      // Silent — confirmation promise error is non-fatal
+    });
+
+    return true;
     } catch (error) {
       console.error('Failed to join pod:', error);
       const errorMsg = getContractErrorMessage(error);
@@ -304,61 +332,148 @@ export const usePodsStore = create<PodsStore>((set, get) => ({
   sendMessage: async (podId: number, content: string) => {
     const evmAddress = useWalletStore.getState().evmAddress;
     if (!evmAddress) return false;
-    
-    // 1. OPTIMISTIC INSERT — synchronous, happens BEFORE any await
-    const optimisticId = Date.now(); // large number = optimistic marker
+
+    // 1. OPTIMISTIC INSERT — synchronous, before any await
+    const optimisticId = Date.now();
     const optimisticMessage: RawPodMessage = {
       id: optimisticId,
       sender: evmAddress,
       content,
-      timestamp: Math.floor(Date.now() / 1000), // seconds for chain consistency
+      timestamp: Math.floor(Date.now() / 1000),
       isOptimistic: true,
     };
-    
+
     set(state => ({
       messages: {
         ...state.messages,
         [podId]: [...(state.messages[podId] || []), optimisticMessage]
       }
     }));
-    
-    // Haptic feedback for message send
-    hapticSend();
-    
-    set((state) => ({ isSending: { ...state.isSending, [podId]: true } }));
-    
-    try {
-      // 2. Contract write — this is the slow part
-      const result = await contractSendPodMessage(podId, content);
-      const confirmation = await result.confirmation;
 
-      if (!confirmation.confirmed) {
-        throw new Error(confirmation.error || 'Transaction not confirmed');
-      }
-      
-      // 3. Success — mark confirmed (remove isOptimistic or refetch)
+    hapticSend();
+    set((state) => ({ isSending: { ...state.isSending, [podId]: true } }));
+
+    try {
+      // 2. Contract write — returns when BROADCAST received (not when confirmed)
+      const result = await contractSendPodMessage(podId, content);
+
+      // 3. BROADCAST RECEIVED — transition optimistic → confirming
+      //    This is the QNS pattern: resolve UI success on broadcast.
       set((state) => ({
         messages: {
           ...state.messages,
           [podId]: (state.messages[podId] || []).map((m) =>
-            m.id === optimisticId ? { ...m, isOptimistic: false } : m
+            m.id === optimisticId
+              ? { ...m, isOptimistic: false, isConfirming: true }
+              : m
           ),
         },
         isSending: { ...state.isSending, [podId]: false },
       }));
-      
-      // Mark getting started step
+
+      // Input unlocks here — user can type next message immediately
+
+      // 4. BACKGROUND CONFIRMATION — non-blocking
+      result.confirmation.then(async (confirmation) => {
+        if (confirmation.confirmed) {
+          // Chain confirmed — mark as fully confirmed
+          set((state) => ({
+            messages: {
+              ...state.messages,
+              [podId]: (state.messages[podId] || []).map((m) =>
+                m.id === optimisticId
+                  ? { ...m, isConfirming: false }
+                  : m
+              ),
+            },
+          }));
+          hapticConfirm();
+        } else {
+          // Timeout or subscription miss — verify on-chain before failing
+          try {
+            const beforeCount = (get().messages[podId] || [])
+              .filter(m => !m.isOptimistic && !m.isConfirming && !m.isFailed).length;
+            const onChainCount = await getPodMessageCount(podId);
+            if (onChainCount > beforeCount) {
+              // New message appeared — our tx landed, mark confirmed
+              set((state) => ({
+                messages: {
+                  ...state.messages,
+                  [podId]: (state.messages[podId] || []).map((m) =>
+                    m.id === optimisticId
+                      ? { ...m, isConfirming: false }
+                      : m
+                  ),
+                },
+              }));
+              hapticConfirm();
+              return;
+            }
+          } catch {
+            // Verification failed — still don't mark as failed yet.
+            // The next poll cycle will reconcile.
+          }
+
+          // Only mark failed if confirmation.error indicates an actual revert,
+          // NOT just a subscription timeout
+          const isActualFailure = confirmation.error &&
+            confirmation.error !== 'not_confirmed' &&
+            confirmation.error !== 'verification_failed';
+
+          if (isActualFailure) {
+            set((state) => ({
+              messages: {
+                ...state.messages,
+                [podId]: (state.messages[podId] || []).map((m) =>
+                  m.id === optimisticId
+                    ? { ...m, isConfirming: false, isFailed: true }
+                    : m
+                ),
+              },
+            }));
+            useToastStore.getState().addToast('error', confirmation.error || 'Transaction failed');
+            hapticError();
+          } else {
+            // "not_confirmed" = subscription didn't fire, tx almost certainly landed.
+            // Silently mark as confirmed — next poll will reconcile with chain state.
+            set((state) => ({
+              messages: {
+                ...state.messages,
+                [podId]: (state.messages[podId] || []).map((m) =>
+                  m.id === optimisticId
+                    ? { ...m, isConfirming: false }
+                    : m
+                ),
+              },
+            }));
+          }
+        }
+      }).catch(() => {
+        // Confirmation promise itself errored — treat as soft confirmed
+        set((state) => ({
+          messages: {
+            ...state.messages,
+            [podId]: (state.messages[podId] || []).map((m) =>
+              m.id === optimisticId
+                ? { ...m, isConfirming: false }
+                : m
+            ),
+          },
+        }));
+      });
+
+      // Mark getting started step (non-blocking)
       try {
         const { useGettingStartedStore } = await import('@/stores/gettingStarted');
         useGettingStartedStore.getState().markStep('hasSentMessage');
-        hapticConfirm();
       } catch {}
-      
+
       return true;
     } catch (error) {
+      // This catch only fires if writeContract itself threw (before broadcast)
+      // — i.e., user rejected signing, wallet not connected, gas estimation failed
       console.error('Failed to send message:', error);
-      
-      // 4. Mark as failed instead of removing
+
       set((state) => ({
         messages: {
           ...state.messages,
@@ -368,12 +483,13 @@ export const usePodsStore = create<PodsStore>((set, get) => ({
         },
         isSending: { ...state.isSending, [podId]: false },
       }));
-      
-      useToastStore.getState().addToast("error", getContractErrorMessage(error));
-      
-      // Haptic feedback for error
+
+      const errorMsg = getContractErrorMessage(error);
+      // Don't toast for user cancellation — it's intentional
+      if (!errorMsg.includes('cancelled')) {
+        useToastStore.getState().addToast('error', errorMsg);
+      }
       hapticError();
-      
       return false;
     }
   },

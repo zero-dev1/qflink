@@ -87,41 +87,17 @@ export function PodComposer({ onClose, onSuccess }: PodComposerProps) {
       let result;
       if (priceWei > 0n) {
         result = await createPaidPod(
-          trimmedName,
-          true, // isPublic
-          thresholdWei,
-          priceWei,
-          creationFee!, // creation fee (overridden inside the function)
-          category,
-          trimmedDesc
+          trimmedName, true, thresholdWei, priceWei,
+          creationFee!, category, trimmedDesc
         );
       } else {
         result = await createPod(
-          trimmedName,
-          trimmedDesc,
-          thresholdWei,
-          0n,
-          undefined,
-          category
+          trimmedName, trimmedDesc, thresholdWei,
+          0n, undefined, category
         );
       }
 
-      setLaunchState('confirming');
-
-      const confirmation = await result.confirmation;
-
-      if (!confirmation.confirmed) {
-        const errorMsg = confirmation.error || 'Transaction failed';
-        // Check if user cancelled/rejected
-        if (errorMsg.toLowerCase().includes('cancel') || errorMsg.toLowerCase().includes('reject') || errorMsg.toLowerCase().includes('denied')) {
-          setLaunchState('cancelled');
-          setTimeout(() => setLaunchState('idle'), 2000);
-          return;
-        }
-        throw new Error(errorMsg);
-      }
-
-      // Success
+      // BROADCAST RECEIVED — show success immediately
       setLaunchState('success');
       hapticSuccess();
       chimeSuccess();
@@ -136,12 +112,28 @@ export function PodComposer({ onClose, onSuccess }: PodComposerProps) {
         onSuccess();
       }, 800);
 
+      // Background confirmation — warn only on actual revert
+      result.confirmation.then(async (confirmation) => {
+        if (confirmation.confirmed) return; // Perfect
+
+        const isActualFailure = confirmation.error &&
+          confirmation.error !== 'not_confirmed' &&
+          confirmation.error !== 'verification_failed';
+
+        if (isActualFailure) {
+          useToastStore.getState().addToast('warning', 'Pod creation may not have completed — check Explore');
+        }
+        // "not_confirmed" — silent, pod will appear on next fetch
+      }).catch(() => {});
+
     } catch (error) {
+      // Pre-broadcast failure (user rejected, gas error)
       console.error('Pod creation failed:', error);
       const errorStr = String(error);
 
-      // Check for user cancellation
-      if (errorStr.toLowerCase().includes('cancel') || errorStr.toLowerCase().includes('reject') || errorStr.toLowerCase().includes('denied')) {
+      if (errorStr.toLowerCase().includes('cancel') ||
+          errorStr.toLowerCase().includes('reject') ||
+          errorStr.toLowerCase().includes('denied')) {
         setLaunchState('cancelled');
         setTimeout(() => setLaunchState('idle'), 2000);
         return;

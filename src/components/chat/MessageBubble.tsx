@@ -18,6 +18,7 @@ interface MessageBubbleProps {
   showSender: boolean;
   senderName?: string;
   isOptimistic?: boolean;
+  isConfirming?: boolean;
   isEncrypted?: boolean;
   isFailed?: boolean;
   onRetry?: () => void;
@@ -33,14 +34,20 @@ export const MessageBubble = memo(function MessageBubble({
   showSender,
   senderName,
   isOptimistic = false,
+  isConfirming,
   isEncrypted,
   isFailed,
   onRetry,
   onDismiss,
   onAvatarTap,
 }: MessageBubbleProps) {
-  // Determine tx state
-  const state = isFailed ? 'failed' : isOptimistic ? 'optimistic' : 'confirmed';
+  const state = isFailed
+  ? 'failed'
+  : isOptimistic
+    ? 'optimistic'
+    : isConfirming
+      ? 'confirming'
+      : 'confirmed';
 
   return (
     <motion.div
@@ -81,6 +88,8 @@ export const MessageBubble = memo(function MessageBubble({
             state === 'failed' && isMine && 'bg-error/10 border border-error/20',
             // Optimistic state — translucent with pulsing border
             state === 'optimistic' && isMine && 'bg-cyan-muted/50 border border-cyan-border animate-border-pulse opacity-60',
+            // Confirming state — full opacity, subtle confirming indicator
+            state === 'confirming' && isMine && 'bg-cyan-muted',
             // Confirmed state — full opacity
             state === 'confirmed' && isMine && 'bg-cyan-muted',
             // Other's messages
@@ -97,12 +106,19 @@ export const MessageBubble = memo(function MessageBubble({
               {formatMessageTime(timestamp)}
             </span>
 
-            {/* Optimistic — confirming dots */}
+            {/* Optimistic — sending dots (fast pulse) */}
             {state === 'optimistic' && isMine && (
               <span className="flex items-center gap-0.5">
                 <span className="w-1 h-1 rounded-full bg-cyan-primary animate-pulse" style={{ animationDelay: '0ms' }} />
                 <span className="w-1 h-1 rounded-full bg-cyan-primary animate-pulse" style={{ animationDelay: '200ms' }} />
                 <span className="w-1 h-1 rounded-full bg-cyan-primary animate-pulse" style={{ animationDelay: '400ms' }} />
+              </span>
+            )}
+
+            {/* Confirming — subtle single dot pulse */}
+            {state === 'confirming' && isMine && (
+              <span className="flex items-center gap-1">
+                <span className="w-1 h-1 rounded-full bg-cyan-primary/50 animate-pulse" />
               </span>
             )}
 

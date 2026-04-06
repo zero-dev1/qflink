@@ -123,7 +123,9 @@ export default function PodChat() {
       const prev = sorted[index - 1];
       const showSender = !prev || prev.sender !== message.sender || message.timestamp - prev.timestamp > 5 * 60 * 1000;
       const isMine = message.sender === evmAddress;
-      const isOptimistic = message.isOptimistic || message.id > 1_000_000_000_000;
+      // Only mark as optimistic if explicitly flagged (no more ID-based heuristic)
+      const isOptimistic = !!message.isOptimistic;
+      const isConfirming = !!message.isConfirming;
 
       return (
         <MessageBubble
@@ -135,14 +137,15 @@ export default function PodChat() {
           showSender={showSender}
           senderName={senderNames[message.sender.toLowerCase()] || undefined}
           isOptimistic={isOptimistic}
+          isConfirming={isConfirming}
           isFailed={message.isFailed}
-          onRetry={message.isFailed ? () => {} : undefined}
-          onDismiss={message.isFailed ? () => {} : undefined}
+          onRetry={message.isFailed ? () => usePodsStore.getState().retryMessage(podId!, message.id) : undefined}
+          onDismiss={message.isFailed ? () => usePodsStore.getState().dismissFailedMessage(podId!, message.id) : undefined}
           onAvatarTap={(addr) => setProfileSheetAddress(addr)}
         />
       );
     });
-  }, [podMessages, evmAddress, senderNames]);
+  }, [podMessages, evmAddress, senderNames, usePodsStore]);
 
   if (podId === null) {
     return (

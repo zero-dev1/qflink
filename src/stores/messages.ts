@@ -43,6 +43,7 @@ export interface DMMessage {
   timestamp: number;
   id: string;
   isOptimistic?: boolean;
+  isConfirming?: boolean;
   isEncrypted?: boolean;
   isFailed?: boolean;
 }
@@ -163,7 +164,7 @@ export const useMessagesStore = create<MessagesStore>((set, get) => ({
 
     const lower = otherAddress.toLowerCase();
     const existing = get().messages[lower] || [];
-    const nonOptimistic = existing.filter(m => !m.isOptimistic && !m.isFailed);
+    const nonOptimistic = existing.filter(m => !m.isOptimistic && !m.isConfirming && !m.isFailed);
     const isFirstLoad = nonOptimistic.length === 0;
     const lastKnownCount = _dmLastFetchedCounts[lower] || 0;
 
@@ -276,20 +277,20 @@ export const useMessagesStore = create<MessagesStore>((set, get) => ({
         ? [...nonOptimistic, ...mapped]
         : mapped;
 
-      // De-duplicate optimistic messages that now have a chain counterpart
-      const optimistic = existing.filter(m => m.isOptimistic || m.isFailed);
-      const remainingOptimistic = optimistic.filter((opt) => {
-        if (opt.isFailed) return true;
-        return !allDecrypted.some(
-          (chain) =>
-            chain.sender.toLowerCase() === opt.sender.toLowerCase() &&
-            chain.content === opt.content &&
-            Math.abs(chain.timestamp - opt.timestamp) < 60_000,
-        );
-      });
+      // De-duplicate optimistic/confirming messages that now have a chain counterpart
+    const pending = existing.filter(m => m.isOptimistic || m.isConfirming || m.isFailed);
+    const remainingPending = pending.filter((opt) => {
+      if (opt.isFailed) return true;
+      return !allDecrypted.some(
+        (chain) =>
+          chain.sender.toLowerCase() === opt.sender.toLowerCase() &&
+          chain.content === opt.content &&
+          Math.abs(chain.timestamp - opt.timestamp) < 60_000,
+      );
+    });
 
-      const finalMessages = [...allDecrypted, ...remainingOptimistic]
-        .sort((a, b) => a.timestamp - b.timestamp);
+    const finalMessages = [...allDecrypted, ...remainingPending]
+      .sort((a, b) => a.timestamp - b.timestamp);
 
       // Compare before set: skip if identical
       if (
@@ -316,150 +317,195 @@ export const useMessagesStore = create<MessagesStore>((set, get) => ({
   },
   
   sendMessage: async (recipient: string, content: string) => {
-    const evmAddress = useWalletStore.getState().evmAddress;
-    if (!evmAddress) return false;
-    
-    const lower = recipient.toLowerCase();
-    const addr = lower;
-    set((state) => ({ isSending: { ...state.isSending, [addr]: true } }));
-    
-    // Optimistic insert
-    const optimistic: DMMessage = {
-      sender: evmAddress.toLowerCase(),
-      recipient: lower,
-      content,
-      timestamp: Date.now(),
-      id: `optimistic-${Date.now()}`,
-      isOptimistic: true,
-    };
-    
+  const evmAddress = useWalletStore.getState().evmAddress;
+  if (!evmAddress) return false;
+
+  const lower = recipient.toLowerCase();
+  const addr = lower;
+  set((state) => ({ isSending: { ...state.isSending, [addr]: true } }));
+
+  // Optimistic insert
+  const optimistic: DMMessage = {
+    sender: evmAddress.toLowerCase(),
+    recipient: lower,
+    content,
+    timestamp: Date.now(),
+    id: `optimistic-${Date.now()}`,
+    isOptimistic: true,
+  };
+
+  set((state) => ({
+    messages: {
+      ...state.messages,
+      [lower]: [...(state.messages[lower] || []), optimistic],
+    },
+  }));
+
+  hapticSend();
+
+  try {
+    // --- Encryption logic (unchanged) ---
+    let activeKeyPair = useWalletStore.getState().encryptionKeyPair;
+    if (!activeKeyPair) {
+      try {
+        const { getCurrentConnection } = await import('@/lib/wallet');
+        const conn = getCurrentConnection();
+        if (conn?.signer?.polkadotSigner?.signBytes) {
+          const { deriveEncryptionKeypair } = await import('@/lib/encryption');
+          const signMessage = async (message: string): Promise<Uint8Array> => {
+            const encoder = new TextEncoder();
+            const messageBytes = encoder.encode(message);
+            const result = await conn.signer.polkadotSigner.signBytes(messageBytes);
+            return new Uint8Array(result);
+          };
+          activeKeyPair = await deriveEncryptionKeypair(signMessage);
+          useWalletStore.setState({ encryptionKeyPair: activeKeyPair });
+        }
+      } catch {}
+    }
+
+    let messageToSend = content;
+    let isEncrypted = false;
+
+    if (activeKeyPair) {
+      try {
+        const recipientProfile = await getProfile(lower as `0x${string}`);
+        const recipientPubkeyHex = recipientProfile?.encryptionPubkey;
+        const hasRealPubkey = recipientPubkeyHex &&
+          recipientPubkeyHex !== '0x' &&
+          recipientPubkeyHex !== '0x0000000000000000000000000000000000000000000000000000000000000000' &&
+          !/^0x0+$/.test(recipientPubkeyHex);
+
+        if (hasRealPubkey) {
+          const pubkeyBytes = new Uint8Array(
+            (recipientPubkeyHex.slice(2).match(/.{2}/g) || []).map(b => parseInt(b, 16))
+          );
+          const recipientPubkey = pubkeyBytes.slice(0, 32);
+          const encrypted = encryptMessage(content, recipientPubkey, activeKeyPair.secretKey);
+          messageToSend = 'enc:' + btoa(String.fromCharCode(...encrypted));
+          isEncrypted = true;
+        }
+      } catch (encErr) {
+        console.warn('[messages] Encryption failed, sending plaintext:', encErr);
+      }
+    }
+    // --- End encryption logic ---
+
+    // Contract write — returns on BROADCAST
+    const result = await contractSendMessage(lower as `0x${string}`, messageToSend);
+
+    // BROADCAST RECEIVED — transition to confirming, unlock input
     set((state) => ({
       messages: {
         ...state.messages,
-        [lower]: [...(state.messages[lower] || []), optimistic],
-      },
-    }));
-    
-    // Haptic feedback for message send
-    hapticSend();
-    
-    try {
-      // Guard against missing encryption keypair
-      let activeKeyPair = useWalletStore.getState().encryptionKeyPair;
-      if (!activeKeyPair) {
-        // Keypair was wiped (account change, session restore) — try to re-derive
-        try {
-          const { getCurrentConnection } = await import('@/lib/wallet');
-          const conn = getCurrentConnection();
-          if (conn?.signer?.polkadotSigner?.signBytes) {
-            const { deriveEncryptionKeypair } = await import('@/lib/encryption');
-            const signMessage = async (message: string): Promise<Uint8Array> => {
-              const encoder = new TextEncoder();
-              const messageBytes = encoder.encode(message);
-              const result = await conn.signer.polkadotSigner.signBytes(messageBytes);
-              return new Uint8Array(result);
-            };
-            activeKeyPair = await deriveEncryptionKeypair(signMessage);
-            // Persist back to wallet store so subsequent sends don't re-prompt
-            useWalletStore.setState({ encryptionKeyPair: activeKeyPair });
-          }
-        } catch {
-          // Re-derivation failed — fall through to plaintext path
-        }
-      }
-      
-      // Attempt encryption if we have a keypair
-      let messageToSend = content;
-      let isEncrypted = false;
-
-      if (activeKeyPair) {
-        try {
-          // Fetch recipient's encryption pubkey from their on-chain profile
-          const recipientProfile = await getProfile(lower as `0x${string}`);
-          const recipientPubkeyHex = recipientProfile?.encryptionPubkey;
-
-          // Check if recipient has a real encryption pubkey (not zero)
-          const hasRealPubkey = recipientPubkeyHex &&
-            recipientPubkeyHex !== '0x' &&
-            recipientPubkeyHex !== '0x0000000000000000000000000000000000000000000000000000000000000000' &&
-            !/^0x0+$/.test(recipientPubkeyHex);
-
-          if (hasRealPubkey) {
-            // Decode recipient pubkey — stored as hex on-chain, need Uint8Array
-            const pubkeyBytes = new Uint8Array(
-              (recipientPubkeyHex.slice(2).match(/.{2}/g) || []).map(b => parseInt(b, 16))
-            );
-            // NaCl box pubkey is 32 bytes
-            const recipientPubkey = pubkeyBytes.slice(0, 32);
-
-            const encrypted = encryptMessage(content, recipientPubkey, activeKeyPair.secretKey);
-            // Encode as base64 with prefix so we can detect encrypted messages on read
-            messageToSend = 'enc:' + btoa(String.fromCharCode(...encrypted));
-            isEncrypted = true;
-          }
-        } catch (encErr) {
-          console.warn('[messages] Encryption failed, sending plaintext:', encErr);
-          // Fall through to send plaintext
-        }
-      }
-
-      const result = await contractSendMessage(lower as `0x${string}`, messageToSend);
-      const confirmation = await result.confirmation;
-
-      if (!confirmation.confirmed) {
-        throw new Error(confirmation.error || 'Transaction not confirmed');
-      }
-      
-      // Mark getting started step
-      try {
-        const { useGettingStartedStore } = await import('@/stores/gettingStarted');
-        useGettingStartedStore.getState().markStep('hasSentMessage');
-        hapticConfirm();
-      } catch {}
-      
-      // Mark as confirmed by removing optimistic flag
-      set((state) => ({
-        messages: {
-          ...state.messages,
-          [lower]: (state.messages[lower] || []).map((m) =>
-            m.id === optimistic.id ? { ...m, isOptimistic: false } : m
-          ),
-        },
-        isSending: { ...state.isSending, [addr]: false },
-      }));
-      
-      // Update conversation list preview
-      set((state) => ({
-        conversations: state.conversations.map((c) =>
-          c.address === lower
-            ? { ...c, lastMessage: content, lastMessageTime: Date.now() }
-            : c
+        [lower]: (state.messages[lower] || []).map((m) =>
+          m.id === optimistic.id
+            ? { ...m, isOptimistic: false, isConfirming: true }
+            : m
         ),
-      }));
-      
-      return true;
-    } catch (error) {
-      console.error('Failed to send message:', error);
-      
-      // Mark as failed instead of removing
+      },
+      isSending: { ...state.isSending, [addr]: false },
+    }));
+
+    // Update conversation list preview immediately
+    set((state) => ({
+      conversations: state.conversations.map((c) =>
+        c.address === lower
+          ? { ...c, lastMessage: content, lastMessageTime: Date.now() }
+          : c
+      ),
+    }));
+
+    // BACKGROUND CONFIRMATION
+    result.confirmation.then(async (confirmation) => {
+      if (confirmation.confirmed) {
+        set((state) => ({
+          messages: {
+            ...state.messages,
+            [lower]: (state.messages[lower] || []).map((m) =>
+              m.id === optimistic.id
+                ? { ...m, isConfirming: false }
+                : m
+            ),
+          },
+        }));
+        hapticConfirm();
+      } else {
+        // Only fail on actual revert, not subscription timeout
+        const isActualFailure = confirmation.error &&
+          confirmation.error !== 'not_confirmed' &&
+          confirmation.error !== 'verification_failed';
+
+        if (isActualFailure) {
+          set((state) => ({
+            messages: {
+              ...state.messages,
+              [lower]: (state.messages[lower] || []).map((m) =>
+                m.id === optimistic.id
+                  ? { ...m, isConfirming: false, isFailed: true }
+                  : m
+              ),
+            },
+          }));
+          useToastStore.getState().addToast('error', confirmation.error || 'Transaction failed');
+          hapticError();
+        } else {
+          // Soft-confirm — tx almost certainly landed
+          set((state) => ({
+            messages: {
+              ...state.messages,
+              [lower]: (state.messages[lower] || []).map((m) =>
+                m.id === optimistic.id
+                  ? { ...m, isConfirming: false }
+                  : m
+              ),
+            },
+          }));
+        }
+      }
+    }).catch(() => {
+      // Silent soft-confirm
       set((state) => ({
         messages: {
           ...state.messages,
           [lower]: (state.messages[lower] || []).map((m) =>
-            m.id === optimistic.id ? { ...m, isOptimistic: false, isFailed: true } : m
+            m.id === optimistic.id
+              ? { ...m, isConfirming: false }
+              : m
           ),
         },
-        isSending: { ...state.isSending, [addr]: false },
       }));
-      
-      useToastStore.getState().addToast('error', getContractErrorMessage(error));
-      
-      // Haptic feedback for error
-      hapticError();
-      
-      return false;
+    });
+
+    // Mark getting started step
+    try {
+      const { useGettingStartedStore } = await import('@/stores/gettingStarted');
+      useGettingStartedStore.getState().markStep('hasSentMessage');
+    } catch {}
+
+    return true;
+  } catch (error) {
+    // Pre-broadcast failure (user rejected, wallet disconnected, gas error)
+    console.error('Failed to send message:', error);
+
+    set((state) => ({
+      messages: {
+        ...state.messages,
+        [lower]: (state.messages[lower] || []).map((m) =>
+          m.id === optimistic.id ? { ...m, isOptimistic: false, isFailed: true } : m
+        ),
+      },
+      isSending: { ...state.isSending, [addr]: false },
+    }));
+
+    const errorMsg = getContractErrorMessage(error);
+    if (!errorMsg.includes('cancelled')) {
+      useToastStore.getState().addToast('error', errorMsg);
     }
-  },
+    hapticError();
+    return false;
+  }
+},
   
   retryMessage: async (address: string, messageId: string) => {
     const msg = get().messages[address]?.find((m) => m.id === messageId);

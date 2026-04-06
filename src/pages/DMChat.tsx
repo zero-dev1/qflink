@@ -115,13 +115,14 @@ export default function DMChat() {
           showSender={showSender}
           senderName={!isMine ? recipientName || undefined : undefined}
           isOptimistic={msg.isOptimistic}
+          isConfirming={msg.isConfirming}
           isFailed={msg.isFailed}
-          onRetry={msg.isFailed ? () => {} : undefined}
-          onDismiss={msg.isFailed ? () => {} : undefined}
+          onRetry={msg.isFailed ? () => useMessagesStore.getState().retryMessage(otherAddress, msg.id) : undefined}
+          onDismiss={msg.isFailed ? () => useMessagesStore.getState().dismissFailedMessage(otherAddress, msg.id) : undefined}
         />
       );
     });
-  }, [dmMessages, evmAddress, recipientName]);
+  }, [dmMessages, evmAddress, recipientName, useMessagesStore]);
 
   // Display name
   const headerName = recipientName || (otherAddress ? `${otherAddress.slice(0, 6)}...${otherAddress.slice(-4)}` : 'Unknown');

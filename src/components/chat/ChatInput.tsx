@@ -22,25 +22,15 @@ export function ChatInput({ placeholder, onSend, disabled = false, isSending = f
   const pendingTextRef = useRef<string | null>(null);
 
   // Sync external isSending → internal phase
-  useEffect(() => {
-    if (isSending && phase === 'idle') setPhase('signing');
-    if (!isSending && phase !== 'idle') {
-      setPhase('idle');
-      if (pendingTextRef.current && input === '') {
-        setInput(pendingTextRef.current);
-        pendingTextRef.current = null;
-      }
-    }
-  }, [isSending, phase, input]);
-
-  // Transition signing → sending after delay
-  useEffect(() => {
-    if (phase !== 'signing') return;
-    const timer = setTimeout(() => {
-      if (phase === 'signing') setPhase('sending');
-    }, 2000);
-    return () => clearTimeout(timer);
-  }, [phase]);
+useEffect(() => {
+  if (isSending && phase === 'idle') setPhase('signing');
+  if (!isSending && phase !== 'idle') {
+    // isSending went false — broadcast received or error.
+    // Reset to idle immediately so user can type next message.
+    setPhase('idle');
+    pendingTextRef.current = null;
+  }
+}, [isSending, phase]);
 
   const handleSend = async () => {
     const trimmed = input.trim();
@@ -53,13 +43,16 @@ export function ChatInput({ placeholder, onSend, disabled = false, isSending = f
 
     try {
       const result = await onSend(trimmed);
+      // onSend now returns at broadcast (fast) — phase will be reset by isSending effect
       if (result === false) {
         setInput(pendingTextRef.current || '');
+        setPhase('idle');
       }
       pendingTextRef.current = null;
     } catch {
       setInput(pendingTextRef.current || '');
       pendingTextRef.current = null;
+      setPhase('idle');
     }
   };
 
