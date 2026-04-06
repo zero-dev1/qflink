@@ -35,6 +35,7 @@ export interface DMMessage {
   id: string;
   isOptimistic?: boolean;
   isEncrypted?: boolean;
+  isFailed?: boolean;
 }
 
 interface MessagesStore {
@@ -51,6 +52,8 @@ interface MessagesStore {
   fetchConversations: () => Promise<void>;
   fetchMessages: (otherAddress: string) => Promise<void>;
   sendMessage: (recipient: string, content: string) => Promise<boolean>;
+  retryMessage: (address: string, messageId: string) => Promise<boolean>;
+  dismissFailedMessage: (address: string, messageId: string) => void;
   
   // Helpers
   getConversation: (address: string) => ConversationItem | undefined;
@@ -144,12 +147,9 @@ export const useMessagesStore = create<MessagesStore>((set, get) => ({
       // on-chain message arrives (same sender + same content within 60s)
       const existing = get().messages[lower] || [];
       const optimistic = existing.filter((m) => m.isOptimistic);
-      const deduped = raw.filter((fetched: DirectMessageData) => {
-        // Keep the fetched message, but check if it matches an optimistic one
-        return true; // Always keep chain messages
-      });
       // Remove optimistic messages that now have a chain counterpart
       const remainingOptimistic = optimistic.filter((opt) => {
+        if (opt.isFailed) return true; // Failed messages persist until retry/dismiss
         return !raw.some(
           (chain: DirectMessageData) =>
             chain.sender.toLowerCase() === opt.sender.toLowerCase() &&
@@ -161,7 +161,7 @@ export const useMessagesStore = create<MessagesStore>((set, get) => ({
       const encryptionKeyPair = useWalletStore.getState().encryptionKeyPair;
 
       const mapped: DMMessage[] = await Promise.all(
-        deduped.map(async (m, i) => {
+        raw.map(async (m, i) => {
           let content = m.content;
           let decryptionFailed = false;
 
@@ -257,26 +257,34 @@ export const useMessagesStore = create<MessagesStore>((set, get) => ({
     
     try {
       // Guard against missing encryption keypair
-      const encryptionKeyPair = useWalletStore.getState().encryptionKeyPair;
-      if (!encryptionKeyPair) {
-        // Try to re-derive silently
+      let activeKeyPair = useWalletStore.getState().encryptionKeyPair;
+      if (!activeKeyPair) {
+        // Keypair was wiped (account change, session restore) — try to re-derive
         try {
           const { getCurrentConnection } = await import('@/lib/wallet');
           const conn = getCurrentConnection();
-          if (conn) {
+          if (conn?.signer?.polkadotSigner?.signBytes) {
             const { deriveEncryptionKeypair } = await import('@/lib/encryption');
-            const signer = conn.signer;
-            // Re-derive requires signMessage capability
-            // If unavailable, fall through to plaintext path
+            const signMessage = async (message: string): Promise<Uint8Array> => {
+              const encoder = new TextEncoder();
+              const messageBytes = encoder.encode(message);
+              const result = await conn.signer.polkadotSigner.signBytes(messageBytes);
+              return new Uint8Array(result);
+            };
+            activeKeyPair = await deriveEncryptionKeypair(signMessage);
+            // Persist back to wallet store so subsequent sends don't re-prompt
+            useWalletStore.setState({ encryptionKeyPair: activeKeyPair });
           }
-        } catch {}
+        } catch {
+          // Re-derivation failed — fall through to plaintext path
+        }
       }
       
       // Attempt encryption if we have a keypair
       let messageToSend = content;
       let isEncrypted = false;
 
-      if (encryptionKeyPair) {
+      if (activeKeyPair) {
         try {
           // Fetch recipient's encryption pubkey from their on-chain profile
           const recipientProfile = await getProfile(lower as `0x${string}`);
@@ -296,7 +304,7 @@ export const useMessagesStore = create<MessagesStore>((set, get) => ({
             // NaCl box pubkey is 32 bytes
             const recipientPubkey = pubkeyBytes.slice(0, 32);
 
-            const encrypted = encryptMessage(content, recipientPubkey, encryptionKeyPair.secretKey);
+            const encrypted = encryptMessage(content, recipientPubkey, activeKeyPair.secretKey);
             // Encode as base64 with prefix so we can detect encrypted messages on read
             messageToSend = 'enc:' + btoa(String.fromCharCode(...encrypted));
             isEncrypted = true;
@@ -345,12 +353,12 @@ export const useMessagesStore = create<MessagesStore>((set, get) => ({
     } catch (error) {
       console.error('Failed to send message:', error);
       
-      // Rollback optimistic
+      // Mark as failed instead of removing
       set((state) => ({
         messages: {
           ...state.messages,
-          [lower]: (state.messages[lower] || []).filter(
-            (m) => m.id !== optimistic.id
+          [lower]: (state.messages[lower] || []).map((m) =>
+            m.id === optimistic.id ? { ...m, isOptimistic: false, isFailed: true } : m
           ),
         },
         isSending: { ...state.isSending, [addr]: false },
@@ -363,6 +371,45 @@ export const useMessagesStore = create<MessagesStore>((set, get) => ({
       
       return false;
     }
+  },
+  
+  retryMessage: async (address: string, messageId: string) => {
+    const msg = get().messages[address]?.find((m) => m.id === messageId);
+    if (!msg || !msg.isFailed) return false;
+
+    // Reset to optimistic
+    set((state) => ({
+      messages: {
+        ...state.messages,
+        [address]: (state.messages[address] || []).map((m) =>
+          m.id === messageId ? { ...m, isFailed: false, isOptimistic: true } : m
+        ),
+      },
+    }));
+
+    // Re-attempt send
+    const result = await get().sendMessage(address, msg.content);
+
+    // If sendMessage succeeded, it created a NEW optimistic message.
+    // Remove the old failed-then-retried one.
+    if (result) {
+      set((state) => ({
+        messages: {
+          ...state.messages,
+          [address]: (state.messages[address] || []).filter((m) => m.id !== messageId),
+        },
+      }));
+    }
+    return result;
+  },
+
+  dismissFailedMessage: (address: string, messageId: string) => {
+    set((state) => ({
+      messages: {
+        ...state.messages,
+        [address]: (state.messages[address] || []).filter((m) => m.id !== messageId),
+      },
+    }));
   },
   
   getConversation: (address: string) => {

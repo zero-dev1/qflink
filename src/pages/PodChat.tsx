@@ -23,6 +23,8 @@ export default function PodChat() {
     fetchPods,
     sendMessage,
     isUserMember,
+    retryMessage,
+    dismissFailedMessage,
   } = usePodsStore();
   
   const messagesEndRef = useRef<HTMLDivElement>(null);
@@ -94,9 +96,9 @@ export default function PodChat() {
   }, [podMessages]);
 
   const handleSend = async (content: string) => {
-    if (podId === null) return;
+    if (podId === null) return false;
     wasAtBottomRef.current = true;
-    await sendMessage(podId, content);
+    return await sendMessage(podId, content);
   };
 
   // Build sorted messages with collapse logic
@@ -122,6 +124,9 @@ export default function PodChat() {
           isMine={isMine}
           showSender={showSender}
           isOptimistic={isOptimistic}
+          isFailed={message.isFailed}
+          onRetry={message.isFailed ? () => retryMessage(podId!, message.id) : undefined}
+          onDismiss={message.isFailed ? () => dismissFailedMessage(podId!, message.id) : undefined}
         />
       );
     });

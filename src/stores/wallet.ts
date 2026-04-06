@@ -213,14 +213,13 @@ export const useWalletStore = create<WalletState>()(
             try {
               const conn = getCurrentConnection();
               if (!conn) return;
-              // The stored address should match the current connection
-              const currentAddr = get().address;
-              if (conn.evmAddress !== currentAddr) {
-                // Account changed in extension — refresh
-                const evmAddr = conn.evmAddress as `0x${string}`;
+              // The stored EVM address should match the current connection
+              const currentEvmAddr = get().evmAddress;
+              if (conn.evmAddress.toLowerCase() !== currentEvmAddr?.toLowerCase()) {
+                // Account genuinely changed in extension
+                const newEvmAddr = conn.evmAddress.toLowerCase();
                 set({
-                  address: evmAddr,
-                  evmAddress: evmAddr,
+                  evmAddress: newEvmAddr,
                   encryptionKeyPair: null, // Force re-derivation on next send
                 });
                 get().refreshName();

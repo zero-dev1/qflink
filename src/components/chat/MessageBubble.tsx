@@ -12,6 +12,9 @@ interface MessageBubbleProps {
   senderName?: string;
   isOptimistic?: boolean;
   isEncrypted?: boolean;
+  isFailed?: boolean;
+  onRetry?: () => void;
+  onDismiss?: () => void;
 }
 
 export function MessageBubble({
@@ -23,12 +26,15 @@ export function MessageBubble({
   senderName,
   isOptimistic = false,
   isEncrypted,
+  isFailed,
+  onRetry,
+  onDismiss,
 }: MessageBubbleProps) {
   return (
     <motion.div
       initial={{ opacity: 0, scale: 0.95, y: 6 }}
       animate={{
-        opacity: isOptimistic ? 0.55 : 1,
+        opacity: isOptimistic && !isFailed ? 0.55 : 1,
         scale: 1,
         y: 0,
       }}
@@ -67,8 +73,12 @@ export function MessageBubble({
         {/* Message content */}
         <div
           className={`${
-            isMine ? 'bg-cyan-muted rounded-lg px-3 py-2' : ''
-          } ${isOptimistic && isMine ? 'animate-pulse' : ''}`}
+            isMine
+              ? isFailed
+                ? 'bg-red-500/10 border border-red-500/20 rounded-lg px-3 py-2'
+                : 'bg-cyan-muted rounded-lg px-3 py-2'
+              : ''
+          } ${isOptimistic && isMine && !isFailed ? 'animate-pulse' : ''}`}
         >
           <p className="text-body text-text-primary">{content}</p>
         </div>
@@ -83,7 +93,7 @@ export function MessageBubble({
             <span className="text-caption text-text-tertiary">
               {formatMessageTime(timestamp)}
             </span>
-            {isOptimistic && isMine && (
+            {isOptimistic && isMine && !isFailed && (
               <span
                 className="text-caption text-text-tertiary flex items-center gap-1"
                 title="Confirming on-chain..."
@@ -106,7 +116,28 @@ export function MessageBubble({
                 </svg>
               </span>
             )}
-            {!isOptimistic && isMine && (
+            {isFailed && isMine && (
+              <div className="flex items-center gap-2 mt-0.5 justify-end">
+                <span className="text-caption text-error">Failed</span>
+                {onRetry && (
+                  <button
+                    onClick={onRetry}
+                    className="text-caption text-cyan-primary hover:text-cyan-hover transition-colors"
+                  >
+                    Retry
+                  </button>
+                )}
+                {onDismiss && (
+                  <button
+                    onClick={onDismiss}
+                    className="text-caption text-text-tertiary hover:text-text-secondary transition-colors"
+                  >
+                    Dismiss
+                  </button>
+                )}
+              </div>
+            )}
+            {!isOptimistic && isMine && !isFailed && (
               <svg
                 width="12"
                 height="12"

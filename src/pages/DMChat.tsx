@@ -21,6 +21,8 @@ export default function DMChat() {
     isSending,
     fetchMessages,
     sendMessage,
+    retryMessage,
+    dismissFailedMessage,
   } = useMessagesStore();
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
@@ -90,9 +92,9 @@ export default function DMChat() {
   }, [dmMessages]);
 
   const handleSend = async (content: string) => {
-    if (!otherAddress) return;
+    if (!otherAddress) return false;
     wasAtBottomRef.current = true;
-    await sendMessage(otherAddress, content);
+    return await sendMessage(otherAddress, content);
   };
 
   // Build rendered messages
@@ -118,6 +120,9 @@ export default function DMChat() {
           showSender={showSender}
           senderName={!isMine ? recipientName || undefined : undefined}
           isOptimistic={msg.isOptimistic}
+          isFailed={msg.isFailed}
+          onRetry={msg.isFailed ? () => retryMessage(otherAddress, msg.id) : undefined}
+          onDismiss={msg.isFailed ? () => dismissFailedMessage(otherAddress, msg.id) : undefined}
         />
       );
     });

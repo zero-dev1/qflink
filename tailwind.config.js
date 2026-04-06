@@ -40,6 +40,21 @@ export default {
         warning: '#F59E0B',
         error: '#EF4444',
         info: '#06B6D4',
+
+        // Category colors (pod cards & rail avatars)
+        'cat-trading': '#10B981',
+        'cat-alpha': '#F59E0B',
+        'cat-defi': '#8B5CF6',
+        'cat-gaming': '#F97316',
+        'cat-builders': '#3B82F6',
+        'cat-social': '#06B6D4',
+        'cat-nfts': '#EC4899',
+
+        // Badge colors
+        'badge-team': '#DADADA',
+        'badge-dapplab': '#00EFE7',
+        'badge-pioneer': '#FFD700',
+        'badge-ambassador': '#FF6B35',
       },
       fontFamily: {
         sans: ['Satoshi', 'system-ui', '-apple-system', 'sans-serif'],

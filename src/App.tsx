@@ -4,6 +4,7 @@ import { Suspense, lazy } from "react";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
 import { AppLayout } from "@/components/layout/AppLayout";
 import { ToastContainer } from "@/components/ui/Toast";
+import { ActionBar } from "@/components/ui/ActionBar";
 import { Spotlight } from "@/components/spotlight/Spotlight";
 
 // Standalone pages (no sidebar)

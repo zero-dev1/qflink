@@ -42,6 +42,7 @@ export interface RawPodMessage {
   timestamp: number;
   id: number;
   isOptimistic?: boolean;
+  isFailed?: boolean;
 }
 
 interface PodsStore {
@@ -66,6 +67,8 @@ interface PodsStore {
   fetchMessages: (podId: number) => Promise<void>;
   joinPod: (podId: number) => Promise<boolean>;
   sendMessage: (podId: number, content: string) => Promise<boolean>;
+  retryMessage: (podId: number, messageId: number) => Promise<boolean>;
+  dismissFailedMessage: (podId: number, messageId: number) => void;
   
   // Helpers
   getPodById: (id: number) => PodData | undefined;
@@ -125,12 +128,9 @@ export const usePodsStore = create<PodsStore>((set, get) => ({
       // on-chain message arrives (same sender + same content within 60s)
       const existing = get().messages[podId] || [];
       const optimistic = existing.filter((m) => m.isOptimistic);
-      const deduped = messages.filter((fetched: RawPodMessage) => {
-        // Keep the fetched message, but check if it matches an optimistic one
-        return true; // Always keep chain messages
-      });
       // Remove optimistic messages that now have a chain counterpart
       const remainingOptimistic = optimistic.filter((opt) => {
+        if (opt.isFailed) return true; // Failed messages persist until retry/dismiss
         return !messages.some(
           (chain: RawPodMessage) =>
             chain.sender.toLowerCase() === opt.sender.toLowerCase() &&
@@ -138,7 +138,7 @@ export const usePodsStore = create<PodsStore>((set, get) => ({
             Math.abs(chain.timestamp - opt.timestamp) < 60_000,
         );
       });
-      const finalMessages = [...deduped, ...remainingOptimistic];
+      const finalMessages = [...messages, ...remainingOptimistic];
       
       // Update unread tracking
       if (finalMessages.length > 0) {
@@ -317,11 +317,13 @@ export const usePodsStore = create<PodsStore>((set, get) => ({
     } catch (error) {
       console.error('Failed to send message:', error);
       
-      // 4. Rollback — remove the optimistic message
+      // 4. Mark as failed instead of removing
       set((state) => ({
         messages: {
           ...state.messages,
-          [podId]: (state.messages[podId] || []).filter((m) => m.id !== optimisticId),
+          [podId]: (state.messages[podId] || []).map((m) =>
+            m.id === optimisticId ? { ...m, isOptimistic: false, isFailed: true } : m
+          ),
         },
         isSending: { ...state.isSending, [podId]: false },
       }));
@@ -333,6 +335,45 @@ export const usePodsStore = create<PodsStore>((set, get) => ({
       
       return false;
     }
+  },
+  
+  retryMessage: async (podId: number, messageId: number) => {
+    const msg = get().messages[podId]?.find((m) => m.id === messageId);
+    if (!msg || !msg.isFailed) return false;
+
+    // Reset to optimistic
+    set((state) => ({
+      messages: {
+        ...state.messages,
+        [podId]: (state.messages[podId] || []).map((m) =>
+          m.id === messageId ? { ...m, isFailed: false, isOptimistic: true } : m
+        ),
+      },
+    }));
+
+    // Re-attempt send
+    const result = await get().sendMessage(podId, msg.content);
+
+    // If sendMessage succeeded, it created a NEW optimistic message.
+    // Remove the old failed-then-retried one.
+    if (result) {
+      set((state) => ({
+        messages: {
+          ...state.messages,
+          [podId]: (state.messages[podId] || []).filter((m) => m.id !== messageId),
+        },
+      }));
+    }
+    return result;
+  },
+
+  dismissFailedMessage: (podId: number, messageId: number) => {
+    set((state) => ({
+      messages: {
+        ...state.messages,
+        [podId]: (state.messages[podId] || []).filter((m) => m.id !== messageId),
+      },
+    }));
   },
   
   // Helpers

@@ -7,7 +7,7 @@ type SendPhase = 'idle' | 'signing' | 'sending';
 
 interface ChatInputProps {
   placeholder: string;
-  onSend: (content: string) => Promise<void> | void;
+  onSend: (content: string) => Promise<boolean> | boolean | void;
   disabled?: boolean;
   isSending?: boolean;
 }
@@ -21,6 +21,7 @@ export function ChatInput({
   const [input, setInput] = useState('');
   const [phase, setPhase] = useState<SendPhase>('idle');
   const inputRef = useRef<HTMLInputElement>(null);
+  const pendingTextRef = useRef<string | null>(null);
 
   // Sync external isSending → internal phase
   useEffect(() => {
@@ -29,8 +30,14 @@ export function ChatInput({
     }
     if (!isSending && phase !== 'idle') {
       setPhase('idle');
+      // If we still have pending text and the input is empty, the send failed
+      // (success would have cleared pendingTextRef)
+      if (pendingTextRef.current && input === '') {
+        setInput(pendingTextRef.current);
+        pendingTextRef.current = null;
+      }
     }
-  }, [isSending, phase]);
+  }, [isSending, phase, input]);
 
   // Transition from 'signing' to 'sending' after a short delay
   // (the wallet popup has appeared, user is signing)
@@ -42,15 +49,30 @@ export function ChatInput({
     return () => clearTimeout(timer);
   }, [phase]);
 
-  const handleSend = () => {
+  const handleSend = async () => {
     const trimmed = input.trim();
     if (!trimmed || disabled || phase !== 'idle') return;
     hapticTap();
+    pendingTextRef.current = trimmed;
     setInput('');
     setPhase('signing');
     // Re-focus input for next message
     inputRef.current?.focus();
-    onSend(trimmed);
+
+    try {
+      const result = await onSend(trimmed);
+      // If onSend explicitly returns false, restore text
+      if (result === false) {
+        setInput(pendingTextRef.current || '');
+        pendingTextRef.current = null;
+      } else {
+        pendingTextRef.current = null;
+      }
+    } catch {
+      // Error during send — restore text
+      setInput(pendingTextRef.current || '');
+      pendingTextRef.current = null;
+    }
   };
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
