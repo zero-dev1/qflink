@@ -13,7 +13,7 @@ import { getCategoryColor } from '@/lib/categories';
 import { formatBalance, cn } from '@/lib/utils';
 
 export function Sidebar() {
-  const { isConnected, qnsName, evmAddress, balance, disconnect } = useWalletStore();
+  const { isConnected, isConnecting, qnsName, evmAddress, balance, disconnect } = useWalletStore();
   const { pods, userPodIds } = usePodsStore();
   const navigate = useNavigate();
   const location = useLocation();
@@ -33,7 +33,7 @@ export function Sidebar() {
   return (
     <aside className="hidden md:flex h-screen shrink-0">
       {/* ─── Layer 1: Rail (56px) ─── */}
-      <div className="w-14 h-full flex flex-col items-center bg-white/[0.02] backdrop-blur-xl border-r border-white/[0.06] py-3 gap-1">
+      <div className="w-14 h-full flex flex-col items-center bg-white/[0.02] backdrop-blur-md border-r border-white/[0.06] py-3 gap-1">
         {/* QFLink mark → Home */}
         <NavLink
           to={isConnected ? '/home' : '/'}
@@ -132,20 +132,31 @@ export function Sidebar() {
           )}
         </NavLink>
 
-        {/* Profile capsule at bottom */}
+        {/* Profile capsule at bottom — §23 pulsing border when reconnecting */}
         <div className="mt-2 pt-2 border-t border-white/[0.06]">
-          {isConnected && evmAddress ? (
+          {(isConnected || isConnecting) && evmAddress ? (
             <button
               onClick={() => navigate('/profile')}
               className="relative group active:scale-[0.96]"
-              aria-label="Profile"
+              aria-label={isConnecting ? 'Reconnecting...' : 'Profile'}
             >
-              <div className="w-10 h-10 rounded-full overflow-hidden border-2 border-cyan-border">
-                <Avatar address={evmAddress} size={48} className="w-full h-full" />
+              <div
+                className={cn(
+                  'w-10 h-10 rounded-full overflow-hidden border-2 transition-colors',
+                  isConnecting
+                    ? 'border-cyan-primary animate-pulse-slow'
+                    : 'border-cyan-border'
+                )}
+              >
+                <Avatar
+                  address={evmAddress}
+                  size={48}
+                  className={cn('w-full h-full', isConnecting && 'opacity-60')}
+                />
               </div>
               {/* Collapsed tooltip */}
               <div className="absolute left-full ml-2 top-1/2 -translate-y-1/2 px-2 py-1 rounded bg-surface-4 text-caption text-text-primary whitespace-nowrap opacity-0 group-hover:opacity-100 pointer-events-none transition-opacity z-50">
-                {displayName}
+                {isConnecting ? 'Reconnecting...' : displayName}
               </div>
             </button>
           ) : (
@@ -172,7 +183,7 @@ export function Sidebar() {
             animate={{ width: 240, opacity: 1 }}
             exit={{ width: 0, opacity: 0 }}
             transition={{ type: 'spring', damping: 25, stiffness: 300 }}
-            className="h-full bg-white/[0.01] backdrop-blur-lg border-r border-white/[0.04] overflow-hidden"
+            className="h-full bg-white/[0.01] backdrop-blur-md border-r border-white/[0.04] overflow-hidden"
           >
             <div className="w-60 h-full flex flex-col">
               {/* Panel header */}
@@ -196,12 +207,17 @@ export function Sidebar() {
                 <ContextPanelContent />
               </div>
 
-              {/* Profile capsule (expanded) */}
-              {isConnected && evmAddress && (
+              {/* Profile capsule (expanded) — §23 pulsing border when reconnecting */}
+              {(isConnected || isConnecting) && evmAddress && (
                 <div className="px-3 py-3 border-t border-white/[0.04]">
                   <button
                     onClick={() => navigate('/profile')}
-                    className="w-full flex items-center gap-2.5 px-2.5 py-2 rounded-pill bg-white/[0.02] border border-cyan-border hover:bg-white/[0.04] transition-colors active:scale-[0.98]"
+                    className={cn(
+                      'w-full flex items-center gap-2.5 px-2.5 py-2 rounded-pill bg-white/[0.02] hover:bg-white/[0.04] transition-colors active:scale-[0.98] border',
+                      isConnecting
+                        ? 'border-cyan-primary animate-pulse-slow'
+                        : 'border-cyan-border'
+                    )}
                   >
                     <Avatar address={evmAddress} size={32} className="shrink-0" />
                     <div className="flex-1 min-w-0 text-left">

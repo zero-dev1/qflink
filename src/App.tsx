@@ -1,11 +1,11 @@
 // src/App.tsx
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import { Suspense, lazy } from "react";
+import { MotionConfig } from "framer-motion";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
 import { AppLayout } from "@/components/layout/AppLayout";
 import { ToastContainer } from "@/components/ui/Toast";
 import { ActionBar } from "@/components/ui/ActionBar";
-import { Spotlight } from "@/components/spotlight/Spotlight";
 
 // Standalone pages (no sidebar)
 const Landing = lazy(() => import("@/pages/Landing"));
@@ -22,8 +22,11 @@ const CreatorDashboard = lazy(() => import("@/pages/CreatorDashboard"));
 
 function PageLoader() {
   return (
-    <div className="flex h-screen items-center justify-center bg-base">
-      <div className="h-8 w-8 border-2 border-white/[0.10] border-t-cyan-primary rounded-full animate-spin" />
+    <div className="h-screen bg-base relative">
+      {/* §26.3 — Thin pulsing cyan line at top, not spinners */}
+      <div className="absolute top-0 left-0 right-0 h-[2px] bg-white/[0.04] overflow-hidden">
+        <div className="h-full w-1/3 bg-cyan-primary animate-shimmer" style={{ backgroundSize: '200% 100%' }} />
+      </div>
     </div>
   );
 }
@@ -31,30 +34,33 @@ function PageLoader() {
 export default function App() {
   return (
     <ErrorBoundary>
-      <BrowserRouter>
-        <Suspense fallback={<PageLoader />}>
-          <Routes>
-            {/* Standalone — no app chrome */}
-            <Route path="/" element={<Landing />} />
-            <Route path="/connect" element={<Connect />} />
+      {/* §28 — Respect prefers-reduced-motion for all Framer Motion animations */}
+      <MotionConfig reducedMotion="user">
+        <BrowserRouter>
+          <Suspense fallback={<PageLoader />}>
+            <Routes>
+              {/* Standalone — no app chrome */}
+              <Route path="/" element={<Landing />} />
+              <Route path="/connect" element={<Connect />} />
 
-            {/* App — sidebar + content */}
-            <Route element={<AppLayout />}>
-              <Route path="/home" element={<Home />} />
-              <Route path="/explore" element={<Explore />} />
-              <Route path="/pod/:id" element={<PodChat />} />
-              <Route path="/messages" element={<Messages />} />
-              <Route path="/dm/:address" element={<DMChat />} />
-              <Route path="/profile" element={<Profile />} />
-              <Route path="/creator/:podId" element={<CreatorDashboard />} />
-            </Route>
+              {/* App — sidebar + content */}
+              <Route element={<AppLayout />}>
+                <Route path="/home" element={<Home />} />
+                <Route path="/explore" element={<Explore />} />
+                <Route path="/pod/:id" element={<PodChat />} />
+                <Route path="/messages" element={<Messages />} />
+                <Route path="/dm/:address" element={<DMChat />} />
+                <Route path="/profile" element={<Profile />} />
+                <Route path="/creator/:podId" element={<CreatorDashboard />} />
+              </Route>
 
-            <Route path="*" element={<Navigate to="/" replace />} />
-          </Routes>
-        </Suspense>
-        <ToastContainer />
-        <Spotlight />
-      </BrowserRouter>
+              <Route path="*" element={<Navigate to="/" replace />} />
+            </Routes>
+          </Suspense>
+          <ToastContainer />
+          <ActionBar />
+        </BrowserRouter>
+      </MotionConfig>
     </ErrorBoundary>
   );
 }

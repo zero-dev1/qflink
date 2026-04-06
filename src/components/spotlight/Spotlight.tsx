@@ -189,7 +189,7 @@ export function Spotlight() {
             transition={{ duration: 0.2, ease: [0.25, 0.1, 0.25, 1] }}
             className="fixed top-[20%] inset-x-0 z-[61] flex justify-center px-4"
           >
-            <div className="w-full max-w-lg bg-surface-2/80 backdrop-blur-2xl border border-white/[0.08] rounded-xl overflow-hidden">
+            <div className="w-full max-w-lg bg-surface-2/80 backdrop-blur-md border border-white/[0.08] rounded-xl overflow-hidden">
               {/* Search input */}
               <div className="flex items-center gap-3 px-4 h-14 border-b border-white/[0.06]">
                 <svg width="18" height="18" viewBox="0 0 18 18" fill="none" className="text-text-tertiary shrink-0">

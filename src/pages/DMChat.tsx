@@ -1,4 +1,5 @@
 // src/pages/DMChat.tsx
+// Design System §16.2 — Header with tappable avatar, encryption indicator, tx state bubbles
 import { useEffect, useRef, useMemo, useCallback, useState } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { useMessagesStore } from '@/stores/messages';
@@ -9,20 +10,18 @@ import { MessageBubble } from '@/components/chat/MessageBubble';
 import { ChatInput } from '@/components/chat/ChatInput';
 import { Avatar } from '@/components/ui/Avatar';
 import { Skeleton } from '@/components/ui/Skeleton';
-import { Button } from '@/components/ui/Button';
+import { ProfileSheet } from '@/components/ui/ProfileSheet';
 import { reverseResolve } from '@/lib/qns';
 
 export default function DMChat() {
   const { address } = useParams<{ address: string }>();
-  const { isConnected, evmAddress } = useWalletStore();
+  const { isConnected, evmAddress, encryptionKeyPair } = useWalletStore();
   const {
     messages,
     isLoadingMessages,
     isSending,
     fetchMessages,
     sendMessage,
-    retryMessage,
-    dismissFailedMessage,
   } = useMessagesStore();
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
@@ -30,6 +29,7 @@ export default function DMChat() {
   const wasAtBottomRef = useRef(true);
   const [recipientName, setRecipientName] = useState<string | null>(null);
   const [recipientEncryptionReady, setRecipientEncryptionReady] = useState<boolean>(true);
+  const [showProfileSheet, setShowProfileSheet] = useState(false);
 
   const otherAddress = address?.toLowerCase() || '';
   const dmMessages = messages[otherAddress] || [];
@@ -37,9 +37,7 @@ export default function DMChat() {
   // Resolve recipient QNS name
   useEffect(() => {
     if (!otherAddress) return;
-    reverseResolve(otherAddress)
-      .then((name) => setRecipientName(name))
-      .catch(() => {});
+    reverseResolve(otherAddress).then((name) => setRecipientName(name)).catch(() => {});
   }, [otherAddress]);
 
   // Check recipient encryption readiness
@@ -47,13 +45,13 @@ export default function DMChat() {
     if (!otherAddress) return;
     import('@/lib/contractCalls').then(({ getProfile }) => {
       getProfile(otherAddress as `0x${string}`).then((profile) => {
-        const hasPubkey = profile?.encryptionPubkey &&
-          profile.encryptionPubkey !== '0x' &&
-          !/^0x0+$/.test(profile.encryptionPubkey);
+        const hasPubkey = profile?.encryptionPubkey && profile.encryptionPubkey !== '0x' && !/^0x0+$/.test(profile.encryptionPubkey);
         setRecipientEncryptionReady(!!hasPubkey);
       }).catch(() => {});
     });
   }, [otherAddress]);
+
+  const isEncrypted = !!encryptionKeyPair && recipientEncryptionReady;
 
   // Scroll tracking
   const checkIsAtBottom = useCallback(() => {
@@ -66,14 +64,14 @@ export default function DMChat() {
     wasAtBottomRef.current = checkIsAtBottom();
   }, [checkIsAtBottom]);
 
-  // Fetch messages on mount
+  // Fetch messages
   useEffect(() => {
     if (!otherAddress || !isConnected) return;
     fetchMessages(otherAddress);
     useUnreadStore.getState().markDMSeen(otherAddress);
   }, [otherAddress, isConnected, fetchMessages]);
 
-  // Poll — pauses when tab hidden, fires immediately on return
+  // Poll
   useVisibilityPolling(
     () => {
       if (!otherAddress || !isConnected) return;
@@ -84,7 +82,7 @@ export default function DMChat() {
     [otherAddress, isConnected, fetchMessages],
   );
 
-  // Auto-scroll when at bottom
+  // Auto-scroll
   useEffect(() => {
     if (wasAtBottomRef.current && messagesEndRef.current) {
       messagesEndRef.current.scrollIntoView({ behavior: 'smooth' });
@@ -103,11 +101,7 @@ export default function DMChat() {
 
     return sorted.map((msg, index) => {
       const prev = sorted[index - 1];
-      const showSender =
-        !prev ||
-        prev.sender !== msg.sender ||
-        msg.timestamp - prev.timestamp > 5 * 60 * 1000;
-
+      const showSender = !prev || prev.sender !== msg.sender || msg.timestamp - prev.timestamp > 5 * 60 * 1000;
       const isMine = msg.sender.toLowerCase() === evmAddress?.toLowerCase();
 
       return (
@@ -121,33 +115,21 @@ export default function DMChat() {
           senderName={!isMine ? recipientName || undefined : undefined}
           isOptimistic={msg.isOptimistic}
           isFailed={msg.isFailed}
-          onRetry={msg.isFailed ? () => retryMessage(otherAddress, msg.id) : undefined}
-          onDismiss={msg.isFailed ? () => dismissFailedMessage(otherAddress, msg.id) : undefined}
+          onRetry={msg.isFailed ? () => {} : undefined}
+          onDismiss={msg.isFailed ? () => {} : undefined}
         />
       );
     });
   }, [dmMessages, evmAddress, recipientName]);
 
-  // Display name for header — FIX: always show something
-  const headerDisplayName = recipientName
-    ? recipientName
-    : otherAddress
-      ? `${otherAddress.slice(0, 6)}...${otherAddress.slice(-4)}` 
-      : 'Unknown';
+  // Display name
+  const headerName = recipientName || (otherAddress ? `${otherAddress.slice(0, 6)}...${otherAddress.slice(-4)}` : 'Unknown');
 
-  // Disconnected state
   if (!isConnected) {
     return (
       <div className="h-full flex flex-col items-center justify-center px-6 text-center">
-        <p className="text-body text-text-secondary">
-          Connect your wallet to view this conversation
-        </p>
-        <Link
-          to="/connect"
-          className="mt-4 text-label text-cyan-primary hover:text-cyan-hover transition-colors"
-        >
-          Connect →
-        </Link>
+        <p className="text-body text-text-secondary">Connect your wallet to view this conversation</p>
+        <Link to="/connect" className="mt-4 text-label text-cyan-primary hover:text-cyan-hover transition-colors">Connect →</Link>
       </div>
     );
   }
@@ -156,78 +138,68 @@ export default function DMChat() {
     return (
       <div className="h-full flex flex-col items-center justify-center px-6 text-center">
         <p className="text-body text-text-secondary">Invalid address</p>
-        <Link
-          to="/messages"
-          className="mt-4 text-label text-cyan-primary hover:text-cyan-hover transition-colors"
-        >
-          Back to Messages →
-        </Link>
+        <Link to="/messages" className="mt-4 text-label text-cyan-primary hover:text-cyan-hover transition-colors">Back to Messages →</Link>
       </div>
     );
   }
 
   return (
     <div className="flex flex-col h-full">
-      {/* Header */}
+      {/* §16.2 — Header with tappable avatar + encryption indicator */}
       <div className="flex items-center gap-3 px-4 md:px-6 h-14 border-b border-white/[0.04] shrink-0">
-        <Link to="/messages">
-          <Button variant="icon" aria-label="Back to messages">
+        <Link to="/messages" className="shrink-0">
+          <button className="w-8 h-8 rounded-lg flex items-center justify-center text-text-tertiary hover:text-text-secondary hover:bg-white/[0.04] active:scale-[0.96]" aria-label="Back">
             <svg width="20" height="20" viewBox="0 0 20 20" fill="none">
               <path d="M12.5 15L7.5 10L12.5 5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
             </svg>
-          </Button>
+          </button>
         </Link>
-        <Avatar address={otherAddress} size={32} />
-        <span className="text-label text-text-primary truncate">
-          {recipientName ? (
-            <>
-              {recipientName.replace('.qf', '')}
-              <span className="text-cyan-primary">.qf</span>
-            </>
-          ) : (
-            headerDisplayName
-          )}
-        </span>
+
+        {/* Tappable avatar → profile sheet */}
+        <button onClick={() => setShowProfileSheet(true)} className="shrink-0 active:scale-[0.96]" aria-label="View profile">
+          <Avatar address={otherAddress} size={32} />
+        </button>
+
+        <div className="flex-1 min-w-0">
+          <span className="text-label text-text-primary truncate block">
+            {recipientName ? (
+              <>{recipientName.replace('.qf', '')}<span className="text-cyan-primary">.qf</span></>
+            ) : headerName}
+          </span>
+        </div>
+
+        {/* Encryption indicator */}
+        {isEncrypted && (
+          <span className="text-sm shrink-0" title="End-to-end encrypted" role="img" aria-label="End-to-end encrypted">🔒</span>
+        )}
       </div>
 
       {/* Messages area */}
-      <div
-        ref={messagesContainerRef}
-        onScroll={handleScroll}
-        className="flex-1 overflow-y-auto px-4 md:px-6 py-4"
-      >
+      <div ref={messagesContainerRef} onScroll={handleScroll} className="flex-1 overflow-y-auto px-4 md:px-6 py-4">
         {isLoadingMessages[otherAddress] ? (
-          <>
+          <div className="space-y-4">
             {[1, 2, 3].map((i) => (
-              <div
-                key={i}
-                className={`flex ${i % 2 === 0 ? 'justify-end' : 'justify-start'} mt-4`}
-              >
-                <div className="max-w-[85%] md:max-w-[75%]">
-                  <Skeleton className="h-4 w-32 mb-1" />
-                  <Skeleton className="h-8 w-48" />
-                </div>
+              <div key={i} className={`flex ${i % 2 === 0 ? 'justify-end' : 'justify-start'}`}>
+                <Skeleton className="h-10 w-48 rounded-lg" />
               </div>
             ))}
-          </>
+          </div>
         ) : dmMessages.length === 0 ? (
+          /* §16.2 — Empty state: large avatar + "Everything here lives on-chain." */
           <div className="flex items-center justify-center h-full">
             <div className="text-center">
-              <Avatar address={otherAddress} size={48} className="mx-auto mb-3" />
-              <p className="text-body text-text-secondary">
-                This is the beginning of your conversation with{' '}
-                {recipientName && recipientName.endsWith('.qf') ? (
-                  <>
-                    {recipientName.slice(0, -3)}
-                    <span className="text-cyan-primary">.qf</span>
-                  </>
-                ) : (
-                  headerDisplayName
-                )}
+              <Avatar address={otherAddress} size={80} className="mx-auto mb-4" />
+              <p className="text-label text-text-primary">
+                {recipientName ? (
+                  <>{recipientName.replace('.qf', '')}<span className="text-cyan-primary">.qf</span></>
+                ) : headerName}
               </p>
-              <p className="mt-1 text-body-sm text-text-tertiary">
-                Messages are stored on-chain forever
+              <p className="mt-2 text-body-sm text-text-tertiary">
+                Everything here lives on-chain.
               </p>
+              {isEncrypted && (
+                <p className="mt-1 text-caption text-cyan-primary">🔒 End-to-end encrypted</p>
+              )}
             </div>
           </div>
         ) : (
@@ -238,23 +210,39 @@ export default function DMChat() {
         )}
       </div>
 
+      {/* Encryption warning */}
       {!recipientEncryptionReady && isConnected && (
-        <div className="px-4 md:px-6 py-2 bg-yellow-500/10 border-t border-yellow-500/20">
-          <p className="text-caption text-yellow-400/80 text-center">
+        <div className="px-4 md:px-6 py-2 bg-warning/5 border-t border-warning/20">
+          <p className="text-caption text-warning/80 text-center">
             Messages to this user are not encrypted — they haven't set up encryption yet
           </p>
         </div>
       )}
 
-      {/* Chat input */}
+      {/* §16.2 — Chat input with encryption indicator */}
       <div className="shrink-0 px-4 md:px-6 py-3 pb-[calc(0.75rem+env(safe-area-inset-bottom))] border-t border-white/[0.04] bg-base">
-        <ChatInput
-          placeholder={`Message ${recipientName || headerDisplayName}...`}
-          onSend={handleSend}
-          disabled={!isConnected}
-          isSending={isSending[otherAddress] || false}
-        />
+        <div className="flex items-center gap-2">
+          {/* Encryption indicator left of input */}
+          <span className="text-sm shrink-0" title={isEncrypted ? 'Encrypted' : 'Not encrypted'} role="img" aria-label={isEncrypted ? 'Messages are encrypted' : 'Messages are not encrypted'}>
+            {isEncrypted ? '🔒' : '🔓'}
+          </span>
+          <div className="flex-1">
+            <ChatInput
+              placeholder={`Message ${recipientName || headerName}...`}
+              onSend={handleSend}
+              disabled={!isConnected}
+              isSending={isSending[otherAddress] || false}
+            />
+          </div>
+        </div>
       </div>
+
+      {/* §11 — Avatar-as-portal: profile sheet for recipient */}
+      <ProfileSheet
+        address={otherAddress}
+        isOpen={showProfileSheet}
+        onClose={() => setShowProfileSheet(false)}
+      />
     </div>
   );
 }

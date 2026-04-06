@@ -1,8 +1,11 @@
 // src/components/pods/PodCard.tsx
+// Design System §14.3 — Pod Card Anatomy
 import { motion, useMotionValue, useSpring, useTransform } from 'framer-motion';
 import { useRef } from 'react';
 import { PodData } from '@/stores/pods';
-import { formatCompactBalance } from '@/lib/utils';
+import { formatExactAmount } from '@/lib/utils';
+import { getCategoryColor } from '@/lib/categories';
+import { BADGE_TYPES } from '@/lib/badges';
 
 interface PodCardProps {
   pod: PodData;
@@ -15,8 +18,8 @@ export function PodCard({ pod, isOfficial = false, onClick }: PodCardProps) {
   const mouseX = useMotionValue(0.5);
   const mouseY = useMotionValue(0.5);
 
-  const rotateX = useSpring(useTransform(mouseY, [0, 1], [3, -3]), { stiffness: 300, damping: 30 });
-  const rotateY = useSpring(useTransform(mouseX, [0, 1], [-3, 3]), { stiffness: 300, damping: 30 });
+  const rotateX = useSpring(useTransform(mouseY, [0, 1], [2, -2]), { stiffness: 300, damping: 30 });
+  const rotateY = useSpring(useTransform(mouseX, [0, 1], [-2, 2]), { stiffness: 300, damping: 30 });
 
   const handleMouseMove = (e: React.MouseEvent) => {
     if (!cardRef.current) return;
@@ -30,47 +33,88 @@ export function PodCard({ pod, isOfficial = false, onClick }: PodCardProps) {
     mouseY.set(0.5);
   };
 
+  // Strip color: official = badge color (team/dapplab), community = category color
+  const stripColor = isOfficial
+    ? BADGE_TYPES.team.color
+    : getCategoryColor(pod.category);
+
+  // Economics display per §14.3
+  const hasFee = pod.threshold > 0n;
+  const hasGate = pod.minBalance > 0n;
+  const feeDisplay = hasFee ? `${formatExactAmount(pod.threshold)} QF` : null;
+  const gateDisplay = hasGate ? `🔒 ${formatExactAmount(pod.minBalance)}+ QF` : null;
+
+  let economicsText: string;
+  if (feeDisplay && gateDisplay) {
+    economicsText = `${feeDisplay} · ${gateDisplay}`;
+  } else if (feeDisplay) {
+    economicsText = feeDisplay;
+  } else if (gateDisplay) {
+    economicsText = `Free · ${gateDisplay}`;
+  } else {
+    economicsText = 'Free';
+  }
+
   return (
     <motion.div
       ref={cardRef}
+      role="button"
+      tabIndex={0}
+      aria-label={`${pod.name}${isOfficial ? ', Official' : ''} — ${pod.category}, ${pod.memberCount} members, ${economicsText}`}
       onMouseMove={handleMouseMove}
       onMouseLeave={handleMouseLeave}
+      onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onClick(); } }}
       style={{ rotateX, rotateY, transformPerspective: 800 }}
       whileHover={{ scale: 1.01 }}
-      transition={{ duration: 0.2, scale: { duration: 0.2 } }}
-      className={`bg-white/[0.02] border border-white/[0.06] rounded-xl cursor-pointer transition-colors duration-150 hover:border-cyan-primary/20 ${
-        isOfficial ? 'border-t-2 border-t-cyan-primary p-6' : 'p-4'
-      }`}
+      transition={{ duration: 0.2 }}
+      className="bg-white/[0.02] border border-white/[0.06] rounded-xl cursor-pointer hover:border-white/[0.12] transition-colors overflow-hidden active:scale-[0.98]"
       onClick={onClick}
     >
-      <div className="flex flex-col h-full">
-        {/* Category tag */}
-        <div className="text-caption text-text-tertiary mb-2">
-          {pod.category.charAt(0).toUpperCase() + pod.category.slice(1)}
+      {/* Top strip — 4px color */}
+      <div className="h-1" style={{ backgroundColor: stripColor }} />
+
+      <div className="p-4 flex flex-col h-full min-h-[140px]">
+        {/* Category chip */}
+        <div className="mb-2">
+          <span
+            className="inline-flex items-center px-2 py-0.5 rounded-pill text-[10px] font-medium"
+            style={{
+              backgroundColor: `${getCategoryColor(pod.category)}15`,
+              color: getCategoryColor(pod.category),
+            }}
+          >
+            {pod.category}
+          </span>
         </div>
 
-        {/* Pod name */}
-        <h3 className="text-h3 font-sans font-semibold text-text-primary mb-2">
-          {pod.name}
-        </h3>
-
-        {/* Description */}
-        <p className="text-body-sm text-text-secondary line-clamp-2 flex-grow mb-4">
-          {pod.description}
-        </p>
-
-        {/* Bottom row */}
-        <div className="flex items-center justify-between">
-          <div className="text-caption text-text-tertiary">
-            {pod.memberCount} members
-          </div>
-
-          {/* Threshold badge if > 0 */}
-          {pod.threshold > 0n && (
-            <div className="bg-cyan-muted text-cyan-primary text-caption px-2 py-0.5 rounded-pill">
-              {formatCompactBalance(pod.threshold)} entry
-            </div>
+        {/* Name + Official chip */}
+        <div className="flex items-center gap-2 mb-1.5">
+          <h3 className="text-h3 font-sans font-semibold text-text-primary truncate">
+            {pod.name}
+          </h3>
+          {isOfficial && (
+            <span className="inline-flex items-center px-1.5 py-0.5 rounded-pill bg-badge-team/10 text-badge-team text-[10px] font-medium shrink-0">
+              Official
+            </span>
           )}
+        </div>
+
+        {/* Description — one line truncated */}
+        {pod.description && (
+          <p className="text-body-sm text-text-secondary truncate mb-auto">
+            {pod.description}
+          </p>
+        )}
+        {!pod.description && <div className="mb-auto" />}
+
+        {/* Bottom row — members + economics */}
+        <div className="flex items-center justify-between mt-3 pt-3 border-t border-white/[0.04]">
+          <span className="text-caption text-text-tertiary">
+            👥 {pod.memberCount} members
+          </span>
+          <span className="text-caption text-text-secondary">
+            {economicsText}
+          </span>
         </div>
       </div>
     </motion.div>

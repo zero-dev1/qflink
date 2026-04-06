@@ -1,6 +1,7 @@
 // src/components/landing/ChainPulse.tsx
 import { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
+import { useVisibilityPolling } from '@/hooks/useVisibilityPolling';
 
 interface BlockBadge {
   id: number;
@@ -10,29 +11,34 @@ interface BlockBadge {
 export function ChainPulse() {
   const [blocks, setBlocks] = useState<BlockBadge[]>([]);
   const [synced, setSynced] = useState(true);
-  const blockCounter = useRef(58_196_750); // Starting block, will be replaced with real data
+  const blockCounter = useRef(58_196_750);
   const nextId = useRef(0);
+  const initialized = useRef(false);
 
+  // Initialize with 5 blocks (once)
   useEffect(() => {
-    // Initialize with 5 blocks
+    if (initialized.current) return;
+    initialized.current = true;
     const initial: BlockBadge[] = [];
     for (let i = 0; i < 5; i++) {
       initial.push({ id: nextId.current++, number: blockCounter.current + i });
     }
     blockCounter.current += 5;
     setBlocks(initial);
+  }, []);
 
-    // Add new block every 6 seconds (QF Network ~6s block time)
-    const interval = setInterval(() => {
+  // Tick new blocks — pauses when tab hidden, fires immediately on return
+  useVisibilityPolling(
+    () => {
+      if (!initialized.current) return;
       const newBlock: BlockBadge = {
         id: nextId.current++,
         number: blockCounter.current++,
       };
-      setBlocks((prev) => [...prev.slice(-4), newBlock]); // Keep last 5
-    }, 6000);
-
-    return () => clearInterval(interval);
-  }, []);
+      setBlocks((prev) => [...prev.slice(-4), newBlock]);
+    },
+    6000,
+  );
 
   return (
     <div className="flex flex-col items-center gap-3">
@@ -67,8 +73,8 @@ export function ChainPulse() {
       </div>
 
       {/* Synced indicator */}
-      <div className="flex items-center gap-1.5">
-        <span className="h-1.5 w-1.5 rounded-full bg-success animate-pulse" />
+      <div className="flex items-center gap-1.5" role="status" aria-label="Network sync status">
+        <span className="h-1.5 w-1.5 rounded-full bg-success animate-pulse" aria-hidden="true" />
         <span className="text-caption text-text-tertiary">
           Synced to QF Network
         </span>

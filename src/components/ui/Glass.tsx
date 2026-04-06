@@ -8,9 +8,9 @@ interface GlassProps extends React.HTMLAttributes<HTMLDivElement> {
 }
 
 const intensityMap = {
-  subtle: 'bg-white/[0.02] backdrop-blur-lg border-white/[0.06]',
-  medium: 'bg-white/[0.04] backdrop-blur-xl border-white/[0.08]',
-  strong: 'bg-white/[0.06] backdrop-blur-2xl border-white/[0.10]',
+  subtle: 'bg-white/[0.03] backdrop-blur-md border-white/[0.06]',
+  medium: 'bg-white/[0.04] backdrop-blur-md border-white/[0.08]',
+  strong: 'bg-white/[0.06] backdrop-blur-md border-white/[0.10]',
 };
 
 export const Glass = forwardRef<HTMLDivElement, GlassProps>(

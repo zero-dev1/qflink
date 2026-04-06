@@ -113,7 +113,7 @@ export function ActionBarInline({
             initial={{ opacity: 0, y: -4 }}
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: -4 }}
-            className="absolute left-0 right-0 top-full mt-1 z-10 rounded-lg bg-surface-3/90 backdrop-blur-xl border border-white/[0.08] overflow-hidden"
+            className="absolute left-0 right-0 top-full mt-1 z-10 rounded-lg bg-surface-3/90 backdrop-blur-md border border-white/[0.08] overflow-hidden"
           >
             <button
               onClick={() => handleSelect(resolvedAddress)}
@@ -397,7 +397,7 @@ export function ActionBar() {
             transition={{ type: 'spring', damping: 25, stiffness: 300 }}
             className="fixed top-[20%] inset-x-0 z-[61] flex justify-center px-4"
           >
-            <div className="w-full max-w-modal bg-white/[0.04] backdrop-blur-2xl border border-white/[0.08] rounded-xl overflow-hidden shadow-2xl">
+            <div className="w-full max-w-modal bg-white/[0.04] backdrop-blur-md border border-white/[0.08] rounded-xl overflow-hidden shadow-2xl">
               {/* Input */}
               <div className="flex items-center gap-3 px-4 h-14 border-b border-white/[0.06]">
                 <svg

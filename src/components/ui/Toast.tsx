@@ -16,8 +16,16 @@ const iconColors: Record<string, string> = {
   info: "text-cyan-primary",
 };
 
+const borderColors: Record<string, string> = {
+  success: "border-l-success",
+  error: "border-l-error",
+  warning: "border-l-warning",
+  info: "border-l-cyan-primary",
+};
+
 function ToastItem({ toast }: { toast: ToastData }) {
   const removeToast = useToastStore((s) => s.removeToast);
+  const isManualDismiss = toast.duration === 0;
 
   return (
     <motion.div
@@ -31,7 +39,13 @@ function ToastItem({ toast }: { toast: ToastData }) {
         damping: 30,
         opacity: { duration: 0.15 },
       }}
-      className="flex items-start gap-3 max-w-toast bg-surface-4 border border-border-medium rounded-[12px] px-4 py-3 shadow-none"
+      role="alert"
+      aria-live={isManualDismiss ? "assertive" : "polite"}
+      className={cn(
+        "relative flex items-start gap-3 max-w-toast bg-surface-4 border border-border-medium rounded-[12px] px-4 py-3 shadow-none overflow-hidden",
+        isManualDismiss && "border-l-[3px]",
+        isManualDismiss && borderColors[toast.type],
+      )}
     >
       <span className={cn("text-label font-semibold shrink-0 mt-0.5", iconColors[toast.type])}>
         {icons[toast.type]}
@@ -39,10 +53,26 @@ function ToastItem({ toast }: { toast: ToastData }) {
       <p className="text-body-sm text-text-primary flex-1">{toast.message}</p>
       <button
         onClick={() => removeToast(toast.id)}
-        className="text-text-tertiary hover:text-text-secondary text-body-sm shrink-0 mt-0.5"
+        className={cn(
+          "shrink-0 mt-0.5 transition-colors",
+          isManualDismiss
+            ? "text-text-secondary hover:text-text-primary text-label font-medium"
+            : "text-text-tertiary hover:text-text-secondary text-body-sm"
+        )}
+        aria-label="Dismiss notification"
       >
         ✕
       </button>
+
+      {/* Auto-dismiss progress bar — §22 */}
+      {toast.duration > 0 && (
+        <motion.div
+          initial={{ scaleX: 1 }}
+          animate={{ scaleX: 0 }}
+          transition={{ duration: toast.duration / 1000, ease: "linear" }}
+          className="absolute bottom-0 left-0 right-0 h-[2px] bg-white/[0.08] origin-left"
+        />
+      )}
     </motion.div>
   );
 }

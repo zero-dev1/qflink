@@ -15,7 +15,7 @@ export function MobileTabBar() {
   const navigate = useNavigate();
 
   return (
-    <nav className="md:hidden fixed bottom-0 left-0 right-0 bg-base/80 backdrop-blur-xl border-t border-white/[0.04] z-50 pb-[env(safe-area-inset-bottom)]">
+    <nav className="md:hidden fixed bottom-0 left-0 right-0 bg-base/80 backdrop-blur-md border-t border-white/[0.04] z-50 pb-[env(safe-area-inset-bottom)]">
       <div className="flex items-center justify-around h-14">
         {/* Home */}
         <NavLink

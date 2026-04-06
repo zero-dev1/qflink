@@ -6,10 +6,14 @@ import { MobileTabBar } from './MobileTabBar';
 import { PageTransition } from './PageTransition';
 import { ModePill } from '@/components/ui/ModePill';
 import { useWalletStore } from '@/stores/wallet';
+import { useTabReturn } from '@/hooks/useTabReturn';
 
 export function AppLayout() {
   const location = useLocation();
   const { isConnected } = useWalletStore();
+
+  // §24 — Tab return opacity breath on main content
+  const breathClass = useTabReturn();
 
   return (
     <div className="flex h-screen bg-base overflow-hidden">
@@ -22,7 +26,7 @@ export function AppLayout() {
 
       <Sidebar />
 
-      <main id="main-content" className="flex-1 flex flex-col overflow-hidden pb-14 md:pb-0">
+      <main id="main-content" className={`flex-1 flex flex-col overflow-hidden pb-14 md:pb-0 ${breathClass}`}>
         {/* Mode pill — centered top of content area */}
         {isConnected && (
           <div className="shrink-0 py-2 px-4">

@@ -25,7 +25,7 @@ export default {
         },
 
         // Text
-        'text-primary': '#F5F5F5',
+        'text-primary': '#FFFFFF',
         'text-secondary': '#A3A3A3',
         'text-tertiary': '#636363',
         'text-on-cyan': '#050505',
@@ -72,9 +72,9 @@ export default {
         'mono': ['13px', { lineHeight: '1.4', fontWeight: '400' }],
       },
       borderRadius: {
-        DEFAULT: '10px',
+        DEFAULT: '12px',
         sm: '8px',
-        md: '10px',
+        md: '12px',
         lg: '14px',
         pill: '999px',
       },

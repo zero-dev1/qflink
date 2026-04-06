@@ -1,24 +1,20 @@
+// src/pages/Messages.tsx
+// Design System §16 — No "Messages" title. ActionBar inline at top.
 import { useEffect, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
-import { AnimatePresence } from 'framer-motion';
+import { useNavigate, Link } from 'react-router-dom';
 import { useWalletStore } from '@/stores/wallet';
 import { useMessagesStore } from '@/stores/messages';
+import { useUnreadStore } from '@/stores/unread';
 import { ConversationRow } from '@/components/messages/ConversationRow';
-import { NewMessageModal } from '@/components/messages/NewMessageModal';
+import { ActionBarInline } from '@/components/ui/ActionBar';
 import { Skeleton } from '@/components/ui/Skeleton';
-import { Button } from '@/components/ui/Button';
-import { Link } from 'react-router-dom';
+import { ProfileSheet } from '@/components/ui/ProfileSheet';
 
 export default function Messages() {
   const navigate = useNavigate();
   const { isConnected } = useWalletStore();
-  const {
-    conversations,
-    isLoadingConversations,
-    fetchConversations,
-  } = useMessagesStore();
-
-  const [showNewMessage, setShowNewMessage] = useState(false);
+  const { conversations, isLoadingConversations, fetchConversations } = useMessagesStore();
+  const [profileSheetAddress, setProfileSheetAddress] = useState<string | null>(null);
 
   useEffect(() => {
     if (isConnected) fetchConversations();
@@ -28,28 +24,19 @@ export default function Messages() {
   if (!isConnected) {
     return (
       <div className="h-full flex flex-col items-center justify-center px-6 text-center">
-        <p className="text-body text-text-secondary">
-          Connect your wallet to view messages
-        </p>
-        <Link
-          to="/connect"
-          className="mt-4 text-label text-cyan-primary hover:text-cyan-hover transition-colors"
-        >
+        <p className="text-body text-text-secondary">Connect your wallet to view messages</p>
+        <Link to="/connect" className="mt-4 text-label text-cyan-primary hover:text-cyan-hover transition-colors">
           Connect →
         </Link>
       </div>
     );
   }
 
-  return (
-    <>
-      {isLoadingConversations ? (
+  if (isLoadingConversations) {
+    return (
       <div className="h-full overflow-y-auto">
-        <div className="max-w-content mx-auto px-4 md:px-8 py-8">
-          <div className="flex items-center justify-between mb-6">
-            <Skeleton className="h-7 w-32" />
-            <Skeleton className="h-10 w-28 rounded-default" />
-          </div>
+        <div className="max-w-content px-6 md:px-8 py-6">
+          <Skeleton className="h-11 w-full rounded-xl mb-4" />
           <div className="space-y-2">
             {[1, 2, 3, 4].map((i) => (
               <Skeleton key={i} className="h-16 w-full rounded-lg" />
@@ -57,74 +44,51 @@ export default function Messages() {
           </div>
         </div>
       </div>
-      ) : (
-        <div className="h-full overflow-y-auto">
-          <div className="max-w-content mx-auto px-6 md:px-8 py-8">
-          {/* Header */}
-          <div className="flex items-center justify-between">
-            <h1 className="font-display text-h1 text-text-primary">Messages</h1>
-            {/* Desktop new message button in header */}
-            <div className="hidden md:block">
-              <Button
-                variant="secondary"
-                onClick={() => setShowNewMessage(true)}
-              >
-                New message
-              </Button>
+    );
+  }
+
+  return (
+    <div className="h-full overflow-y-auto">
+      <div className="max-w-content px-6 md:px-8 py-6">
+        {/* §16.1 — ActionBar inline at top */}
+        <ActionBarInline
+          onSelectPerson={(address) => navigate(`/dm/${address.toLowerCase()}`)}
+        />
+
+        {/* Conversation list */}
+        <div className="mt-4">
+          {conversations.length > 0 ? (
+            <div className="flex flex-col gap-0.5">
+              {conversations.map((conv) => (
+                <ConversationRow
+                  key={conv.address}
+                  conversation={conv}
+                  onClick={() => navigate(`/dm/${conv.address}`)}
+                  onAvatarTap={(addr) => setProfileSheetAddress(addr)}
+                />
+              ))}
             </div>
-          </div>
-
-          {/* Mobile FAB */}
-          <button
-            onClick={() => setShowNewMessage(true)}
-            className="md:hidden fixed bottom-20 right-4 z-40 w-14 h-14 rounded-full bg-cyan-primary text-on-cyan flex items-center justify-center shadow-none active:bg-cyan-pressed transition-colors"
-            aria-label="New message"
-          >
-            <svg width="24" height="24" viewBox="0 0 24 24" fill="none">
-              <path d="M12 5V19M5 12H19" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
-            </svg>
-          </button>
-
-          {/* Conversation list */}
-          <div className="mt-6">
-            {conversations.length > 0 ? (
-              <div className="flex flex-col gap-1">
-                {conversations.map((conv) => (
-                  <ConversationRow
-                    key={conv.address}
-                    conversation={conv}
-                    onClick={() => navigate(`/dm/${conv.address}`)}
-                  />
-                ))}
-              </div>
-            ) : (
-              <div className="rounded-xl bg-white/[0.02] border border-white/[0.06] p-8 text-center">
-                <p className="text-body text-text-secondary">No conversations yet</p>
-                <p className="mt-2 text-body-sm text-text-tertiary">
-                  Start a conversation by sending a message to any .qf name or address
-                </p>
-                <button
-                  onClick={() => setShowNewMessage(true)}
-                  className="mt-4 text-label text-cyan-primary hover:text-cyan-hover transition-colors"
-                >
-                  Start a conversation →
-                </button>
-              </div>
-            )}
-          </div>
-
-          {/* New message modal */}
-          <AnimatePresence>
-            {showNewMessage && (
-              <NewMessageModal
-                onClose={() => setShowNewMessage(false)}
-                recentConversations={conversations}
-              />
-            )}
-          </AnimatePresence>
+          ) : (
+            <div className="rounded-xl bg-white/[0.02] border border-dashed border-white/[0.08] p-12 text-center mt-8">
+              <p className="text-body text-text-secondary">
+                Your conversations will appear here.
+              </p>
+              <p className="mt-2 text-body-sm text-text-tertiary">
+                Type a .qf name above to start.
+              </p>
+            </div>
+          )}
         </div>
+
+        {/* §11 — Avatar-as-portal */}
+        {profileSheetAddress && (
+          <ProfileSheet
+            address={profileSheetAddress}
+            isOpen={!!profileSheetAddress}
+            onClose={() => setProfileSheetAddress(null)}
+          />
+        )}
       </div>
-      )}
-    </>
+    </div>
   );
 }

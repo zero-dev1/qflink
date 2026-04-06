@@ -6,7 +6,7 @@
   @font-face {
     font-family: 'Clash Display';
     src: url('/fonts/ClashDisplay-Semibold.woff2') format('woff2');
-    font-weight: 600;
+    font-weight: 600 700;
     font-style: normal;
     font-display: swap;
   }
@@ -108,4 +108,157 @@
   *:focus:not(:focus-visible) {
     outline: none;
   }
+
+  /* Reduced motion — all animations instant */
+  @media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+      animation-duration: 0.01ms !important;
+      animation-iteration-count: 1 !important;
+      transition-duration: 0.01ms !important;
+      scroll-behavior: auto !important;
+    }
+  }
 }
+
+@layer components {
+  /* Press state — universal for interactive elements */
+  .press {
+    @apply transition-transform duration-150 active:scale-[0.98];
+  }
+
+  /* ── Landing Page — Scroll Snap Container ── */
+  .snap-container {
+    height: 100vh;
+    overflow-y: auto;
+    scroll-snap-type: y mandatory;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .snap-section {
+    height: 100vh;
+    scroll-snap-align: start;
+    scroll-snap-stop: always;
+    position: relative;
+    overflow: hidden;
+  }
+
+  /* ── Self-drawing SVG path ── */
+  .svg-draw {
+    stroke-dasharray: var(--path-length, 200);
+    stroke-dashoffset: var(--path-length, 200);
+    animation: draw-path 0.8s ease-out forwards;
+  }
+
+  /* ── Typing cursor blink ── */
+  .typing-cursor::after {
+    content: '|';
+    animation: cursor-blink 0.6s step-end infinite;
+    color: #06B6D4;
+    font-weight: 300;
+    margin-left: 1px;
+  }
+
+  /* ── Connect spinner arc ── */
+  .spinner-arc {
+    fill: none;
+    stroke: #06B6D4;
+    stroke-width: 2;
+    stroke-linecap: round;
+    stroke-dasharray: 60 200;
+    stroke-dashoffset: 0;
+    transform-origin: center;
+    animation: spin-arc 1.4s linear infinite;
+  }
+
+  .spinner-arc-decel {
+    fill: none;
+    stroke: #F59E0B;
+    stroke-width: 2;
+    stroke-linecap: round;
+    stroke-dasharray: 60 200;
+    stroke-dashoffset: 0;
+    transform-origin: center;
+    animation: spin-arc-decel 0.6s cubic-bezier(0.4, 0, 0.2, 1) forwards;
+  }
+
+  .spinner-arc-accel {
+    fill: none;
+    stroke: #06B6D4;
+    stroke-width: 2;
+    stroke-linecap: round;
+    stroke-dasharray: 200 0;
+    stroke-dashoffset: 0;
+    transform-origin: center;
+    animation: spin-arc-accel 0.3s ease-in forwards;
+  }
+
+  /* ── Breathing radial gradient for hero ── */
+  .breathing-bg {
+    background: radial-gradient(ellipse at 50% 40%, rgba(6,182,212,0.04) 0%, transparent 70%);
+    animation: breathe 6s ease-in-out infinite;
+  }
+}
+
+@keyframes draw-path {
+  to { stroke-dashoffset: 0; }
+}
+
+@keyframes cursor-blink {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0; }
+}
+
+@keyframes spin-arc {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
+}
+
+@keyframes spin-arc-decel {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(180deg); }
+}
+
+@keyframes spin-arc-accel {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(720deg); }
+}
+
+@keyframes breathe {
+  0%, 100% { opacity: 0.5; transform: scale(1); }
+  50% { opacity: 1; transform: scale(1.05); }
+}
+
+@keyframes ring-trace {
+  0% { stroke-dashoffset: 283; }
+  100% { stroke-dashoffset: 0; }
+}
+
+@keyframes pulse-ring {
+  0% { transform: scale(1); opacity: 0.6; }
+  100% { transform: scale(1.5); opacity: 0; }
+}
+
+/* §23 — Slow pulse for reconnecting state (sidebar capsule) */
+@keyframes pulse-slow {
+  0%, 100% { border-color: rgba(6, 182, 212, 0.3); }
+  50% { border-color: rgba(6, 182, 212, 1); }
+}
+
+.animate-pulse-slow {
+  animation: pulse-slow 2s ease-in-out infinite;
+}
+
+/* §24 — Tab return opacity breath */
+@keyframes opacity-breath {
+  from { opacity: 0.97; }
+  to { opacity: 1; }
+}
+
+.animate-opacity-breath {
+  animation: opacity-breath 200ms ease-out forwards;
+}
+
+/* §28 — Focus rings already handled via *:focus-visible above */
+/* §28 — prefers-reduced-motion already handled via @media rule above */
