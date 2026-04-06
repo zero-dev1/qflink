@@ -6,9 +6,10 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { usePodsStore, PodData } from '@/stores/pods';
 import { useWalletStore } from '@/stores/wallet';
 import { PodCard } from '@/components/pods/PodCard';
+import { PodComposer } from '@/components/pods/PodComposer';
 import { Skeleton } from '@/components/ui/Skeleton';
 import { Avatar } from '@/components/ui/Avatar';
-import { Button } from '@/components/ui/Button';
+import { ProfileSheet } from '@/components/ui/ProfileSheet';
 import { useActionBarStore } from '@/components/ui/ActionBar';
 import { CATEGORIES, getCategoryColor } from '@/lib/categories';
 import { formatExactAmount, formatBalance, cn } from '@/lib/utils';
@@ -34,6 +35,7 @@ export default function Explore() {
   const [sortMode, setSortMode] = useState<SortMode>('active');
   const [expandedPodId, setExpandedPodId] = useState<number | null>(null);
   const [showComposer, setShowComposer] = useState(false);
+  const [profileSheetAddress, setProfileSheetAddress] = useState<string | null>(null);
 
   // Badge cache for official detection
   const [creatorBadges, setCreatorBadges] = useState<Record<string, boolean>>({});
@@ -279,42 +281,34 @@ export default function Explore() {
               onJoin={() => handleJoin(Number(expandedPod.id))}
               onEnter={() => navigate(`/pod/${expandedPod.id}`)}
               onClose={() => setExpandedPodId(null)}
+              onCreatorTap={(addr) => setProfileSheetAddress(addr)}
             />
           )}
         </AnimatePresence>
 
-        {/* Composer placeholder */}
+        {/* §15 — Pod Composer (6-beat progressive reveal, real contract calls) */}
         <AnimatePresence>
           {showComposer && (
-            <motion.div
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
-              className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4"
-              onClick={() => setShowComposer(false)}
-            >
-              <motion.div
-                initial={{ scale: 0.95, y: 16 }}
-                animate={{ scale: 1, y: 0 }}
-                exit={{ scale: 0.95, y: 8 }}
-                transition={{ type: 'spring', damping: 25, stiffness: 300 }}
-                className="bg-surface-3 border border-white/[0.08] rounded-xl p-6 max-w-modal w-full"
-                onClick={(e) => e.stopPropagation()}
-              >
-                <p className="text-body text-text-secondary text-center">
-                  Pod Composer coming in Phase 3 completion
-                </p>
-                <button
-                  onClick={() => setShowComposer(false)}
-                  className="mt-4 mx-auto block text-label text-text-tertiary hover:text-text-secondary"
-                >
-                  Close
-                </button>
-              </motion.div>
-            </motion.div>
+            <PodComposer
+              onClose={() => setShowComposer(false)}
+              onSuccess={() => {
+                setShowComposer(false);
+                fetchPods();
+                if (isConnected) fetchUserPods();
+              }}
+            />
           )}
         </AnimatePresence>
       </div>
+
+      {/* §11 — Avatar-as-portal */}
+      {profileSheetAddress && (
+        <ProfileSheet
+          address={profileSheetAddress}
+          isOpen={!!profileSheetAddress}
+          onClose={() => setProfileSheetAddress(null)}
+        />
+      )}
     </div>
   );
 }
@@ -330,6 +324,7 @@ function PodDetailInline({
   onJoin,
   onEnter,
   onClose,
+  onCreatorTap,
 }: {
   pod: PodData;
   isOfficial: boolean;
@@ -340,6 +335,7 @@ function PodDetailInline({
   onJoin: () => void;
   onEnter: () => void;
   onClose: () => void;
+  onCreatorTap?: (address: string) => void;
 }) {
   const navigate = useNavigate();
   const hasCost = pod.threshold > 0n;
@@ -457,10 +453,18 @@ function PodDetailInline({
           )}
         </div>
 
-        {/* Creator */}
-        <p className="text-caption text-text-tertiary mb-4">
-          Created by {pod.creator.slice(0, 6)}...{pod.creator.slice(-4)}
-        </p>
+        {/* Creator — tappable → profile sheet */}
+        <div className="flex items-center gap-2 mb-4">
+          <button
+            onClick={() => onCreatorTap?.(pod.creator)}
+            className="flex items-center gap-2 active:scale-[0.98]"
+          >
+            <Avatar address={pod.creator} size={24} className="shrink-0 w-5 h-5" />
+            <span className="text-caption text-text-tertiary hover:text-text-secondary transition-colors">
+              {pod.creator.slice(0, 6)}...{pod.creator.slice(-4)}
+            </span>
+          </button>
+        </div>
 
         {/* Join button */}
         <button

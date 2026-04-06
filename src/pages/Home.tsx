@@ -15,6 +15,7 @@ import { formatBalance, formatCompactBalance } from '@/lib/utils';
 import { getCategoryColor } from '@/lib/categories';
 import { getPodMessages } from '@/lib/contractCalls';
 import { useIsMobile } from '@/hooks/useIsMobile';
+import { useVisibilityPolling } from '@/hooks/useVisibilityPolling';
 import { useUnreadStore } from '@/stores/unread';
 import { ProfileSheet } from '@/components/ui/ProfileSheet';
 
@@ -55,6 +56,18 @@ export default function Home() {
     fetchUserPods();
     fetchConversations();
   }, [isConnected, fetchPods, fetchUserPods, fetchConversations]);
+
+  // Poll for fresh data — pauses when tab hidden, immediate refresh on return
+  useVisibilityPolling(
+    () => {
+      if (!isConnected) return;
+      fetchPods();
+      fetchUserPods();
+      fetchConversations();
+    },
+    15000,
+    [isConnected, fetchPods, fetchUserPods, fetchConversations],
+  );
 
   useEffect(() => {
     if (!isConnected || userPodIds.length === 0) {

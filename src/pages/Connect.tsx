@@ -135,7 +135,7 @@ function CheckMark() {
     >
       <motion.path
         d="M6 14L11.5 19.5L22 8.5"
-        stroke="#06B6D4"
+        stroke="#00EFE7"
         strokeWidth="2.5"
         strokeLinecap="round"
         strokeLinejoin="round"
@@ -265,9 +265,11 @@ interface WalletCircleProps {
   isOther: boolean;
   connectState: ConnectState;
   onClick: () => void;
+  evmAddress?: string;
+  showQnsRing?: boolean;
 }
 
-function WalletCircle({ wallet, isSelected, isOther, connectState, onClick }: WalletCircleProps) {
+function WalletCircle({ wallet, isSelected, isOther, connectState, onClick, evmAddress, showQnsRing }: WalletCircleProps) {
   const baseSize = 72;
   const expandedSize = 96;
 
@@ -277,7 +279,7 @@ function WalletCircle({ wallet, isSelected, isOther, connectState, onClick }: Wa
   // Determine border color
   let borderColor = 'rgba(255,255,255,0.08)';
   if (connectState === 'cancelled' && isSelected) borderColor = '#F59E0B';
-  if (connectState === 'approved' && isSelected) borderColor = '#06B6D4';
+  if (connectState === 'approved' && isSelected) borderColor = '#00EFE7';
 
   // Determine inner content
   const renderInner = () => {
@@ -303,7 +305,10 @@ function WalletCircle({ wallet, isSelected, isOther, connectState, onClick }: Wa
           </>
         );
       case 'seal':
+      case 'qns':
         return <QFLinkMark />;
+      case 'avatar':
+        return null;
       default:
         return <span className="text-text-secondary">{wallet.icon}</span>;
     }
@@ -352,6 +357,23 @@ function WalletCircle({ wallet, isSelected, isOther, connectState, onClick }: Wa
             {renderInner()}
           </motion.div>
         </AnimatePresence>
+
+        {/* §Fix1 — QNS emerald ring overlaid INSIDE the circle */}
+        {connectState === 'qns' && showQnsRing && isSelected && (
+          <EmeraldRing size={currentSize} />
+        )}
+
+        {/* §Fix1 — Avatar fades in as CHILD of circle container */}
+        {isSelected && evmAddress && (connectState === 'avatar' || connectState === 'pill' || connectState === 'entry') && (
+          <motion.div
+            className="absolute inset-0 rounded-full overflow-hidden"
+            initial={{ opacity: 0, scale: 0.8 }}
+            animate={{ opacity: 1, scale: 1 }}
+            transition={{ duration: 0.4, type: 'spring', stiffness: 300, damping: 20 }}
+          >
+            <AvatarIcon address={evmAddress} />
+          </motion.div>
+        )}
 
         {/* Flash on approve */}
         {connectState === 'approved' && isSelected && (
@@ -564,30 +586,11 @@ export default function Connect() {
                     isOther={selectedWallet !== null && selectedWallet !== w.id}
                     connectState={connectState}
                     onClick={() => handleSelectWallet(w.id)}
+                    evmAddress={evmAddress || undefined}
+                    showQnsRing={showQnsRing}
                   />
                 ))}
               </div>
-
-              {/* QNS emerald ring overlay on selected circle */}
-              {connectState === 'qns' && showQnsRing && selectedWallet && (
-                <div className="absolute" style={{ marginTop: -96 / 2 - 2 }}>
-                  <EmeraldRing size={100} />
-                </div>
-              )}
-
-              {/* Avatar reveal inside circle area */}
-              {connectState === 'avatar' && showAvatar && evmAddress && (
-                <motion.div
-                  className="absolute w-[96px] h-[96px] rounded-full overflow-hidden"
-                  style={{ marginTop: 0 }}
-                  initial={{ opacity: 0, scale: 0.8 }}
-                  animate={{ opacity: 1, scale: 1 }}
-                  transition={{ duration: 0.4, type: 'spring', stiffness: 300, damping: 20 }}
-                >
-                  <AvatarIcon address={evmAddress} />
-                  {showQnsRing && <EmeraldRing size={96} />}
-                </motion.div>
-              )}
 
               {/* Status text */}
               <AnimatePresence mode="wait">
@@ -659,6 +662,7 @@ export default function Connect() {
               transition={{ type: 'spring', stiffness: 300, damping: 20 }}
             >
               <motion.div
+                layoutId="profile-capsule"
                 className={cn(
                   'flex items-center gap-3 px-4 py-2 rounded-full border-2',
                   hasQns ? 'border-[#00EFE7]' : 'border-white/[0.10]',

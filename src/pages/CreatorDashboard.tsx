@@ -11,6 +11,7 @@ import {
   getPod,
   getCreator,
   getEntryFee,
+  setEntryFee as setEntryFeeContract,
   getPodMemberCount,
   getPaymentsBalance,
   getPaymentsCreatorShare,
@@ -47,6 +48,33 @@ export default function CreatorDashboard() {
   // Inline edit states
   const [editingFee, setEditingFee] = useState(false);
   const [editingThreshold, setEditingThreshold] = useState(false);
+  const [isSavingFee, setIsSavingFee] = useState(false);
+
+  const handleSaveFee = async (newValue: string) => {
+    if (podId === null) return;
+    const parsed = parseFloat(newValue);
+    if (isNaN(parsed) || parsed < 0) {
+      addToast('error', 'Invalid fee value');
+      return;
+    }
+    setIsSavingFee(true);
+    try {
+      const feeWei = BigInt(Math.floor(parsed * 1e18));
+      const result = await setEntryFeeContract(podId, feeWei);
+      const confirmation = await result.confirmation;
+      if (confirmation.confirmed) {
+        setEntryFee(feeWei);
+        setEditingFee(false);
+        addToast('success', 'Entry fee updated');
+      } else {
+        addToast('error', confirmation.error || 'Transaction failed');
+      }
+    } catch (err) {
+      addToast('error', 'Failed to update entry fee');
+    } finally {
+      setIsSavingFee(false);
+    }
+  };
 
   const podId = podIdParam ? parseInt(podIdParam, 10) : null;
 
@@ -172,8 +200,10 @@ export default function CreatorDashboard() {
                 label="Entry fee"
                 value={entryFee !== null && entryFee > 0n ? `${formatExactAmount(entryFee)} QF` : 'Free'}
                 isEditing={editingFee}
+                isSaving={isSavingFee}
                 onEdit={() => setEditingFee(true)}
                 onCancel={() => setEditingFee(false)}
+                onSave={handleSaveFee}
               />
               <InlineEditRow
                 label="Token gate"
@@ -244,15 +274,21 @@ function InlineEditRow({
   label,
   value,
   isEditing,
+  isSaving,
   onEdit,
   onCancel,
+  onSave,
 }: {
   label: string;
   value: string;
   isEditing: boolean;
+  isSaving?: boolean;
   onEdit: () => void;
   onCancel: () => void;
+  onSave?: (newValue: string) => void;
 }) {
+  const [editValue, setEditValue] = useState(value === 'Free' || value === 'None' ? '' : value.replace(' QF', ''));
+
   return (
     <div className="flex items-center justify-between py-2">
       <span className="text-body-sm text-text-secondary">{label}</span>
@@ -260,10 +296,19 @@ function InlineEditRow({
         <div className="flex items-center gap-2">
           <input
             type="text"
-            defaultValue={value === 'Free' || value === 'None' ? '' : value.replace(' QF', '')}
+            value={editValue}
+            onChange={(e) => setEditValue(e.target.value)}
             className="w-20 h-8 rounded-lg bg-white/[0.03] border border-white/[0.08] px-2 text-body-sm text-text-primary outline-none text-right"
             autoFocus
+            onKeyDown={(e) => { if (e.key === 'Enter') onSave?.(editValue); if (e.key === 'Escape') onCancel(); }}
           />
+          <button
+            onClick={() => onSave?.(editValue)}
+            disabled={isSaving}
+            className="text-caption text-cyan-primary hover:text-cyan-hover transition-colors disabled:text-text-tertiary"
+          >
+            {isSaving ? 'Saving...' : 'Save'}
+          </button>
           <button onClick={onCancel} className="text-caption text-text-tertiary hover:text-text-secondary">Cancel</button>
         </div>
       ) : (

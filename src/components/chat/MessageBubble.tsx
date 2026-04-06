@@ -4,6 +4,7 @@
 // Confirming: dot animation under bubble
 // Confirmed: full opacity, brief ✓ fades
 // Failed: red-tinted, "Failed — tap to retry"
+import { memo } from 'react';
 import { motion } from 'framer-motion';
 import { formatMessageTime } from '@/lib/utils';
 import { Avatar } from '@/components/ui/Avatar';
@@ -24,7 +25,7 @@ interface MessageBubbleProps {
   onAvatarTap?: (address: string) => void;
 }
 
-export function MessageBubble({
+export const MessageBubble = memo(function MessageBubble({
   sender,
   content,
   timestamp,
@@ -133,4 +134,4 @@ export function MessageBubble({
       </div>
     </motion.div>
   );
-}
+});

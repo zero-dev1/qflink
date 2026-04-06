@@ -2,6 +2,7 @@
 // Design System §16.2 — Header with tappable avatar, encryption indicator, tx state bubbles
 import { useEffect, useRef, useMemo, useCallback, useState } from 'react';
 import { useParams, Link } from 'react-router-dom';
+import { Lock, LockOpen } from 'lucide-react';
 import { useMessagesStore } from '@/stores/messages';
 import { useWalletStore } from '@/stores/wallet';
 import { useUnreadStore } from '@/stores/unread';
@@ -170,7 +171,7 @@ export default function DMChat() {
 
         {/* Encryption indicator */}
         {isEncrypted && (
-          <span className="text-sm shrink-0" title="End-to-end encrypted" role="img" aria-label="End-to-end encrypted">🔒</span>
+          <span className="shrink-0" title="End-to-end encrypted" aria-label="End-to-end encrypted"><Lock size={14} className="text-cyan-primary" strokeWidth={1.5} /></span>
         )}
       </div>
 
@@ -198,7 +199,7 @@ export default function DMChat() {
                 Everything here lives on-chain.
               </p>
               {isEncrypted && (
-                <p className="mt-1 text-caption text-cyan-primary">🔒 End-to-end encrypted</p>
+                <p className="mt-1 text-caption text-cyan-primary inline-flex items-center gap-1"><Lock size={12} strokeWidth={1.5} /> End-to-end encrypted</p>
               )}
             </div>
           </div>
@@ -224,7 +225,7 @@ export default function DMChat() {
         <div className="flex items-center gap-2">
           {/* Encryption indicator left of input */}
           <span className="text-sm shrink-0" title={isEncrypted ? 'Encrypted' : 'Not encrypted'} role="img" aria-label={isEncrypted ? 'Messages are encrypted' : 'Messages are not encrypted'}>
-            {isEncrypted ? '🔒' : '🔓'}
+            {isEncrypted ? <Lock size={14} className="text-cyan-primary" strokeWidth={1.5} /> : <LockOpen size={14} className="text-text-tertiary" strokeWidth={1.5} />}
           </span>
           <div className="flex-1">
             <ChatInput

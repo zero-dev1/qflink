@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
+import { Crown, Shield, FlaskConical, Megaphone, Zap, Lock, LockOpen } from 'lucide-react';
 import { useWalletStore } from '@/stores/wallet';
 import { usePodsStore } from '@/stores/pods';
 import { useModeStore } from '@/stores/mode';
@@ -52,7 +53,7 @@ export default function Profile() {
   const firstName = qnsName ? qnsName.replace('.qf', '') : null;
 
   // Badge color for avatar ring
-  const badgeColor = badges.length > 0 ? badges[0].color : '#06B6D4';
+  const badgeColor = badges.length > 0 ? badges[0].color : '#00EFE7';
 
   if (!isConnected) {
     return (
@@ -124,10 +125,10 @@ export default function Profile() {
                         className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-pill text-caption font-medium"
                         style={{ backgroundColor: `${badge.color}15`, color: badge.color, border: `1px solid ${badge.color}30` }}
                       >
-                        {badge.icon === 'crown' && '👑'}
-                        {badge.icon === 'shield' && '🛡️'}
-                        {badge.icon === 'flask' && '🧪'}
-                        {badge.icon === 'megaphone' && '📣'}
+                        {badge.icon === 'crown' && <Crown size={12} strokeWidth={1.5} />}
+                        {badge.icon === 'shield' && <Shield size={12} strokeWidth={1.5} />}
+                        {badge.icon === 'flask' && <FlaskConical size={12} strokeWidth={1.5} />}
+                        {badge.icon === 'megaphone' && <Megaphone size={12} strokeWidth={1.5} />}
                         {badge.label}
                       </span>
                     ))}
@@ -151,12 +152,12 @@ export default function Profile() {
 
         {/* §18.2 — Session Status Strip */}
         <motion.div variants={fadeUp} className="mb-6 flex flex-wrap items-center gap-3 px-4 py-3 rounded-xl bg-white/[0.02] border border-white/[0.06]">
-          <span className="text-caption text-text-secondary">
-            ⚡ Instant: {instantActive ? `${instantRemaining}m` : 'Off'}
+          <span className="text-caption text-text-secondary inline-flex items-center gap-1">
+            <Zap size={12} strokeWidth={1.5} /> Instant: {instantActive ? `${instantRemaining}m` : 'Off'}
           </span>
           <span className="text-white/[0.10]">·</span>
-          <span className="text-caption text-text-secondary">
-            🔒 Privacy: {privacyActive ? 'On' : 'Off'}
+          <span className="text-caption text-text-secondary inline-flex items-center gap-1">
+            <Lock size={12} strokeWidth={1.5} /> Privacy: {privacyActive ? 'On' : 'Off'}
           </span>
           <span className="text-white/[0.10]">·</span>
           <span className="text-caption text-text-secondary">
@@ -249,9 +250,9 @@ export default function Profile() {
         <motion.div variants={fadeUp} className="mb-8">
           <p className="text-body-sm text-text-secondary">
             {encryptionKeyPair ? (
-              <span>🔒 Encryption key active</span>
+              <span className="inline-flex items-center gap-1"><Lock size={12} strokeWidth={1.5} /> Encryption key active</span>
             ) : (
-              <span className="text-text-tertiary">🔓 Encryption not set up — connect wallet to derive keys</span>
+              <span className="text-text-tertiary inline-flex items-center gap-1"><LockOpen size={12} strokeWidth={1.5} /> Encryption not set up — connect wallet to derive keys</span>
             )}
           </p>
         </motion.div>

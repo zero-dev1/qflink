@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useNavigate, useLocation } from 'react-router-dom';
+import { Zap, Lock } from 'lucide-react';
 import { useWalletStore } from '@/stores/wallet';
 import { usePodsStore } from '@/stores/pods';
 import { useModeStore } from '@/stores/mode';
@@ -287,22 +288,17 @@ export function ActionBar() {
       if (!q || 'instant'.includes(q)) {
         results.push({
           id: 'action-instant',
-          label: 'Toggle Instant Mode',
-          icon: <span className="text-sm">⚡</span>,
+          label: 'Instant Mode — Coming soon',
+          icon: <Zap size={14} className="text-text-tertiary" strokeWidth={1.5} />,
           category: 'actions',
-          onSelect: () => {
-            const store = useModeStore.getState();
-            if (store.instantActive) store.deactivateInstant();
-            else store.activateInstant('30m');
-            close();
-          },
+          onSelect: () => { close(); },
         });
       }
       if (!q || 'privacy'.includes(q)) {
         results.push({
           id: 'action-privacy',
           label: 'Toggle Privacy Mode',
-          icon: <span className="text-sm">🔒</span>,
+          icon: <Lock size={14} className="text-text-secondary" strokeWidth={1.5} />,
           category: 'actions',
           onSelect: () => {
             useModeStore.getState().togglePrivacy();

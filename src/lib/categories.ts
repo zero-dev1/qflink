@@ -6,7 +6,7 @@ export const CATEGORY_COLORS: Record<string, string> = {
   DeFi: '#8B5CF6',
   Gaming: '#F97316',
   Builders: '#3B82F6',
-  Social: '#06B6D4',
+  Social: '#00EFE7',
   NFTs: '#EC4899',
 };
 

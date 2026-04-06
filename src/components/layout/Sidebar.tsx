@@ -6,7 +6,6 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { useWalletStore } from '@/stores/wallet';
 import { usePodsStore } from '@/stores/pods';
 import { useUnreadStore } from '@/stores/unread';
-import { useActionBarStore } from '@/components/ui/ActionBar';
 import { Avatar } from '@/components/ui/Avatar';
 import { UnreadDot } from '@/components/ui/UnreadDot';
 import { getCategoryColor } from '@/lib/categories';
@@ -135,7 +134,8 @@ export function Sidebar() {
         {/* Profile capsule at bottom — §23 pulsing border when reconnecting */}
         <div className="mt-2 pt-2 border-t border-white/[0.06]">
           {(isConnected || isConnecting) && evmAddress ? (
-            <button
+            <motion.button
+              layoutId="profile-capsule"
               onClick={() => navigate('/profile')}
               className="relative group active:scale-[0.96]"
               aria-label={isConnecting ? 'Reconnecting...' : 'Profile'}
@@ -158,7 +158,7 @@ export function Sidebar() {
               <div className="absolute left-full ml-2 top-1/2 -translate-y-1/2 px-2 py-1 rounded bg-surface-4 text-caption text-text-primary whitespace-nowrap opacity-0 group-hover:opacity-100 pointer-events-none transition-opacity z-50">
                 {isConnecting ? 'Reconnecting...' : displayName}
               </div>
-            </button>
+            </motion.button>
           ) : (
             <button
               onClick={() => navigate('/connect')}

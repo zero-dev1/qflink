@@ -1,5 +1,7 @@
 // src/components/messages/ConversationRow.tsx
-// Design System §16.1 — avatar (badge ring), .qf split render, preview, timestamp, 🔒 indicator, unread dot
+// Design System §16.1 — avatar (badge ring), .qf split render, preview, timestamp, lock indicator, unread dot
+import { memo } from 'react';
+import { Lock } from 'lucide-react';
 import { formatTimestamp } from '@/lib/utils';
 import { Avatar } from '@/components/ui/Avatar';
 import { UnreadDot } from '@/components/ui/UnreadDot';
@@ -13,14 +15,14 @@ interface ConversationRowProps {
   onAvatarTap?: (address: string) => void;
 }
 
-export function ConversationRow({ conversation, isActive = false, onClick, onAvatarTap }: ConversationRowProps) {
+export const ConversationRow = memo(function ConversationRow({ conversation, isActive = false, onClick, onAvatarTap }: ConversationRowProps) {
   const { address, displayName, lastMessage, lastMessageTime, unreadCount } = conversation;
   const hasUnread = useUnreadStore((s) => s.hasDMUnread(address));
   const dmUnreadCount = useUnreadStore((s) => s.getDMUnreadCount(address));
 
   // Detect encrypted message in preview
   const isEncryptedPreview = lastMessage?.startsWith('enc:') || lastMessage?.startsWith('[Encrypted');
-  const previewText = isEncryptedPreview ? '🔒 Encrypted message' : (lastMessage || 'No messages yet');
+  const previewText = isEncryptedPreview ? 'Encrypted message' : (lastMessage || 'No messages yet');
 
   return (
     <button
@@ -56,7 +58,7 @@ export function ConversationRow({ conversation, isActive = false, onClick, onAva
             )}
           </p>
           <div className="flex items-center gap-2 shrink-0">
-            {isEncryptedPreview && <span className="text-[11px]">🔒</span>}
+            {isEncryptedPreview && <Lock size={11} className="text-text-tertiary" strokeWidth={1.5} />}
             {lastMessageTime > 0 && (
               <span className="text-caption text-text-tertiary">
                 {formatTimestamp(lastMessageTime)}
@@ -77,4 +79,4 @@ export function ConversationRow({ conversation, isActive = false, onClick, onAva
       </div>
     </button>
   );
-}
+});

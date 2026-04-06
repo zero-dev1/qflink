@@ -5,6 +5,7 @@ import { useNavigate, Link } from 'react-router-dom';
 import { useWalletStore } from '@/stores/wallet';
 import { useMessagesStore } from '@/stores/messages';
 import { useUnreadStore } from '@/stores/unread';
+import { useVisibilityPolling } from '@/hooks/useVisibilityPolling';
 import { ConversationRow } from '@/components/messages/ConversationRow';
 import { ActionBarInline } from '@/components/ui/ActionBar';
 import { Skeleton } from '@/components/ui/Skeleton';
@@ -19,6 +20,13 @@ export default function Messages() {
   useEffect(() => {
     if (isConnected) fetchConversations();
   }, [isConnected, fetchConversations]);
+
+  // Poll conversation list — pauses when tab hidden, immediate refresh on return
+  useVisibilityPolling(
+    () => { if (isConnected) fetchConversations(); },
+    15000,
+    [isConnected, fetchConversations],
+  );
 
   // Disconnected state
   if (!isConnected) {

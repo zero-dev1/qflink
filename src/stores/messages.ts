@@ -5,10 +5,19 @@ import { useUnreadStore } from '@/stores/unread';
 import {
   getConversations,
   getMessages,
+  getDirectMessageIds,
   sendMessage as contractSendMessage,
   getProfile,
 } from '@/lib/contractCalls';
 import type { DirectMessageData } from '@/lib/contractCalls';
+
+// Module-level cache for DM message counts per conversation (avoids re-fetching unchanged conversations)
+const _dmLastFetchedCounts: Record<string, number> = {};
+
+// Module-level cache for conversation list throttling
+let _conversationsLastFetchTime = 0;
+let _lastConversationAddresses: string[] = [];
+const CONVERSATIONS_CACHE_TTL = 30_000; // 30 seconds
 import { reverseResolve } from '@/lib/qns';
 import { hapticTap, hapticError, hapticSend, hapticConfirm } from '@/lib/feedback';
 import {
@@ -70,17 +79,40 @@ export const useMessagesStore = create<MessagesStore>((set, get) => ({
   fetchConversations: async () => {
     const evmAddress = useWalletStore.getState().evmAddress;
     if (!evmAddress) return;
-    
-    set({ isLoadingConversations: true });
-    
+
+    const now = Date.now();
+    const isFirstLoad = get().conversations.length === 0;
+
+    // Throttle: skip if we fetched within the cache TTL (unless first load)
+    if (!isFirstLoad && now - _conversationsLastFetchTime < CONVERSATIONS_CACHE_TTL) {
+      return;
+    }
+
+    if (isFirstLoad) {
+      set({ isLoadingConversations: true });
+    }
+
     try {
       const addresses = await getConversations(evmAddress as `0x${string}`);
-      
+
+      // Compare address list — if same addresses in same order, skip the expensive per-address fetching
+      const addressesMatch =
+        addresses.length === _lastConversationAddresses.length &&
+        addresses.every((a, i) => a === _lastConversationAddresses[i]);
+
+      if (addressesMatch && !isFirstLoad) {
+        _conversationsLastFetchTime = now;
+        return;
+      }
+
+      _lastConversationAddresses = addresses;
+      _conversationsLastFetchTime = now;
+
       // Build conversation items with last message and QNS names
       const items: ConversationItem[] = await Promise.all(
         addresses.map(async (addr) => {
           const lower = addr.toLowerCase();
-          
+
           // Fetch last message for preview
           const msgs = await getMessages(
             evmAddress as `0x${string}`,
@@ -89,7 +121,7 @@ export const useMessagesStore = create<MessagesStore>((set, get) => ({
             1
           );
           const lastMsg = msgs[0];
-          
+
           // Update unread tracking
           if (lastMsg) {
             const lastSeen = useUnreadStore.getState().lastSeenDM[lower] || 0;
@@ -98,26 +130,26 @@ export const useMessagesStore = create<MessagesStore>((set, get) => ({
               useUnreadStore.getState().updateDMUnread(lower, timestamp, 1);
             }
           }
-          
+
           // Resolve QNS name
           let displayName: string | null = null;
           try {
             displayName = await reverseResolve(lower);
           } catch {}
-          
+
           return {
             address: lower,
             displayName,
             lastMessage: lastMsg?.content || '',
             lastMessageTime: lastMsg?.timestamp || 0,
-            unreadCount: 0, // Unread tracking comes in Session 7
+            unreadCount: 0,
           };
         })
       );
-      
+
       // Sort by most recent message first
       items.sort((a, b) => b.lastMessageTime - a.lastMessageTime);
-      
+
       set({ conversations: items, isLoadingConversations: false });
     } catch (error) {
       console.error('Failed to fetch conversations:', error);
@@ -128,56 +160,84 @@ export const useMessagesStore = create<MessagesStore>((set, get) => ({
   fetchMessages: async (otherAddress: string) => {
     const evmAddress = useWalletStore.getState().evmAddress;
     if (!evmAddress) return;
-    
-    const lower = otherAddress.toLowerCase();
-    
-    set((state) => ({
-      isLoadingMessages: { ...state.isLoadingMessages, [lower]: true },
-    }));
-    
-    try {
-      const raw = await getMessages(
-        evmAddress as `0x${string}`,
-        lower as `0x${string}`,
-        0,
-        100
-      );
-      
-      // De-duplicate: if we have optimistic messages, remove them when a matching
-      // on-chain message arrives (same sender + same content within 60s)
-      const existing = get().messages[lower] || [];
-      const optimistic = existing.filter((m) => m.isOptimistic);
-      // Remove optimistic messages that now have a chain counterpart
-      const remainingOptimistic = optimistic.filter((opt) => {
-        if (opt.isFailed) return true; // Failed messages persist until retry/dismiss
-        return !raw.some(
-          (chain: DirectMessageData) =>
-            chain.sender.toLowerCase() === opt.sender.toLowerCase() &&
-            chain.content === opt.content &&
-            Math.abs(Number(chain.timestamp) - opt.timestamp) < 60_000,
-        );
-      });
-      
-      const encryptionKeyPair = useWalletStore.getState().encryptionKeyPair;
 
+    const lower = otherAddress.toLowerCase();
+    const existing = get().messages[lower] || [];
+    const nonOptimistic = existing.filter(m => !m.isOptimistic && !m.isFailed);
+    const isFirstLoad = nonOptimistic.length === 0;
+    const lastKnownCount = _dmLastFetchedCounts[lower] || 0;
+
+    // Only show loading spinner on first load
+    if (isFirstLoad) {
+      set((state) => ({
+        isLoadingMessages: { ...state.isLoadingMessages, [lower]: true },
+      }));
+    }
+
+    try {
+      // Probe for new messages: check if any IDs exist beyond what we last fetched
+      if (!isFirstLoad && lastKnownCount > 0) {
+        const probeIds = await getDirectMessageIds(
+          evmAddress as `0x${string}`,
+          lower as `0x${string}`,
+          lastKnownCount,
+          1
+        );
+        if (probeIds.length === 0) {
+          // No new messages — skip the expensive fetch + decrypt cycle
+          return;
+        }
+      }
+
+      // Fetch messages: incremental if we have some, full otherwise
+      let raw: DirectMessageData[];
+      if (!isFirstLoad && lastKnownCount > 0) {
+        raw = await getMessages(
+          evmAddress as `0x${string}`,
+          lower as `0x${string}`,
+          lastKnownCount,
+          100
+        );
+      } else {
+        raw = await getMessages(
+          evmAddress as `0x${string}`,
+          lower as `0x${string}`,
+          0,
+          100
+        );
+      }
+
+      // Update tracked count
+      if (!isFirstLoad && lastKnownCount > 0) {
+        _dmLastFetchedCounts[lower] = lastKnownCount + raw.length;
+      } else {
+        _dmLastFetchedCounts[lower] = raw.length;
+      }
+
+      // If incremental fetch returned nothing new, skip processing
+      if (!isFirstLoad && raw.length === 0) {
+        if (isFirstLoad) {
+          set((state) => ({ isLoadingMessages: { ...state.isLoadingMessages, [lower]: false } }));
+        }
+        return;
+      }
+
+      // Decrypt new messages
+      const encryptionKeyPair = useWalletStore.getState().encryptionKeyPair;
       const mapped: DMMessage[] = await Promise.all(
         raw.map(async (m, i) => {
           let content = m.content;
-          let decryptionFailed = false;
 
-          // Detect encrypted messages by prefix
           if (content.startsWith('enc:') && encryptionKeyPair) {
             try {
-              const encryptedBase64 = content.slice(4); // strip 'enc:' prefix
+              const encryptedBase64 = content.slice(4);
               const encryptedBytes = new Uint8Array(
                 atob(encryptedBase64).split('').map(c => c.charCodeAt(0))
               );
 
-              // We need the sender's pubkey to decrypt
-              // If we're the sender, use recipient's pubkey; if we're the recipient, use sender's pubkey
               const myAddress = useWalletStore.getState().evmAddress?.toLowerCase();
               const otherParty = m.sender.toLowerCase() === myAddress
-                ? lower // the other address we're chatting with
+                ? lower
                 : m.sender.toLowerCase();
 
               const otherProfile = await getProfile(otherParty as `0x${string}`);
@@ -188,33 +248,61 @@ export const useMessagesStore = create<MessagesStore>((set, get) => ({
                   (otherPubkeyHex.slice(2).match(/.{2}/g) || []).map(b => parseInt(b, 16))
                 );
                 const otherPubkey = pubkeyBytes.slice(0, 32);
-
                 content = decryptMessage(encryptedBytes, otherPubkey, encryptionKeyPair.secretKey);
               } else {
-                decryptionFailed = true;
                 content = '[Encrypted message — recipient key unavailable]';
               }
             } catch {
-              decryptionFailed = true;
               content = '[Encrypted message — decryption failed]';
             }
           } else if (content.startsWith('enc:') && !encryptionKeyPair) {
             content = '[Encrypted message — connect wallet to decrypt]';
           }
 
+          const globalIndex = (!isFirstLoad && lastKnownCount > 0) ? lastKnownCount + i : i;
           return {
             sender: m.sender.toLowerCase(),
             recipient: m.recipient.toLowerCase(),
             content,
             timestamp: m.timestamp,
-            id: `${m.sender}-${m.timestamp}-${i}`,
-            isEncrypted: content.startsWith('enc:') || false,
+            id: `${m.sender}-${m.timestamp}-${globalIndex}`,
+            isEncrypted: m.content.startsWith('enc:'),
           };
         })
       );
-      
-      const finalMessages = [...mapped, ...remainingOptimistic];
-      
+
+      // Merge: existing on-chain + new decrypted messages
+      const allDecrypted = (!isFirstLoad && lastKnownCount > 0)
+        ? [...nonOptimistic, ...mapped]
+        : mapped;
+
+      // De-duplicate optimistic messages that now have a chain counterpart
+      const optimistic = existing.filter(m => m.isOptimistic || m.isFailed);
+      const remainingOptimistic = optimistic.filter((opt) => {
+        if (opt.isFailed) return true;
+        return !allDecrypted.some(
+          (chain) =>
+            chain.sender.toLowerCase() === opt.sender.toLowerCase() &&
+            chain.content === opt.content &&
+            Math.abs(chain.timestamp - opt.timestamp) < 60_000,
+        );
+      });
+
+      const finalMessages = [...allDecrypted, ...remainingOptimistic]
+        .sort((a, b) => a.timestamp - b.timestamp);
+
+      // Compare before set: skip if identical
+      if (
+        existing.length === finalMessages.length &&
+        existing.length > 0 &&
+        existing[existing.length - 1].id === finalMessages[finalMessages.length - 1].id
+      ) {
+        if (isFirstLoad) {
+          set((state) => ({ isLoadingMessages: { ...state.isLoadingMessages, [lower]: false } }));
+        }
+        return;
+      }
+
       set((state) => ({
         messages: { ...state.messages, [lower]: finalMessages },
         isLoadingMessages: { ...state.isLoadingMessages, [lower]: false },

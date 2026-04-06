@@ -116,30 +116,71 @@ export const usePodsStore = create<PodsStore>((set, get) => ({
   },
   
   fetchMessages: async (podId: number) => {
-    set(state => ({
-      isLoadingMessages: { ...state.isLoadingMessages, [podId]: true },
-      messageFetchErrors: { ...state.messageFetchErrors, [podId]: false }
-    }));
-    
+    const existing = get().messages[podId] || [];
+    const nonOptimistic = existing.filter(m => !m.isOptimistic && !m.isFailed);
+    const isFirstLoad = nonOptimistic.length === 0;
+
+    // Only show loading spinner on first load, not on polls
+    if (isFirstLoad) {
+      set(state => ({
+        isLoadingMessages: { ...state.isLoadingMessages, [podId]: true },
+        messageFetchErrors: { ...state.messageFetchErrors, [podId]: false }
+      }));
+    }
+
     try {
-      const messages = await getPodMessages(podId);
-      
-      // De-duplicate: if we have optimistic messages, remove them when a matching
-      // on-chain message arrives (same sender + same content within 60s)
-      const existing = get().messages[podId] || [];
-      const optimistic = existing.filter((m) => m.isOptimistic);
-      // Remove optimistic messages that now have a chain counterpart
+      // Count-based early return: skip fetch if on-chain count matches what we have
+      const onChainCount = await getPodMessageCount(podId);
+      if (!isFirstLoad && onChainCount === nonOptimistic.length) {
+        // Same count — no new messages, skip the expensive fetch + state update
+        if (isFirstLoad) {
+          set(state => ({ isLoadingMessages: { ...state.isLoadingMessages, [podId]: false } }));
+        }
+        return;
+      }
+
+      // Incremental fetch: only get new messages if we already have some
+      let newOnChain: RawPodMessage[];
+      if (!isFirstLoad && onChainCount > nonOptimistic.length) {
+        // Fetch only the new messages from where we left off
+        newOnChain = await getPodMessages(podId, nonOptimistic.length, onChainCount - nonOptimistic.length);
+      } else {
+        // First load or count mismatch — full fetch
+        newOnChain = await getPodMessages(podId);
+      }
+
+      // Merge: existing on-chain + new on-chain
+      const allOnChain = !isFirstLoad && onChainCount > nonOptimistic.length
+        ? [...nonOptimistic, ...newOnChain]
+        : newOnChain;
+
+      // De-duplicate: remove optimistic messages that now have a chain counterpart
+      const optimistic = existing.filter(m => m.isOptimistic || m.isFailed);
       const remainingOptimistic = optimistic.filter((opt) => {
         if (opt.isFailed) return true; // Failed messages persist until retry/dismiss
-        return !messages.some(
+        return !allOnChain.some(
           (chain: RawPodMessage) =>
             chain.sender.toLowerCase() === opt.sender.toLowerCase() &&
             chain.content === opt.content &&
             Math.abs(chain.timestamp - opt.timestamp) < 60_000,
         );
       });
-      const finalMessages = [...messages, ...remainingOptimistic];
-      
+
+      const finalMessages = [...allOnChain, ...remainingOptimistic]
+        .sort((a, b) => a.timestamp - b.timestamp);
+
+      // Compare before set: if same length and last message ID matches, skip update
+      if (
+        existing.length === finalMessages.length &&
+        existing.length > 0 &&
+        existing[existing.length - 1].id === finalMessages[finalMessages.length - 1].id
+      ) {
+        if (isFirstLoad) {
+          set(state => ({ isLoadingMessages: { ...state.isLoadingMessages, [podId]: false } }));
+        }
+        return;
+      }
+
       // Update unread tracking
       if (finalMessages.length > 0) {
         const latestTimestamp = Math.max(...finalMessages.map(m => Number(m.timestamp)));
@@ -147,7 +188,7 @@ export const usePodsStore = create<PodsStore>((set, get) => ({
         const newCount = finalMessages.filter(m => Number(m.timestamp) > lastSeen).length;
         useUnreadStore.getState().updatePodUnread(podId.toString(), latestTimestamp, newCount);
       }
-      
+
       set(state => ({
         messages: { ...state.messages, [podId]: finalMessages },
         isLoadingMessages: { ...state.isLoadingMessages, [podId]: false }

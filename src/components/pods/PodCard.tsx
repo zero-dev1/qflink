@@ -1,7 +1,8 @@
 // src/components/pods/PodCard.tsx
 // Design System §14.3 — Pod Card Anatomy
 import { motion, useMotionValue, useSpring, useTransform } from 'framer-motion';
-import { useRef } from 'react';
+import { memo, useRef } from 'react';
+import { Lock, Users } from 'lucide-react';
 import { PodData } from '@/stores/pods';
 import { formatExactAmount } from '@/lib/utils';
 import { getCategoryColor } from '@/lib/categories';
@@ -13,7 +14,7 @@ interface PodCardProps {
   onClick: () => void;
 }
 
-export function PodCard({ pod, isOfficial = false, onClick }: PodCardProps) {
+export const PodCard = memo(function PodCard({ pod, isOfficial = false, onClick }: PodCardProps) {
   const cardRef = useRef<HTMLDivElement>(null);
   const mouseX = useMotionValue(0.5);
   const mouseY = useMotionValue(0.5);
@@ -42,7 +43,7 @@ export function PodCard({ pod, isOfficial = false, onClick }: PodCardProps) {
   const hasFee = pod.threshold > 0n;
   const hasGate = pod.minBalance > 0n;
   const feeDisplay = hasFee ? `${formatExactAmount(pod.threshold)} QF` : null;
-  const gateDisplay = hasGate ? `🔒 ${formatExactAmount(pod.minBalance)}+ QF` : null;
+  const gateDisplay = hasGate ? `${formatExactAmount(pod.minBalance)}+ QF` : null;
 
   let economicsText: string;
   if (feeDisplay && gateDisplay) {
@@ -109,14 +110,15 @@ export function PodCard({ pod, isOfficial = false, onClick }: PodCardProps) {
 
         {/* Bottom row — members + economics */}
         <div className="flex items-center justify-between mt-3 pt-3 border-t border-white/[0.04]">
-          <span className="text-caption text-text-tertiary">
-            👥 {pod.memberCount} members
+          <span className="text-caption text-text-tertiary inline-flex items-center gap-1">
+            <Users size={12} strokeWidth={1.5} /> {pod.memberCount} members
           </span>
-          <span className="text-caption text-text-secondary">
+          <span className="text-caption text-text-secondary inline-flex items-center gap-1">
+            {hasGate && <Lock size={11} strokeWidth={1.5} />}
             {economicsText}
           </span>
         </div>
       </div>
     </motion.div>
   );
-}
+});

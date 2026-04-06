@@ -1,7 +1,7 @@
 // src/App.tsx
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import { Suspense, lazy } from "react";
-import { MotionConfig } from "framer-motion";
+import { MotionConfig, LayoutGroup } from "framer-motion";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
 import { AppLayout } from "@/components/layout/AppLayout";
 import { ToastContainer } from "@/components/ui/Toast";
@@ -38,6 +38,7 @@ export default function App() {
       <MotionConfig reducedMotion="user">
         <BrowserRouter>
           <Suspense fallback={<PageLoader />}>
+            <LayoutGroup>
             <Routes>
               {/* Standalone — no app chrome */}
               <Route path="/" element={<Landing />} />
@@ -56,6 +57,7 @@ export default function App() {
 
               <Route path="*" element={<Navigate to="/" replace />} />
             </Routes>
+            </LayoutGroup>
           </Suspense>
           <ToastContainer />
           <ActionBar />

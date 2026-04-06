@@ -1,41 +1,15 @@
 // src/components/ui/ModePill.tsx
 import { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { useModeStore, type InstantDuration } from '@/stores/mode';
+import { Zap, Lock, LockOpen } from 'lucide-react';
+import { useModeStore } from '@/stores/mode';
 import { useWalletStore } from '@/stores/wallet';
-import { useVisibilityPolling } from '@/hooks/useVisibilityPolling';
 import { cn } from '@/lib/utils';
 
-const DURATIONS: { label: string; value: InstantDuration }[] = [
-  { label: '5m', value: '5m' },
-  { label: '30m', value: '30m' },
-  { label: '2h', value: '2h' },
-  { label: '24h', value: '24h' },
-];
-
-function formatRemaining(ms: number): string {
-  if (ms <= 0) return '0m';
-  const totalSec = Math.ceil(ms / 1000);
-  const h = Math.floor(totalSec / 3600);
-  const m = Math.floor((totalSec % 3600) / 60);
-  if (h > 0) return `${h}h ${m}m`;
-  if (m > 0) return `${m}m`;
-  return `${totalSec}s`;
-}
-
 export function ModePill() {
-  const {
-    instantActive,
-    privacyActive,
-    activateInstant,
-    deactivateInstant,
-    togglePrivacy,
-    getInstantRemaining,
-    isInstantExpired,
-  } = useModeStore();
+  const { privacyActive, togglePrivacy } = useModeStore();
 
-  const [showPicker, setShowPicker] = useState(false);
-  const [remaining, setRemaining] = useState('');
+  const [showComingSoon, setShowComingSoon] = useState(false);
 
   // §23 — Post-reconnect shimmer: track isConnecting→isConnected transition
   const { isConnecting, isConnected } = useWalletStore();
@@ -53,47 +27,17 @@ export function ModePill() {
     }
   }, [isConnecting, isConnected]);
 
-  // Countdown timer — pauses when tab hidden, fires immediately on return
-  useVisibilityPolling(
-    () => {
-      if (!instantActive) return;
-      const ms = getInstantRemaining();
-      if (ms <= 0) {
-        deactivateInstant();
-        return;
-      }
-      setRemaining(formatRemaining(ms));
-    },
-    1000,
-    [instantActive],
-  );
-
-  // Initial tick when instant activates
-  useEffect(() => {
-    if (!instantActive) { setRemaining(''); return; }
-    setRemaining(formatRemaining(getInstantRemaining()));
-  }, [instantActive, getInstantRemaining]);
-
   const handleInstantTap = () => {
-    if (shimmer) return; // Block during reconnect shimmer
-    if (instantActive) {
-      deactivateInstant();
-    } else {
-      setShowPicker((p) => !p);
-    }
-  };
-
-  const handleDurationSelect = (duration: InstantDuration) => {
-    activateInstant(duration);
-    setShowPicker(false);
+    if (shimmer) return;
+    // §Fix7 — Session key infra not implemented; show "Coming soon"
+    setShowComingSoon(true);
+    setTimeout(() => setShowComingSoon(false), 2000);
   };
 
   const handlePrivacyTap = () => {
-    if (shimmer) return; // Block during reconnect shimmer
+    if (shimmer) return;
     togglePrivacy();
   };
-
-  const bothActive = instantActive && privacyActive;
 
   // §8 — Scroll behavior: increase bg opacity on scroll to avoid fighting content
   const [scrolled, setScrolled] = useState(false);
@@ -114,8 +58,8 @@ export function ModePill() {
           'pointer-events-auto inline-flex items-center rounded-pill border backdrop-blur-md transition-colors duration-300 relative overflow-hidden',
           shimmer && 'border-cyan-border',
           isConnecting && 'opacity-50',
-          bothActive
-            ? 'bg-cyan-muted border-cyan-border shadow-[0_0_12px_rgba(6,182,212,0.15)]'
+          privacyActive
+            ? 'bg-cyan-muted border-cyan-border shadow-[0_0_12px_rgba(0,239,231,0.15)]'
             : scrolled
               ? 'bg-white/[0.06] border-white/[0.08]'
               : 'bg-white/[0.03] border-white/[0.06]'
@@ -131,28 +75,25 @@ export function ModePill() {
             className="absolute inset-0 bg-gradient-to-r from-transparent via-cyan-primary/15 to-transparent pointer-events-none z-10"
           />
         )}
-        {/* Instant side */}
+        {/* Instant side — §Fix7: disabled, session keys not wired */}
         <button
           onClick={handleInstantTap}
-          className={cn(
-            'flex items-center gap-1.5 h-8 px-3 rounded-l-pill transition-all duration-200 active:scale-[0.97]',
-            instantActive
-              ? 'text-cyan-primary'
-              : 'text-text-tertiary hover:text-text-secondary'
-          )}
-          aria-label={instantActive ? 'Deactivate instant mode' : 'Activate instant mode'}
+          className="relative flex items-center gap-1.5 h-8 px-3 rounded-l-pill transition-all duration-200 active:scale-[0.97] text-text-tertiary hover:text-text-secondary"
+          aria-label="Instant mode — coming soon"
         >
-          <span className="text-sm">⚡</span>
-          {instantActive && (
-            <motion.span
-              initial={{ opacity: 0, width: 0 }}
-              animate={{ opacity: 1, width: 'auto' }}
-              exit={{ opacity: 0, width: 0 }}
-              className="text-caption font-medium whitespace-nowrap"
-            >
-              {remaining}
-            </motion.span>
-          )}
+          <Zap size={14} className="text-text-tertiary" strokeWidth={1.5} />
+          <AnimatePresence>
+            {showComingSoon && (
+              <motion.span
+                initial={{ opacity: 0, y: 4 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -4 }}
+                className="absolute -bottom-8 left-1/2 -translate-x-1/2 whitespace-nowrap text-[10px] text-text-tertiary bg-surface-4 px-2 py-0.5 rounded pointer-events-none z-20"
+              >
+                Coming soon
+              </motion.span>
+            )}
+          </AnimatePresence>
         </button>
 
         {/* Divider */}
@@ -169,33 +110,11 @@ export function ModePill() {
           )}
           aria-label={privacyActive ? 'Deactivate privacy mode' : 'Activate privacy mode'}
         >
-          <span className="text-sm">{privacyActive ? '🔒' : '🔓'}</span>
+          {privacyActive ? <Lock size={14} className="text-cyan-primary" strokeWidth={1.5} /> : <LockOpen size={14} className="text-text-tertiary" strokeWidth={1.5} />}
         </button>
       </motion.div>
 
-      {/* Duration picker dropdown */}
-      <AnimatePresence>
-        {showPicker && !instantActive && (
-          <motion.div
-            initial={{ opacity: 0, y: -4, scale: 0.95 }}
-            animate={{ opacity: 1, y: 0, scale: 1 }}
-            exit={{ opacity: 0, y: -4, scale: 0.95 }}
-            transition={{ duration: 0.15 }}
-            className="pointer-events-auto absolute top-full mt-2 flex items-center gap-1 rounded-pill bg-white/[0.04] backdrop-blur-md border border-white/[0.08] p-1"
-          >
-            {DURATIONS.map((d) => (
-              <button
-                key={d.value}
-                onClick={() => handleDurationSelect(d.value)}
-                aria-label={`Set instant mode for ${d.label}`}
-                className="h-7 px-3 rounded-pill text-caption font-medium text-text-secondary hover:text-text-primary hover:bg-white/[0.06] transition-colors active:scale-[0.96]"
-              >
-                {d.label}
-              </button>
-            ))}
-          </motion.div>
-        )}
-      </AnimatePresence>
+      {/* Duration picker removed — §Fix7: session keys not wired */}
     </div>
   );
 }

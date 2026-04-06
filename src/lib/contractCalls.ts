@@ -358,6 +358,15 @@ export async function getMessages(addr1: `0x${string}`, addr2: `0x${string}`, st
   } catch { return []; }
 }
 
+export async function getDirectMessageIds(addr1: `0x${string}`, addr2: `0x${string}`, start = 0, limit = 50): Promise<bigint[]> {
+  try {
+    return await callContract(
+      CONTRACT_ADDRESSES.messageReader, toMutable(messagesReaderAbi),
+      "getDirectMessageIds", [addr1, addr2, BigInt(start), BigInt(limit)]
+    ) as bigint[];
+  } catch { return []; }
+}
+
 export async function getConversations(address: `0x${string}`): Promise<string[]> {
   try {
     const result = await callContract(CONTRACT_ADDRESSES.messageReader, toMutable(messagesReaderAbi), "getConversations", [address]);

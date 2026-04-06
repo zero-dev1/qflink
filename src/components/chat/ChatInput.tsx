@@ -126,7 +126,7 @@ export function ChatInput({ placeholder, onSend, disabled = false, isSending = f
                 <circle cx="16" cy="16" r="14" stroke="rgba(255,255,255,0.06)" strokeWidth="2" fill="none" />
                 <circle
                   cx="16" cy="16" r="14"
-                  stroke={charProgress > 0.9 ? '#EF4444' : '#06B6D4'}
+                  stroke={charProgress > 0.9 ? '#EF4444' : '#00EFE7'}
                   strokeWidth="2"
                   fill="none"
                   strokeDasharray={`${charProgress * 88} 88`}

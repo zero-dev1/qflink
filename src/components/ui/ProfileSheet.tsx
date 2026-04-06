@@ -5,6 +5,7 @@
 import { useState, useEffect } from 'react';
 import { motion, AnimatePresence, useDragControls } from 'framer-motion';
 import { useNavigate } from 'react-router-dom';
+import { Lock, LockOpen } from 'lucide-react';
 import { Avatar } from '@/components/ui/Avatar';
 import { reverseResolve } from '@/lib/qns';
 import { getBadgesForName, type UserBadge } from '@/lib/badges';
@@ -68,7 +69,7 @@ export function ProfileSheet({ address, isOpen, onClose, podContext }: ProfileSh
   };
 
   const firstName = name ? name.replace('.qf', '') : null;
-  const badgeColor = badges.length > 0 ? badges[0].color : '#06B6D4';
+  const badgeColor = badges.length > 0 ? badges[0].color : '#00EFE7';
 
   return (
     <AnimatePresence>
@@ -138,7 +139,7 @@ export function ProfileSheet({ address, isOpen, onClose, podContext }: ProfileSh
 
               {/* Encryption support */}
               <p className="mt-2 text-caption text-text-tertiary">
-                {encryptionSupported ? '🔒 Supports encrypted DMs' : '🔓 No encryption support'}
+                {encryptionSupported ? <><Lock size={12} className="inline -mt-0.5 mr-1" strokeWidth={1.5} />Supports encrypted DMs</> : <><LockOpen size={12} className="inline -mt-0.5 mr-1" strokeWidth={1.5} />No encryption support</>}
               </p>
             </div>
 
