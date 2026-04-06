@@ -4,6 +4,7 @@ import { useParams, Link } from 'react-router-dom';
 import { useMessagesStore } from '@/stores/messages';
 import { useWalletStore } from '@/stores/wallet';
 import { useUnreadStore } from '@/stores/unread';
+import { useVisibilityPolling } from '@/hooks/useVisibilityPolling';
 import { MessageBubble } from '@/components/chat/MessageBubble';
 import { ChatInput } from '@/components/chat/ChatInput';
 import { Avatar } from '@/components/ui/Avatar';
@@ -70,15 +71,16 @@ export default function DMChat() {
     useUnreadStore.getState().markDMSeen(otherAddress);
   }, [otherAddress, isConnected, fetchMessages]);
 
-  // Poll every 8s
-  useEffect(() => {
-    if (!otherAddress || !isConnected) return;
-    const interval = setInterval(() => {
+  // Poll — pauses when tab hidden, fires immediately on return
+  useVisibilityPolling(
+    () => {
+      if (!otherAddress || !isConnected) return;
       fetchMessages(otherAddress);
       useUnreadStore.getState().markDMSeen(otherAddress);
-    }, 8000);
-    return () => clearInterval(interval);
-  }, [otherAddress, isConnected, fetchMessages]);
+    },
+    8000,
+    [otherAddress, isConnected, fetchMessages],
+  );
 
   // Auto-scroll when at bottom
   useEffect(() => {
@@ -245,7 +247,7 @@ export default function DMChat() {
           placeholder={`Message ${recipientName || headerDisplayName}...`}
           onSend={handleSend}
           disabled={!isConnected}
-          isSending={isSending}
+          isSending={isSending[otherAddress] || false}
         />
       </div>
     </div>

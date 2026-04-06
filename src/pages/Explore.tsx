@@ -57,20 +57,55 @@ export default function Explore() {
   }, [pods, debouncedQuery]);
 
   // Split into official and community
-  // TODO: Once QNS badge contract is live, determine Official status by
-  // checking if the pod creator holds a 'team' or 'dapplab' badge.
-  // Implementation should:
-  // 1. When pods are fetched, also fetch creator's badges (batch or cache)
-  // 2. Tag each pod with isOfficial: boolean based on team/dapplab badges
-  // 3. Split in Explore based on the isOfficial flag
-  // For now, first 3 pods are treated as Official.
+  // Badge cache for pod creators
+  const [creatorBadges, setCreatorBadges] = useState<Record<string, boolean>>({});
+
+  // Fetch creator badges when pods load
+  useEffect(() => {
+    if (pods.length === 0) return;
+    const creators = [...new Set(pods.map((p) => p.creator.toLowerCase()))];
+    const unchecked = creators.filter((c) => !(c in creatorBadges));
+    if (unchecked.length === 0) return;
+
+    Promise.allSettled(
+      unchecked.map(async (creator) => {
+        try {
+          const { reverseResolve } = await import('@/lib/qns');
+          const name = await reverseResolve(creator);
+          if (!name) return { creator, isOfficial: false };
+          const { getBadgesForName } = await import('@/lib/badges');
+          const badges = await getBadgesForName(name);
+          const isOfficial = badges.some(
+            (b) => b.type === 'team' || b.type === 'dapplab',
+          );
+          return { creator, isOfficial };
+        } catch {
+          return { creator, isOfficial: false };
+        }
+      }),
+    ).then((results) => {
+      const updates: Record<string, boolean> = {};
+      for (const r of results) {
+        if (r.status === 'fulfilled') {
+          updates[r.value.creator] = r.value.isOfficial;
+        }
+      }
+      if (Object.keys(updates).length > 0) {
+        setCreatorBadges((prev) => ({ ...prev, ...updates }));
+      }
+    });
+  }, [pods]);
+
   const { officialPods, communityPods } = useMemo(() => {
     const sorted = [...filteredPods].sort((a, b) => Number(a.id) - Number(b.id));
-    return {
-      officialPods: sorted.slice(0, 3),
-      communityPods: sorted.slice(3)
-    };
-  }, [filteredPods]);
+    const official = sorted.filter(
+      (p) => creatorBadges[p.creator.toLowerCase()] === true,
+    );
+    const community = sorted.filter(
+      (p) => creatorBadges[p.creator.toLowerCase()] !== true,
+    );
+    return { officialPods: official, communityPods: community };
+  }, [filteredPods, creatorBadges]);
 
   const handleJoin = async () => {
     if (!selectedPod) return;

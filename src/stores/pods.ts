@@ -16,7 +16,7 @@ import {
   sendPodMessage as contractSendPodMessage,
   getPodMessageCount,
 } from '@/lib/contractCalls';
-import { hapticSuccess, chimeSuccess, hapticTap, hapticError } from '@/lib/feedback';
+import { hapticSuccess, chimeSuccess, hapticTap, hapticError, hapticSend, hapticConfirm, chimeError } from '@/lib/feedback';
 import { getContractErrorMessage } from '@/lib/contractErrors';
 
 export interface PodData {
@@ -53,8 +53,8 @@ interface PodsStore {
   // Loading states
   isLoadingPods: boolean;
   isLoadingMessages: Record<number, boolean>;
-  isJoining: number | null;
-  isSending: boolean;
+  isJoining: number | false;
+  isSending: Record<number, boolean>;
   
   // Error states
   podFetchError: boolean;
@@ -81,8 +81,8 @@ export const usePodsStore = create<PodsStore>((set, get) => ({
   // Loading states
   isLoadingPods: false,
   isLoadingMessages: {},
-  isJoining: null,
-  isSending: false,
+  isJoining: false,
+  isSending: {},
   
   // Error states
   podFetchError: false,
@@ -121,16 +121,35 @@ export const usePodsStore = create<PodsStore>((set, get) => ({
     try {
       const messages = await getPodMessages(podId);
       
+      // De-duplicate: if we have optimistic messages, remove them when a matching
+      // on-chain message arrives (same sender + same content within 60s)
+      const existing = get().messages[podId] || [];
+      const optimistic = existing.filter((m) => m.isOptimistic);
+      const deduped = messages.filter((fetched: RawPodMessage) => {
+        // Keep the fetched message, but check if it matches an optimistic one
+        return true; // Always keep chain messages
+      });
+      // Remove optimistic messages that now have a chain counterpart
+      const remainingOptimistic = optimistic.filter((opt) => {
+        return !messages.some(
+          (chain: RawPodMessage) =>
+            chain.sender.toLowerCase() === opt.sender.toLowerCase() &&
+            chain.content === opt.content &&
+            Math.abs(chain.timestamp - opt.timestamp) < 60_000,
+        );
+      });
+      const finalMessages = [...deduped, ...remainingOptimistic];
+      
       // Update unread tracking
-      if (messages.length > 0) {
-        const latestTimestamp = Math.max(...messages.map(m => Number(m.timestamp)));
+      if (finalMessages.length > 0) {
+        const latestTimestamp = Math.max(...finalMessages.map(m => Number(m.timestamp)));
         const lastSeen = useUnreadStore.getState().lastSeenPod[podId.toString()] || 0;
-        const newCount = messages.filter(m => Number(m.timestamp) > lastSeen).length;
+        const newCount = finalMessages.filter(m => Number(m.timestamp) > lastSeen).length;
         useUnreadStore.getState().updatePodUnread(podId.toString(), latestTimestamp, newCount);
       }
       
       set(state => ({
-        messages: { ...state.messages, [podId]: messages },
+        messages: { ...state.messages, [podId]: finalMessages },
         isLoadingMessages: { ...state.isLoadingMessages, [podId]: false }
       }));
     } catch (error) {
@@ -159,7 +178,7 @@ export const usePodsStore = create<PodsStore>((set, get) => ({
       const alreadyMember = await isMember(podId, addr);
       if (alreadyMember) {
         useToastStore.getState().addToast("info", "You're already a member");
-        set({ isJoining: null });
+        set({ isJoining: false });
         return true;
       }
 
@@ -168,7 +187,7 @@ export const usePodsStore = create<PodsStore>((set, get) => ({
       if (banned) {
         useToastStore.getState().addToast("error", "You are banned from this pod");
         hapticError();
-        set({ isJoining: null });
+        set({ isJoining: false });
         return false;
       }
 
@@ -185,13 +204,13 @@ export const usePodsStore = create<PodsStore>((set, get) => ({
               `Requires ${Number(threshold) / 1e18} QF — you have ${Number(balance) / 1e18} QF` 
             );
             hapticError();
-            set({ isJoining: null });
+            set({ isJoining: false });
             return false;
           }
         }
         useToastStore.getState().addToast("error", "Access denied — check pod requirements");
         hapticError();
-        set({ isJoining: null });
+        set({ isJoining: false });
         return false;
       }
 
@@ -203,11 +222,23 @@ export const usePodsStore = create<PodsStore>((set, get) => ({
         const errorMsg = confirmation.error || 'Transaction failed';
         useToastStore.getState().addToast("error", errorMsg);
         hapticError();
-        set({ isJoining: null });
+        set({ isJoining: false });
         return false;
       }
 
-      useToastStore.getState().addToast("success", "You're in");
+      // Verify on-chain that we're actually a member now
+      try {
+        const { isMember: checkMember } = await import('@/lib/contractCalls');
+        const verified = await checkMember(podId, evmAddress as `0x${string}`);
+        if (!verified) {
+          useToastStore.getState().addToast('warning', 'Join transaction confirmed but membership not detected yet. Please refresh.');
+        }
+      } catch {
+        // Non-fatal — membership will be picked up on next fetch
+      }
+
+      const pod = get().getPodById(podId);
+      useToastStore.getState().addToast("success", `Joined ${pod?.name || 'pod'}`);
       hapticSuccess();
       chimeSuccess();
 
@@ -217,14 +248,14 @@ export const usePodsStore = create<PodsStore>((set, get) => ({
       } catch {}
 
       await get().fetchUserPods();
-      set({ isJoining: null });
+      set({ isJoining: false });
       return true;
     } catch (error) {
       console.error('Failed to join pod:', error);
       const errorMsg = getContractErrorMessage(error);
       useToastStore.getState().addToast("error", errorMsg);
       hapticError();
-      set({ isJoining: null });
+      set({ isJoining: false });
       return false;
     }
   },
@@ -251,9 +282,9 @@ export const usePodsStore = create<PodsStore>((set, get) => ({
     }));
     
     // Haptic feedback for message send
-    hapticTap();
+    hapticSend();
     
-    set({ isSending: true });
+    set((state) => ({ isSending: { ...state.isSending, [podId]: true } }));
     
     try {
       // 2. Contract write — this is the slow part
@@ -272,13 +303,14 @@ export const usePodsStore = create<PodsStore>((set, get) => ({
             m.id === optimisticId ? { ...m, isOptimistic: false } : m
           ),
         },
-        isSending: false,
+        isSending: { ...state.isSending, [podId]: false },
       }));
       
       // Mark getting started step
       try {
         const { useGettingStartedStore } = await import('@/stores/gettingStarted');
         useGettingStartedStore.getState().markStep('hasSentMessage');
+        hapticConfirm();
       } catch {}
       
       return true;
@@ -291,7 +323,7 @@ export const usePodsStore = create<PodsStore>((set, get) => ({
           ...state.messages,
           [podId]: (state.messages[podId] || []).filter((m) => m.id !== optimisticId),
         },
-        isSending: false,
+        isSending: { ...state.isSending, [podId]: false },
       }));
       
       useToastStore.getState().addToast("error", getContractErrorMessage(error));

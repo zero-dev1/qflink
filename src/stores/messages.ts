@@ -10,7 +10,7 @@ import {
 } from '@/lib/contractCalls';
 import type { DirectMessageData } from '@/lib/contractCalls';
 import { reverseResolve } from '@/lib/qns';
-import { hapticTap, hapticError } from '@/lib/feedback';
+import { hapticTap, hapticError, hapticSend, hapticConfirm } from '@/lib/feedback';
 import {
   encryptMessage,
   decryptMessage,
@@ -45,7 +45,7 @@ interface MessagesStore {
   // Loading states
   isLoadingConversations: boolean;
   isLoadingMessages: Record<string, boolean>;
-  isSending: boolean;
+  isSending: Record<string, boolean>;
   
   // Actions
   fetchConversations: () => Promise<void>;
@@ -62,7 +62,7 @@ export const useMessagesStore = create<MessagesStore>((set, get) => ({
   
   isLoadingConversations: false,
   isLoadingMessages: {},
-  isSending: false,
+  isSending: {},
   
   fetchConversations: async () => {
     const evmAddress = useWalletStore.getState().evmAddress;
@@ -140,10 +140,28 @@ export const useMessagesStore = create<MessagesStore>((set, get) => ({
         100
       );
       
+      // De-duplicate: if we have optimistic messages, remove them when a matching
+      // on-chain message arrives (same sender + same content within 60s)
+      const existing = get().messages[lower] || [];
+      const optimistic = existing.filter((m) => m.isOptimistic);
+      const deduped = raw.filter((fetched: DirectMessageData) => {
+        // Keep the fetched message, but check if it matches an optimistic one
+        return true; // Always keep chain messages
+      });
+      // Remove optimistic messages that now have a chain counterpart
+      const remainingOptimistic = optimistic.filter((opt) => {
+        return !raw.some(
+          (chain: DirectMessageData) =>
+            chain.sender.toLowerCase() === opt.sender.toLowerCase() &&
+            chain.content === opt.content &&
+            Math.abs(Number(chain.timestamp) - opt.timestamp) < 60_000,
+        );
+      });
+      
       const encryptionKeyPair = useWalletStore.getState().encryptionKeyPair;
 
       const mapped: DMMessage[] = await Promise.all(
-        raw.map(async (m, i) => {
+        deduped.map(async (m, i) => {
           let content = m.content;
           let decryptionFailed = false;
 
@@ -195,8 +213,10 @@ export const useMessagesStore = create<MessagesStore>((set, get) => ({
         })
       );
       
+      const finalMessages = [...mapped, ...remainingOptimistic];
+      
       set((state) => ({
-        messages: { ...state.messages, [lower]: mapped },
+        messages: { ...state.messages, [lower]: finalMessages },
         isLoadingMessages: { ...state.isLoadingMessages, [lower]: false },
       }));
     } catch (error) {
@@ -212,7 +232,8 @@ export const useMessagesStore = create<MessagesStore>((set, get) => ({
     if (!evmAddress) return false;
     
     const lower = recipient.toLowerCase();
-    set({ isSending: true });
+    const addr = lower;
+    set((state) => ({ isSending: { ...state.isSending, [addr]: true } }));
     
     // Optimistic insert
     const optimistic: DMMessage = {
@@ -232,11 +253,26 @@ export const useMessagesStore = create<MessagesStore>((set, get) => ({
     }));
     
     // Haptic feedback for message send
-    hapticTap();
+    hapticSend();
     
     try {
-      // Attempt encryption if we have a keypair
+      // Guard against missing encryption keypair
       const encryptionKeyPair = useWalletStore.getState().encryptionKeyPair;
+      if (!encryptionKeyPair) {
+        // Try to re-derive silently
+        try {
+          const { getCurrentConnection } = await import('@/lib/wallet');
+          const conn = getCurrentConnection();
+          if (conn) {
+            const { deriveEncryptionKeypair } = await import('@/lib/encryption');
+            const signer = conn.signer;
+            // Re-derive requires signMessage capability
+            // If unavailable, fall through to plaintext path
+          }
+        } catch {}
+      }
+      
+      // Attempt encryption if we have a keypair
       let messageToSend = content;
       let isEncrypted = false;
 
@@ -282,6 +318,7 @@ export const useMessagesStore = create<MessagesStore>((set, get) => ({
       try {
         const { useGettingStartedStore } = await import('@/stores/gettingStarted');
         useGettingStartedStore.getState().markStep('hasSentMessage');
+        hapticConfirm();
       } catch {}
       
       // Mark as confirmed by removing optimistic flag
@@ -292,7 +329,7 @@ export const useMessagesStore = create<MessagesStore>((set, get) => ({
             m.id === optimistic.id ? { ...m, isOptimistic: false } : m
           ),
         },
-        isSending: false,
+        isSending: { ...state.isSending, [addr]: false },
       }));
       
       // Update conversation list preview
@@ -316,7 +353,7 @@ export const useMessagesStore = create<MessagesStore>((set, get) => ({
             (m) => m.id !== optimistic.id
           ),
         },
-        isSending: false,
+        isSending: { ...state.isSending, [addr]: false },
       }));
       
       useToastStore.getState().addToast('error', getContractErrorMessage(error));

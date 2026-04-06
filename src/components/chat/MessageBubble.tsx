@@ -11,6 +11,7 @@ interface MessageBubbleProps {
   showSender: boolean;
   senderName?: string;
   isOptimistic?: boolean;
+  isEncrypted?: boolean;
 }
 
 export function MessageBubble({
@@ -21,12 +22,13 @@ export function MessageBubble({
   showSender,
   senderName,
   isOptimistic = false,
+  isEncrypted,
 }: MessageBubbleProps) {
   return (
     <motion.div
       initial={{ opacity: 0, scale: 0.95, y: 6 }}
       animate={{
-        opacity: isOptimistic ? 0.6 : 1,
+        opacity: isOptimistic ? 0.55 : 1,
         scale: 1,
         y: 0,
       }}
@@ -34,12 +36,17 @@ export function MessageBubble({
         type: 'spring',
         stiffness: 400,
         damping: 25,
-        opacity: { duration: 0.2 },
+        // When transitioning from optimistic to confirmed, use a smooth ease
+        opacity: isOptimistic
+          ? { duration: 0.15 }
+          : { type: 'spring', stiffness: 200, damping: 20 },
       }}
-      className={`flex ${isMine ? 'justify-end' : 'justify-start'} ${!showSender ? 'mt-0.5' : 'mt-4'}`}
+      className={`flex ${isMine ? 'justify-end' : 'justify-start'} ${
+        !showSender ? 'mt-0.5' : 'mt-4'
+      }`}
     >
       <div className="max-w-[85%] md:max-w-[75%]">
-        {/* Sender info for their messages */}
+        {/* Sender info */}
         {showSender && !isMine && (
           <div className="flex items-center gap-2 mb-1">
             <Avatar address={sender} size={24} />
@@ -50,29 +57,71 @@ export function MessageBubble({
                   <span className="text-cyan-primary">.qf</span>
                 </>
               ) : (
-                senderName || `${sender.slice(0, 6)}...${sender.slice(-4)}` 
+                senderName ||
+                `${sender.slice(0, 6)}...${sender.slice(-4)}` 
               )}
             </div>
           </div>
         )}
 
         {/* Message content */}
-        <div className={isMine ? 'bg-cyan-muted rounded-lg px-3 py-2' : ''}>
+        <div
+          className={`${
+            isMine ? 'bg-cyan-muted rounded-lg px-3 py-2' : ''
+          } ${isOptimistic && isMine ? 'animate-pulse' : ''}`}
+        >
           <p className="text-body text-text-primary">{content}</p>
         </div>
 
-        {/* Timestamp + optimistic status */}
+        {/* Timestamp + status */}
         {showSender && (
-          <div className={`flex items-center gap-1.5 mt-0.5 ${isMine ? 'justify-end' : ''}`}>
+          <div
+            className={`flex items-center gap-1.5 mt-0.5 ${
+              isMine ? 'justify-end' : ''
+            }`}
+          >
             <span className="text-caption text-text-tertiary">
               {formatMessageTime(timestamp)}
             </span>
             {isOptimistic && isMine && (
-              <span className="text-caption text-text-tertiary" title="Confirming on-chain...">
-                <svg width="12" height="12" viewBox="0 0 12 12" fill="none" className="inline animate-spin">
-                  <circle cx="6" cy="6" r="4.5" stroke="currentColor" strokeWidth="1" strokeDasharray="14 14" />
+              <span
+                className="text-caption text-text-tertiary flex items-center gap-1"
+                title="Confirming on-chain..."
+              >
+                <svg
+                  width="12"
+                  height="12"
+                  viewBox="0 0 12 12"
+                  fill="none"
+                  className="inline animate-spin"
+                >
+                  <circle
+                    cx="6"
+                    cy="6"
+                    r="4.5"
+                    stroke="currentColor"
+                    strokeWidth="1"
+                    strokeDasharray="14 14"
+                  />
                 </svg>
               </span>
+            )}
+            {!isOptimistic && isMine && (
+              <svg
+                width="12"
+                height="12"
+                viewBox="0 0 12 12"
+                fill="none"
+                className="text-cyan-primary"
+              >
+                <path
+                  d="M2.5 6L5 8.5L9.5 3.5"
+                  stroke="currentColor"
+                  strokeWidth="1.2"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                />
+              </svg>
             )}
           </div>
         )}

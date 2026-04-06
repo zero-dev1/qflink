@@ -34,6 +34,8 @@ export interface WalletState extends PersistedState {
   isConnecting: boolean;
   walletError: string | null;
   encryptionKeyPair: EncryptionKeyPair | null;
+  _balanceUnsub: (() => void) | null;
+  _visibilityCleanup: (() => void) | null;
 
   connect: (walletType: "talisman" | "subwallet") => Promise<void>;
   disconnect: () => void;
@@ -88,6 +90,8 @@ export const useWalletStore = create<WalletState>()(
       isConnecting: false,
       walletError: null,
       encryptionKeyPair: null,
+      _balanceUnsub: null,
+      _visibilityCleanup: null,
 
       connect: async (walletType) => {
         set({ isConnecting: true, walletError: null });
@@ -113,6 +117,7 @@ export const useWalletStore = create<WalletState>()(
 
           // Start balance subscription
           startBalanceSubscription(ss58, set);
+          set({ _balanceUnsub: balanceUnsub });
 
           // Map account (required for contract interactions)
           try {
@@ -202,6 +207,30 @@ export const useWalletStore = create<WalletState>()(
             }
           }
           
+          // After successful connection, set up account-change detection
+          const handleVisibility = async () => {
+            if (document.hidden) return;
+            try {
+              const conn = getCurrentConnection();
+              if (!conn) return;
+              // The stored address should match the current connection
+              const currentAddr = get().address;
+              if (conn.evmAddress !== currentAddr) {
+                // Account changed in extension — refresh
+                const evmAddr = conn.evmAddress as `0x${string}`;
+                set({
+                  address: evmAddr,
+                  evmAddress: evmAddr,
+                  encryptionKeyPair: null, // Force re-derivation on next send
+                });
+                get().refreshName();
+              }
+            } catch {}
+          };
+          document.addEventListener('visibilitychange', handleVisibility);
+          // Store cleanup ref
+          set({ _visibilityCleanup: () => document.removeEventListener('visibilitychange', handleVisibility) });
+
           // Haptic and sound feedback
           hapticSuccess();
           chimeSuccess();
@@ -241,10 +270,15 @@ export const useWalletStore = create<WalletState>()(
       },
 
       disconnect: () => {
-        if (balanceUnsub) {
-          balanceUnsub();
-          balanceUnsub = null;
+        // Clear balance subscription
+        const unsub = get()._balanceUnsub;
+        if (unsub && typeof unsub === 'function') {
+          try { unsub(); } catch {}
         }
+        // Clear visibility listener
+        const visCleaner = get()._visibilityCleanup;
+        if (visCleaner) { visCleaner(); }
+        
         disconnectWallet();
         set({
           address: null,
@@ -256,6 +290,8 @@ export const useWalletStore = create<WalletState>()(
           walletError: null,
           qnsName: null,
           encryptionKeyPair: null,
+          _balanceUnsub: null,
+          _visibilityCleanup: null,
         });
       },
 
@@ -296,21 +332,33 @@ export const useWalletStore = create<WalletState>()(
         return (state) => {
           if (!state?.address || !state?.walletName) return;
 
-          const walletType = state.walletName as "talisman" | "subwallet";
+          // Platform validation — mobile must use SubWallet, desktop must use Talisman
+          const onMobile = /Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
+          const walletType = state.walletName as 'talisman' | 'subwallet';
+          const walletValidForPlatform =
+            (onMobile && walletType === 'subwallet') ||
+            (!onMobile && walletType === 'talisman');
 
-          // QNS gold standard: warmUpPapi → connect → on fail, disconnect
-          warmUpPapi()
-            .then(() => state.connect(walletType))
-            .catch((err) => {
-              console.warn('[wallet] Silent reconnect failed:', err);
+          if (!walletValidForPlatform) {
+            // Wrong platform — clean disconnect, no error toast
+            state.disconnect();
+            return;
+          }
+
+          // Warm up PAPI before connecting — ensures nonce tracker is ready
+          import('@/lib/papiClient').then(({ warmUpPapi }) =>
+            warmUpPapi().then(() => {
+              state.connect(walletType)
+                .catch(() => {
+                  state.disconnect();
+                  import('@/stores/toast').then(({ useToastStore }) => {
+                    useToastStore.getState().addToast('warning', 'Session expired — please reconnect');
+                  });
+                });
+            }).catch(() => {
               state.disconnect();
-              // Show feedback after a tick so the toast store is ready
-              setTimeout(() => {
-                import('@/stores/toast').then(({ useToastStore }) => {
-                  useToastStore.getState().addToast('info', 'Session expired — please reconnect your wallet');
-                }).catch(() => {});
-              }, 500);
-            });
+            })
+          );
         };
       },
     }

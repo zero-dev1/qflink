@@ -1,84 +1,116 @@
 // src/lib/feedback.ts
 
 /**
- * Trigger haptic feedback on supported devices.
- * Pattern: array of milliseconds [vibrate, pause, vibrate, ...]
+ * QFLink Sonic Identity — ported from QNS haptics.ts
+ * Singleton AudioContext, multi-note chimes, categorized feedback.
  */
-export function haptic(pattern: number | number[] = 10): void {
-  try {
-    if (navigator.vibrate) {
-      navigator.vibrate(pattern);
-    }
-  } catch {
-    // Silent fail — not all browsers support vibrate
+
+const isVibrationSupported =
+  typeof navigator !== 'undefined' && 'vibrate' in navigator;
+
+let audioCtx: AudioContext | null = null;
+
+function getAudioCtx(): AudioContext {
+  if (!audioCtx) {
+    audioCtx = new (window.AudioContext ||
+      (window as unknown as { webkitAudioContext: typeof AudioContext })
+        .webkitAudioContext)();
   }
+  return audioCtx;
 }
 
-/** Short buzz for success (connect, join, send) */
-export function hapticSuccess(): void {
-  haptic([10, 30, 10]);
-}
-
-/** Single short buzz for general feedback */
-export function hapticTap(): void {
-  haptic(8);
-}
-
-/** Longer buzz for errors */
-export function hapticError(): void {
-  haptic([30, 20, 30]);
-}
-
-/**
- * Play a subtle success chime via Web Audio API.
- * 100ms sine wave at 880Hz, volume 0.08 (barely audible).
- * No-op if AudioContext is unavailable.
- */
-export function chimeSuccess(): void {
+function playChime(frequencies: number[], durations: number[]): void {
   try {
-    const ctx = new (window.AudioContext || (window as any).webkitAudioContext)();
-    const oscillator = ctx.createOscillator();
-    const gain = ctx.createGain();
-
-    oscillator.type = 'sine';
-    oscillator.frequency.setValueAtTime(880, ctx.currentTime);
-    gain.gain.setValueAtTime(0.08, ctx.currentTime);
-    gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.1);
-
-    oscillator.connect(gain);
-    gain.connect(ctx.destination);
-
-    oscillator.start(ctx.currentTime);
-    oscillator.stop(ctx.currentTime + 0.1);
-
-    // Clean up after playback
-    setTimeout(() => ctx.close(), 200);
+    const ctx = getAudioCtx();
+    if (ctx.state === 'suspended') ctx.resume();
+    frequencies.forEach((freq, i) => {
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.connect(gain);
+      gain.connect(ctx.destination);
+      osc.type = 'sine';
+      osc.frequency.value = freq;
+      const start = durations.slice(0, i).reduce((a, b) => a + b, 0);
+      gain.gain.setValueAtTime(0, ctx.currentTime + start);
+      gain.gain.linearRampToValueAtTime(0.10, ctx.currentTime + start + 0.01);
+      gain.gain.exponentialRampToValueAtTime(
+        0.001,
+        ctx.currentTime + start + durations[i],
+      );
+      osc.start(ctx.currentTime + start);
+      osc.stop(ctx.currentTime + start + durations[i]);
+    });
   } catch {
     // Silent fail — AudioContext not available
   }
 }
 
-/**
- * Play a subtle error tone.
- * 100ms sine wave at 220Hz, volume 0.06.
- */
-export function chimeError(): void {
+/** Vibrate helper — no-op if unsupported */
+export function haptic(pattern: number | number[] = 10): void {
   try {
-    const ctx = new (window.AudioContext || (window as any).webkitAudioContext)();
-    const oscillator = ctx.createOscillator();
-    const gain = ctx.createGain();
-
-    oscillator.type = 'sine';
-    oscillator.frequency.setValueAtTime(220, ctx.currentTime);
-    gain.gain.setValueAtTime(0.06, ctx.currentTime);
-    gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.1);
-
-    oscillator.connect(gain);
-    gain.connect(ctx.destination);
-
-    oscillator.start(ctx.currentTime);
-    oscillator.stop(ctx.currentTime + 0.1);
-
-    setTimeout(() => ctx.close(), 200);
+    if (isVibrationSupported) navigator.vibrate(pattern);
   } catch {}
 }
+
+/** Success: short pulse + ascending C5→E5→G5 chime */
+export function hapticSuccess(): void {
+  haptic([10, 30, 10]);
+  playChime([523.25, 659.25, 783.99], [0.12, 0.12, 0.2]);
+}
+
+/** Tap: very short pulse + subtle 1kHz click */
+export function hapticTap(): void {
+  haptic(8);
+  try {
+    const ctx = getAudioCtx();
+    if (ctx.state === 'suspended') ctx.resume();
+    const osc = ctx.createOscillator();
+    const gain = ctx.createGain();
+    osc.connect(gain);
+    gain.connect(ctx.destination);
+    osc.frequency.value = 1000;
+    gain.gain.setValueAtTime(0.06, ctx.currentTime);
+    gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.03);
+    osc.start(ctx.currentTime);
+    osc.stop(ctx.currentTime + 0.03);
+  } catch {}
+}
+
+/** Error: two pulses + descending sawtooth buzz */
+export function hapticError(): void {
+  haptic([50, 50, 50]);
+  try {
+    const ctx = getAudioCtx();
+    if (ctx.state === 'suspended') ctx.resume();
+    const osc = ctx.createOscillator();
+    const gain = ctx.createGain();
+    osc.connect(gain);
+    gain.connect(ctx.destination);
+    osc.type = 'sawtooth';
+    osc.frequency.setValueAtTime(220, ctx.currentTime);
+    osc.frequency.linearRampToValueAtTime(110, ctx.currentTime + 0.15);
+    gain.gain.setValueAtTime(0.08, ctx.currentTime);
+    gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.15);
+    osc.start(ctx.currentTime);
+    osc.stop(ctx.currentTime + 0.15);
+  } catch {}
+}
+
+/** Message sent: quick two-note C5→E5 (shorter than full success) */
+export function hapticSend(): void {
+  haptic(10);
+  playChime([523.25, 659.25], [0.08, 0.12]);
+}
+
+/** Message confirmed on-chain: single G5 ping */
+export function hapticConfirm(): void {
+  haptic(10);
+  playChime([783.99], [0.15]);
+}
+
+/**
+ * Legacy aliases — chimeSuccess/chimeError are used in some stores.
+ * Keep them so nothing breaks.
+ */
+export const chimeSuccess = hapticSuccess;
+export const chimeError = hapticError;

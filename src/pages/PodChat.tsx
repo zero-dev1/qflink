@@ -4,6 +4,7 @@ import { useParams, Link } from 'react-router-dom';
 import { usePodsStore } from '@/stores/pods';
 import { useWalletStore } from '@/stores/wallet';
 import { useUnreadStore } from '@/stores/unread';
+import { useVisibilityPolling } from '@/hooks/useVisibilityPolling';
 import { MessageBubble } from '@/components/chat/MessageBubble';
 import { ChatInput } from '@/components/chat/ChatInput';
 import { Skeleton } from '@/components/ui/Skeleton';
@@ -27,6 +28,7 @@ export default function PodChat() {
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const messagesContainerRef = useRef<HTMLDivElement>(null);
   const wasAtBottomRef = useRef(true);
+  const pollCountRef = useRef(0);
   const [isBannedFromPod, setIsBannedFromPod] = useState(false);
 
   const podId = id ? Number(id) : null;
@@ -54,23 +56,35 @@ export default function PodChat() {
     useUnreadStore.getState().markPodSeen(podId.toString());
   }, [podId, fetchMessages, fetchPods, pod]);
 
-  // Poll for new messages
-  useEffect(() => {
-    if (podId === null) return;
-    const interval = setInterval(() => {
-      fetchMessages(podId);
-      useUnreadStore.getState().markPodSeen(podId.toString());
-    }, 8000);
-    return () => clearInterval(interval);
-  }, [podId, fetchMessages]);
-
-  // Check ban status
-  useEffect(() => {
+  // Ban check — called on mount and periodically
+  const checkBanStatus = useCallback(() => {
     if (podId === null || !isConnected || !evmAddress) return;
     import('@/lib/contractCalls').then(({ isBanned }) => {
-      isBanned(podId, evmAddress as `0x${string}`).then(setIsBannedFromPod).catch(() => {});
+      isBanned(podId, evmAddress as `0x${string}`)
+        .then(setIsBannedFromPod)
+        .catch(() => {});
     });
   }, [podId, isConnected, evmAddress]);
+
+  useEffect(() => {
+    checkBanStatus();
+  }, [checkBanStatus]);
+
+  // Poll for new messages — pauses when tab hidden, fires immediately on return
+  useVisibilityPolling(
+    () => {
+      if (podId === null) return;
+      fetchMessages(podId);
+      useUnreadStore.getState().markPodSeen(podId.toString());
+      // Check ban status every 3rd poll (~24s)
+      pollCountRef.current += 1;
+      if (pollCountRef.current % 3 === 0) {
+        checkBanStatus();
+      }
+    },
+    8000,
+    [podId, fetchMessages, checkBanStatus],
+  );
 
   // Auto-scroll only when user was already at bottom
   useEffect(() => {
@@ -234,7 +248,7 @@ export default function PodChat() {
             placeholder={`Message ${pod?.name || 'pod'}...`}
             onSend={handleSend}
             disabled={!isConnected}
-            isSending={isSending}
+            isSending={podId !== null && isSending[podId] || false}
           />
         </div>
       )}
