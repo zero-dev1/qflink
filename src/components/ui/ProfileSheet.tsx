@@ -69,7 +69,7 @@ export function ProfileSheet({ address, isOpen, onClose, podContext }: ProfileSh
   };
 
   const firstName = name ? name.replace('.qf', '') : null;
-  const badgeColor = badges.length > 0 ? badges[0].color : '#00EFE7';
+  const badgeColor = badges.length > 0 ? badges[0].color : '#06B6D4';
 
   return (
     <AnimatePresence>

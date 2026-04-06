@@ -203,7 +203,7 @@ export function PodComposer({ onClose, onSuccess }: PodComposerProps) {
       }
   }
 
-  const catColor = category ? getCategoryColor(category) : '#00EFE7';
+  const catColor = category ? getCategoryColor(category) : '#06B6D4';
 
   return (
     <motion.div

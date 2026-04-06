@@ -15,13 +15,13 @@ export default {
         'surface-4': '#222222',
         overlay: 'rgba(0,0,0,0.6)',
 
-        // Cyan accent — primary #00EFE7 per QDL §2.4
+        // Cyan accent — primary #06B6D4 per QDL §2.4
         cyan: {
-          primary: '#00EFE7',
-          hover: '#33F5EF',
-          pressed: '#00CCC5',
-          muted: 'rgba(0,239,231,0.12)',
-          border: 'rgba(0,239,231,0.25)',
+          primary: '#06B6D4',
+          hover: '#0891B2',
+          pressed: '#0E7490',
+          muted: 'rgba(6,182,212,0.12)',
+          border: 'rgba(6,182,212,0.25)',
         },
 
         // Text
@@ -39,7 +39,7 @@ export default {
         success: '#10B981',
         warning: '#F59E0B',
         error: '#EF4444',
-        info: '#00EFE7',
+        info: '#06B6D4',
 
         // Category colors (pod cards & rail avatars)
         'cat-trading': '#10B981',
@@ -47,12 +47,12 @@ export default {
         'cat-defi': '#8B5CF6',
         'cat-gaming': '#F97316',
         'cat-builders': '#3B82F6',
-        'cat-social': '#00EFE7',
+        'cat-social': '#06B6D4',
         'cat-nfts': '#EC4899',
 
         // Badge colors
         'badge-team': '#DADADA',
-        'badge-dapplab': '#00EFE7',
+        'badge-dapplab': '#06B6D4',
         'badge-pioneer': '#FFD700',
         'badge-ambassador': '#FF6B35',
       },
@@ -102,8 +102,8 @@ export default {
           '100%': { opacity: '1', transform: 'translateY(0)' },
         },
         'border-pulse': {
-          '0%, 100%': { borderColor: 'rgba(0,239,231,0.25)' },
-          '50%': { borderColor: 'rgba(0,239,231,0.6)' },
+          '0%, 100%': { borderColor: 'rgba(6,182,212,0.25)' },
+          '50%': { borderColor: 'rgba(6,182,212,0.6)' },
         },
         'check-draw': {
           '0%': { strokeDashoffset: '24' },

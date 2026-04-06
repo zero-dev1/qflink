@@ -53,7 +53,7 @@ export default function Profile() {
   const firstName = qnsName ? qnsName.replace('.qf', '') : null;
 
   // Badge color for avatar ring
-  const badgeColor = badges.length > 0 ? badges[0].color : '#00EFE7';
+  const badgeColor = badges.length > 0 ? badges[0].color : '#06B6D4';
 
   if (!isConnected) {
     return (

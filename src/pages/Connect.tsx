@@ -135,7 +135,7 @@ function CheckMark() {
     >
       <motion.path
         d="M6 14L11.5 19.5L22 8.5"
-        stroke="#00EFE7"
+        stroke="#06B6D4"
         strokeWidth="2.5"
         strokeLinecap="round"
         strokeLinejoin="round"
@@ -179,7 +179,7 @@ function EmeraldRing({ size }: { size: number }) {
         cy={size / 2}
         r={r}
         fill="none"
-        stroke="#00EFE7"
+        stroke="#06B6D4"
         strokeWidth="3"
         strokeLinecap="round"
         strokeDasharray={circumference}
@@ -196,7 +196,7 @@ function EmeraldRing({ size }: { size: number }) {
         cy={size / 2}
         r={r}
         fill="none"
-        stroke="#00EFE7"
+        stroke="#06B6D4"
         strokeWidth="1"
         opacity="0"
         style={{
@@ -279,7 +279,7 @@ function WalletCircle({ wallet, isSelected, isOther, connectState, onClick, evmA
   // Determine border color
   let borderColor = 'rgba(255,255,255,0.08)';
   if (connectState === 'cancelled' && isSelected) borderColor = '#F59E0B';
-  if (connectState === 'approved' && isSelected) borderColor = '#00EFE7';
+  if (connectState === 'approved' && isSelected) borderColor = '#06B6D4';
 
   // Determine inner content
   const renderInner = () => {
@@ -665,7 +665,7 @@ export default function Connect() {
                 layoutId="profile-capsule"
                 className={cn(
                   'flex items-center gap-3 px-4 py-2 rounded-full border-2',
-                  hasQns ? 'border-[#00EFE7]' : 'border-white/[0.10]',
+                  hasQns ? 'border-[#06B6D4]' : 'border-white/[0.10]',
                 )}
                 style={{
                   background: 'rgba(255,255,255,0.04)',
