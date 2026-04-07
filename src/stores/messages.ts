@@ -224,6 +224,21 @@ export const useMessagesStore = create<MessagesStore>((set, get) => ({
 
       // Decrypt new messages
       const encryptionKeyPair = useWalletStore.getState().encryptionKeyPair;
+      let otherPartyPubkey: Uint8Array | null = null;
+
+      if (encryptionKeyPair) {
+        try {
+          const otherProfile = await getProfile(lower as `0x${string}`);
+          const otherPubkeyHex = otherProfile?.encryptionPubkey;
+          if (otherPubkeyHex && !/^0x0+$/.test(otherPubkeyHex)) {
+            const pubkeyBytes = new Uint8Array(
+              (otherPubkeyHex.slice(2).match(/.{2}/g) || []).map(b => parseInt(b, 16))
+            );
+            otherPartyPubkey = pubkeyBytes.slice(0, 32);
+          }
+        } catch {}
+      }
+
       const mapped: DMMessage[] = await Promise.all(
         raw.map(async (m, i) => {
           let content = m.content;
@@ -235,28 +250,16 @@ export const useMessagesStore = create<MessagesStore>((set, get) => ({
                 atob(encryptedBase64).split('').map(c => c.charCodeAt(0))
               );
 
-              const myAddress = useWalletStore.getState().evmAddress?.toLowerCase();
-              const otherParty = m.sender.toLowerCase() === myAddress
-                ? lower
-                : m.sender.toLowerCase();
-
-              const otherProfile = await getProfile(otherParty as `0x${string}`);
-              const otherPubkeyHex = otherProfile?.encryptionPubkey;
-
-              if (otherPubkeyHex && !/^0x0+$/.test(otherPubkeyHex)) {
-                const pubkeyBytes = new Uint8Array(
-                  (otherPubkeyHex.slice(2).match(/.{2}/g) || []).map(b => parseInt(b, 16))
-                );
-                const otherPubkey = pubkeyBytes.slice(0, 32);
-                content = decryptMessage(encryptedBytes, otherPubkey, encryptionKeyPair.secretKey);
+              if (otherPartyPubkey) {
+                content = decryptMessage(encryptedBytes, otherPartyPubkey, encryptionKeyPair.secretKey);
               } else {
-                content = '[Encrypted message — recipient key unavailable]';
+                content = '[Encrypted message - recipient key unavailable]';
               }
             } catch {
-              content = '[Encrypted message — decryption failed]';
+              content = '[Encrypted message - decryption failed]';
             }
           } else if (content.startsWith('enc:') && !encryptionKeyPair) {
-            content = '[Encrypted message — connect wallet to decrypt]';
+            content = '[Encrypted message - connect wallet to decrypt]';
           }
 
           const globalIndex = (!isFirstLoad && lastKnownCount > 0) ? lastKnownCount + i : i;
