@@ -5,7 +5,6 @@
 // Confirmed: full opacity, brief ✓ fades
 // Failed: red-tinted, "Failed — tap to retry"
 import { memo } from 'react';
-import { motion } from 'framer-motion';
 import { formatMessageTime } from '@/lib/utils';
 import { Avatar } from '@/components/ui/Avatar';
 import { cn } from '@/lib/utils';
@@ -40,10 +39,7 @@ export const MessageBubble = memo(function MessageBubble({
   const state = isFailed ? 'failed' : 'sent';
 
   return (
-    <motion.div
-      initial={{ opacity: 0, scale: 0.95, y: 6 }}
-      animate={{ opacity: 1, scale: 1, y: 0 }}
-      transition={{ type: 'spring', stiffness: 400, damping: 25 }}
+    <div
       className={cn(
         'flex',
         isMine ? 'justify-end' : 'justify-start',
@@ -113,6 +109,6 @@ export const MessageBubble = memo(function MessageBubble({
           </div>
         )}
       </div>
-    </motion.div>
+    </div>
   );
 });

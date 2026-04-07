@@ -2,6 +2,7 @@
 // Design System §16.2 — Header with tappable avatar, encryption indicator, tx state bubbles
 import { useEffect, useRef, useMemo, useCallback, useState } from 'react';
 import { useParams, Link } from 'react-router-dom';
+import { useVirtualizer } from '@tanstack/react-virtual';
 import { Lock, LockOpen } from 'lucide-react';
 import { useMessagesStore } from '@/stores/messages';
 import { useWalletStore } from '@/stores/wallet';
@@ -27,7 +28,7 @@ export default function DMChat() {
   const fetchMessages = useMessagesStore((state) => state.fetchMessages);
   const sendMessage = useMessagesStore((state) => state.sendMessage);
 
-  const messagesEndRef = useRef<HTMLDivElement>(null);
+  // Remove messagesEndRef since we're using virtualization
   const messagesContainerRef = useRef<HTMLDivElement>(null);
   const wasAtBottomRef = useRef(true);
   const [recipientName, setRecipientName] = useState<string | null>(null);
@@ -83,12 +84,28 @@ export default function DMChat() {
     [otherAddress, isConnected, fetchMessages],
   );
 
-  // Auto-scroll
+  const sortedMessages = useMemo(
+    () => [...dmMessages].sort((a, b) => a.timestamp - b.timestamp),
+    [dmMessages]
+  );
+
+  // Virtualizer setup
+  const virtualizer = useVirtualizer({
+    count: sortedMessages.length,
+    getScrollElement: () => messagesContainerRef.current,
+    estimateSize: () => 72, // avg message height — will be measured
+    overscan: 10,
+  });
+
+  // Auto-scroll: when new messages arrive and user is at bottom
   useEffect(() => {
-    if (wasAtBottomRef.current && messagesEndRef.current) {
-      messagesEndRef.current.scrollIntoView({ behavior: 'smooth' });
+    if (wasAtBottomRef.current && sortedMessages.length > 0) {
+      // Small delay to let virtualizer measure
+      requestAnimationFrame(() => {
+        virtualizer.scrollToIndex(sortedMessages.length - 1, { align: 'end', behavior: 'smooth' });
+      });
     }
-  }, [dmMessages]);
+  }, [sortedMessages.length]);
 
   const handleSend = async (content: string) => {
     if (!otherAddress) return false;
@@ -96,31 +113,6 @@ export default function DMChat() {
     return await sendMessage(otherAddress, content);
   };
 
-  // Build rendered messages
-  const renderedMessages = useMemo(() => {
-    const sorted = [...dmMessages].sort((a, b) => a.timestamp - b.timestamp);
-
-    return sorted.map((msg, index) => {
-      const prev = sorted[index - 1];
-      const showSender = !prev || prev.sender !== msg.sender || msg.timestamp - prev.timestamp > 5 * 60 * 1000;
-      const isMine = msg.sender.toLowerCase() === evmAddress?.toLowerCase();
-
-      return (
-        <MessageBubble
-          key={msg.id}
-          sender={msg.sender}
-          content={msg.content}
-          timestamp={msg.timestamp}
-          isMine={isMine}
-          showSender={showSender}
-          senderName={!isMine ? recipientName || undefined : undefined}
-          isFailed={msg.isFailed}
-          onRetry={msg.isFailed ? () => useMessagesStore.getState().retryMessage(otherAddress, msg.id) : undefined}
-          onDismiss={msg.isFailed ? () => useMessagesStore.getState().dismissFailedMessage(otherAddress, msg.id) : undefined}
-        />
-      );
-    });
-  }, [dmMessages, evmAddress, recipientName, otherAddress]);
 
   // Display name
   const headerName = recipientName || (otherAddress ? `${otherAddress.slice(0, 6)}...${otherAddress.slice(-4)}` : 'Unknown');
@@ -203,11 +195,44 @@ export default function DMChat() {
             </div>
           </div>
         ) : (
-          <>
-            {renderedMessages}
-            <div ref={messagesEndRef} />
-          </>
-        )}
+            <div
+              style={{ height: `${virtualizer.getTotalSize()}px`, width: '100%', position: 'relative' }}
+            >
+              {virtualizer.getVirtualItems().map((virtualRow) => {
+                const message = sortedMessages[virtualRow.index];
+                const prev = virtualRow.index > 0 ? sortedMessages[virtualRow.index - 1] : undefined;
+                const showSender = !prev || prev.sender !== message.sender || message.timestamp - prev.timestamp > 5 * 60 * 1000;
+                const isMine = message.sender.toLowerCase() === evmAddress?.toLowerCase();
+
+                return (
+                  <div
+                    key={message.id}
+                    data-index={virtualRow.index}
+                    ref={virtualizer.measureElement}
+                    style={{
+                      position: 'absolute',
+                      top: 0,
+                      left: 0,
+                      width: '100%',
+                      transform: `translateY(${virtualRow.start}px)`,
+                    }}
+                  >
+                    <MessageBubble
+                      sender={message.sender}
+                      content={message.content}
+                      timestamp={message.timestamp}
+                      isMine={isMine}
+                      showSender={showSender}
+                      senderName={!isMine ? recipientName || undefined : undefined}
+                      isFailed={message.isFailed}
+                      onRetry={message.isFailed ? () => useMessagesStore.getState().retryMessage(otherAddress, message.id) : undefined}
+                      onDismiss={message.isFailed ? () => useMessagesStore.getState().dismissFailedMessage(otherAddress, message.id) : undefined}
+                    />
+                  </div>
+                );
+              })}
+            </div>
+          )}
       </div>
 
       {/* Encryption warning */}

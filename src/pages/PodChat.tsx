@@ -2,6 +2,7 @@
 // Design System §17 — Pod chat with tx state bubbles, sender avatars tappable, banned state red footer
 import { useEffect, useRef, useMemo, useCallback, useState } from 'react';
 import { useParams, Link } from 'react-router-dom';
+import { useVirtualizer } from '@tanstack/react-virtual';
 import { usePodsStore } from '@/stores/pods';
 import { useWalletStore } from '@/stores/wallet';
 import { useUnreadStore } from '@/stores/unread';
@@ -39,7 +40,7 @@ export default function PodChat() {
     [userPodIds, podId]
   );
 
-  const messagesEndRef = useRef<HTMLDivElement>(null);
+  // Remove messagesEndRef since we're using virtualization
   const messagesContainerRef = useRef<HTMLDivElement>(null);
   const wasAtBottomRef = useRef(true);
   const pollCountRef = useRef(0);
@@ -112,11 +113,28 @@ export default function PodChat() {
     [podId, fetchMessages, checkBanStatus],
   );
 
+  const sortedMessages = useMemo(
+    () => [...podMessages].sort((a, b) => a.timestamp - b.timestamp),
+    [podMessages]
+  );
+
+  // Virtualizer setup
+  const virtualizer = useVirtualizer({
+    count: sortedMessages.length,
+    getScrollElement: () => messagesContainerRef.current,
+    estimateSize: () => 72, // avg message height — will be measured
+    overscan: 10,
+  });
+
+  // Auto-scroll: when new messages arrive and user is at bottom
   useEffect(() => {
-    if (wasAtBottomRef.current && messagesEndRef.current) {
-      messagesEndRef.current.scrollIntoView({ behavior: 'smooth' });
+    if (wasAtBottomRef.current && sortedMessages.length > 0) {
+      // Small delay to let virtualizer measure
+      requestAnimationFrame(() => {
+        virtualizer.scrollToIndex(sortedMessages.length - 1, { align: 'end', behavior: 'smooth' });
+      });
     }
-  }, [podMessages]);
+  }, [sortedMessages.length]);
 
   const handleSend = async (content: string) => {
     if (podId === null) return false;
@@ -124,31 +142,6 @@ export default function PodChat() {
     return await sendMessage(podId, content);
   };
 
-  const renderedMessages = useMemo(() => {
-    const sorted = [...podMessages].sort((a, b) => a.timestamp - b.timestamp);
-
-    return sorted.map((message, index) => {
-      const prev = sorted[index - 1];
-      const showSender = !prev || prev.sender !== message.sender || message.timestamp - prev.timestamp > 5 * 60 * 1000;
-      const isMine = message.sender === evmAddress;
-
-      return (
-        <MessageBubble
-          key={message.id}
-          sender={message.sender}
-          content={message.content}
-          timestamp={message.timestamp}
-          isMine={isMine}
-          showSender={showSender}
-          senderName={senderNames[message.sender.toLowerCase()] || undefined}
-          isFailed={message.isFailed}
-          onRetry={message.isFailed ? () => usePodsStore.getState().retryMessage(podId!, message.id) : undefined}
-          onDismiss={message.isFailed ? () => usePodsStore.getState().dismissFailedMessage(podId!, message.id) : undefined}
-          onAvatarTap={(addr) => setProfileSheetAddress(addr)}
-        />
-      );
-    });
-  }, [podMessages, evmAddress, senderNames, podId]);
 
   if (podId === null) {
     return (
@@ -197,16 +190,50 @@ export default function PodChat() {
           ))}
         </div>
       ) : (
-        <div ref={messagesContainerRef} onScroll={handleScroll} className="flex-1 overflow-y-auto px-4 md:px-6 py-4">
+        <div ref={messagesContainerRef} onScroll={handleScroll} className="flex-1 overflow-y-auto px-4 md:px-6">
           {podMessages.length === 0 ? (
             <div className="flex items-center justify-center h-full">
               <p className="text-body-sm text-text-tertiary text-center">No messages yet. Start the conversation</p>
             </div>
           ) : (
-            <>
-              {renderedMessages}
-              <div ref={messagesEndRef} />
-            </>
+            <div
+              style={{ height: `${virtualizer.getTotalSize()}px`, width: '100%', position: 'relative' }}
+            >
+              {virtualizer.getVirtualItems().map((virtualRow) => {
+                const message = sortedMessages[virtualRow.index];
+                const prev = virtualRow.index > 0 ? sortedMessages[virtualRow.index - 1] : undefined;
+                const showSender = !prev || prev.sender !== message.sender || message.timestamp - prev.timestamp > 5 * 60 * 1000;
+                const isMine = message.sender === evmAddress;
+
+                return (
+                  <div
+                    key={message.id}
+                    data-index={virtualRow.index}
+                    ref={virtualizer.measureElement}
+                    style={{
+                      position: 'absolute',
+                      top: 0,
+                      left: 0,
+                      width: '100%',
+                      transform: `translateY(${virtualRow.start}px)`,
+                    }}
+                  >
+                    <MessageBubble
+                      sender={message.sender}
+                      content={message.content}
+                      timestamp={message.timestamp}
+                      isMine={isMine}
+                      showSender={showSender}
+                      senderName={senderNames[message.sender.toLowerCase()] || undefined}
+                      isFailed={message.isFailed}
+                      onRetry={message.isFailed ? () => usePodsStore.getState().retryMessage(podId!, message.id) : undefined}
+                      onDismiss={message.isFailed ? () => usePodsStore.getState().dismissFailedMessage(podId!, message.id) : undefined}
+                      onAvatarTap={(addr) => setProfileSheetAddress(addr)}
+                    />
+                  </div>
+                );
+              })}
+            </div>
           )}
         </div>
       )}
