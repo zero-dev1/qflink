@@ -108,12 +108,21 @@ export const useMessagesStore = create<MessagesStore>((set, get) => ({
       _lastConversationAddresses = addresses;
       _conversationsLastFetchTime = now;
 
-      // Build conversation items with last message and QNS names
+      // Pre-fetch all QNS names in parallel (reverseResolve has internal TTL cache)
+      const nameResults = await Promise.allSettled(
+        addresses.map((addr) => reverseResolve(addr.toLowerCase()))
+      );
+      const nameMap: Record<string, string | null> = {};
+      addresses.forEach((addr, i) => {
+        const r = nameResults[i];
+        nameMap[addr.toLowerCase()] = r.status === 'fulfilled' ? r.value : null;
+      });
+
+      // Build conversation items - messages fetch is the expensive part
       const items: ConversationItem[] = await Promise.all(
         addresses.map(async (addr) => {
           const lower = addr.toLowerCase();
 
-          // Fetch last message for preview
           const msgs = await getMessages(
             evmAddress as `0x${string}`,
             lower as `0x${string}`,
@@ -131,15 +140,9 @@ export const useMessagesStore = create<MessagesStore>((set, get) => ({
             }
           }
 
-          // Resolve QNS name
-          let displayName: string | null = null;
-          try {
-            displayName = await reverseResolve(lower);
-          } catch {}
-
           return {
             address: lower,
-            displayName,
+            displayName: nameMap[lower],
             lastMessage: lastMsg?.content || '',
             lastMessageTime: lastMsg?.timestamp || 0,
             unreadCount: 0,
