@@ -41,8 +41,7 @@ export interface RawPodMessage {
   content: string;
   timestamp: number;
   id: number;
-  isOptimistic?: boolean;
-  isConfirming?: boolean;
+  isLocalPending?: boolean; // internal flag for dedup — NOT for visual state
   isFailed?: boolean;
 }
 
@@ -70,6 +69,7 @@ interface PodsStore {
   sendMessage: (podId: number, content: string) => Promise<boolean>;
   retryMessage: (podId: number, messageId: number) => Promise<boolean>;
   dismissFailedMessage: (podId: number, messageId: number) => void;
+  addOptimisticPod: (pod: PodData) => void;
   
   // Helpers
   getPodById: (id: number) => PodData | undefined;
@@ -135,7 +135,7 @@ export const usePodsStore = create<PodsStore>((set, get) => ({
   
   fetchMessages: async (podId: number) => {
     const existing = get().messages[podId] || [];
-    const nonOptimistic = existing.filter(m => !m.isOptimistic && !m.isConfirming && !m.isFailed);
+    const nonOptimistic = existing.filter(m => !m.isLocalPending && !m.isFailed);
     const isFirstLoad = nonOptimistic.length === 0;
 
     // Only show loading spinner on first load, not on polls
@@ -173,9 +173,9 @@ export const usePodsStore = create<PodsStore>((set, get) => ({
         : newOnChain;
 
       // De-duplicate: remove optimistic/confirming messages that now have a chain counterpart
-    const pending = existing.filter(m => m.isOptimistic || m.isConfirming || m.isFailed);
+    const pending = existing.filter(m => m.isLocalPending || m.isFailed);
     const remainingPending = pending.filter((opt) => {
-      if (opt.isFailed) return true; // Failed messages persist until retry/dismiss
+      if (opt.isFailed) return true;
       return !allOnChain.some(
         (chain: RawPodMessage) =>
           chain.sender.toLowerCase() === opt.sender.toLowerCase() &&
@@ -333,16 +333,16 @@ export const usePodsStore = create<PodsStore>((set, get) => ({
     const evmAddress = useWalletStore.getState().evmAddress;
     if (!evmAddress) return false;
 
-    // 1. OPTIMISTIC INSERT — synchronous, before any await
     const optimisticId = Date.now();
     const optimisticMessage: RawPodMessage = {
       id: optimisticId,
       sender: evmAddress,
       content,
       timestamp: Math.floor(Date.now() / 1000),
-      isOptimistic: true,
+      isLocalPending: true, // for dedup only - message renders at full opacity
     };
 
+    // Instant insert - full opacity, no visual indicator
     set(state => ({
       messages: {
         ...state.messages,
@@ -354,115 +354,94 @@ export const usePodsStore = create<PodsStore>((set, get) => ({
     set((state) => ({ isSending: { ...state.isSending, [podId]: true } }));
 
     try {
-      // 2. Contract write — returns when BROADCAST received (not when confirmed)
       const result = await contractSendPodMessage(podId, content);
 
-      // 3. BROADCAST RECEIVED — transition optimistic → confirming
-      //    This is the QNS pattern: resolve UI success on broadcast.
+      // Broadcast received - unlock input immediately
       set((state) => ({
         messages: {
           ...state.messages,
           [podId]: (state.messages[podId] || []).map((m) =>
-            m.id === optimisticId
-              ? { ...m, isOptimistic: false, isConfirming: true }
-              : m
+            m.id === optimisticId ? { ...m, isLocalPending: true } : m
           ),
         },
         isSending: { ...state.isSending, [podId]: false },
       }));
 
-      // Input unlocks here — user can type next message immediately
-
-      // 4. BACKGROUND CONFIRMATION — non-blocking
+      // Background confirmation - only care about actual failures
       result.confirmation.then(async (confirmation) => {
         if (confirmation.confirmed) {
-          // Chain confirmed — mark as fully confirmed
+          // Remove local pending flag - next poll will replace with chain copy
           set((state) => ({
             messages: {
               ...state.messages,
               [podId]: (state.messages[podId] || []).map((m) =>
-                m.id === optimisticId
-                  ? { ...m, isConfirming: false }
-                  : m
+                m.id === optimisticId ? { ...m, isLocalPending: false } : m
               ),
             },
           }));
           hapticConfirm();
-        } else {
-          // Timeout or subscription miss — verify on-chain before failing
+          return;
+        }
+
+        // Check if it's a real failure or just subscription timeout
+        const isActualFailure = confirmation.error &&
+          confirmation.error !== 'not_confirmed' &&
+          confirmation.error !== 'verification_failed';
+
+        if (isActualFailure) {
+          // Verify on-chain before marking failed
           try {
             const beforeCount = (get().messages[podId] || [])
-              .filter(m => !m.isOptimistic && !m.isConfirming && !m.isFailed).length;
+              .filter(m => !m.isLocalPending && !m.isFailed).length;
             const onChainCount = await getPodMessageCount(podId);
             if (onChainCount > beforeCount) {
-              // New message appeared — our tx landed, mark confirmed
+              // Message landed - mark clean
               set((state) => ({
                 messages: {
                   ...state.messages,
                   [podId]: (state.messages[podId] || []).map((m) =>
-                    m.id === optimisticId
-                      ? { ...m, isConfirming: false }
-                      : m
+                    m.id === optimisticId ? { ...m, isLocalPending: false } : m
                   ),
                 },
               }));
               hapticConfirm();
               return;
             }
-          } catch {
-            // Verification failed — still don't mark as failed yet.
-            // The next poll cycle will reconcile.
-          }
+          } catch {}
 
-          // Only mark failed if confirmation.error indicates an actual revert,
-          // NOT just a subscription timeout
-          const isActualFailure = confirmation.error &&
-            confirmation.error !== 'not_confirmed' &&
-            confirmation.error !== 'verification_failed';
-
-          if (isActualFailure) {
-            set((state) => ({
-              messages: {
-                ...state.messages,
-                [podId]: (state.messages[podId] || []).map((m) =>
-                  m.id === optimisticId
-                    ? { ...m, isConfirming: false, isFailed: true }
-                    : m
-                ),
-              },
-            }));
-            useToastStore.getState().addToast('error', confirmation.error || 'Transaction failed');
-            hapticError();
-          } else {
-            // "not_confirmed" = subscription didn't fire, tx almost certainly landed.
-            // Silently mark as confirmed — next poll will reconcile with chain state.
-            set((state) => ({
-              messages: {
-                ...state.messages,
-                [podId]: (state.messages[podId] || []).map((m) =>
-                  m.id === optimisticId
-                    ? { ...m, isConfirming: false }
-                    : m
-                ),
-              },
-            }));
-          }
+          set((state) => ({
+            messages: {
+              ...state.messages,
+              [podId]: (state.messages[podId] || []).map((m) =>
+                m.id === optimisticId ? { ...m, isLocalPending: false, isFailed: true } : m
+              ),
+            },
+          }));
+          useToastStore.getState().addToast('error', confirmation.error || 'Transaction failed');
+          hapticError();
+        } else {
+          // Subscription timeout - tx almost certainly landed, mark clean
+          set((state) => ({
+            messages: {
+              ...state.messages,
+              [podId]: (state.messages[podId] || []).map((m) =>
+                m.id === optimisticId ? { ...m, isLocalPending: false } : m
+              ),
+            },
+          }));
         }
       }).catch(() => {
-        // Confirmation promise itself errored — treat as soft confirmed
+        // Promise error - treat as landed
         set((state) => ({
           messages: {
             ...state.messages,
             [podId]: (state.messages[podId] || []).map((m) =>
-              m.id === optimisticId
-                ? { ...m, isConfirming: false }
-                : m
+              m.id === optimisticId ? { ...m, isLocalPending: false } : m
             ),
           },
         }));
       });
 
-      // Mark getting started step (non-blocking)
       try {
         const { useGettingStartedStore } = await import('@/stores/gettingStarted');
         useGettingStartedStore.getState().markStep('hasSentMessage');
@@ -470,22 +449,18 @@ export const usePodsStore = create<PodsStore>((set, get) => ({
 
       return true;
     } catch (error) {
-      // This catch only fires if writeContract itself threw (before broadcast)
-      // — i.e., user rejected signing, wallet not connected, gas estimation failed
       console.error('Failed to send message:', error);
-
       set((state) => ({
         messages: {
           ...state.messages,
           [podId]: (state.messages[podId] || []).map((m) =>
-            m.id === optimisticId ? { ...m, isOptimistic: false, isFailed: true } : m
+            m.id === optimisticId ? { ...m, isLocalPending: false, isFailed: true } : m
           ),
         },
         isSending: { ...state.isSending, [podId]: false },
       }));
 
       const errorMsg = getContractErrorMessage(error);
-      // Don't toast for user cancellation — it's intentional
       if (!errorMsg.includes('cancelled')) {
         useToastStore.getState().addToast('error', errorMsg);
       }
@@ -503,7 +478,7 @@ export const usePodsStore = create<PodsStore>((set, get) => ({
       messages: {
         ...state.messages,
         [podId]: (state.messages[podId] || []).map((m) =>
-          m.id === messageId ? { ...m, isFailed: false, isOptimistic: true } : m
+          m.id === messageId ? { ...m, isFailed: false, isLocalPending: true } : m
         ),
       },
     }));
@@ -531,6 +506,17 @@ export const usePodsStore = create<PodsStore>((set, get) => ({
         [podId]: (state.messages[podId] || []).filter((m) => m.id !== messageId),
       },
     }));
+  },
+
+  addOptimisticPod: (pod: PodData) => {
+    set((state) => {
+      // Don't add if a pod with this name already exists
+      if (state.pods.some(p => p.name === pod.name)) return state;
+      return {
+        pods: [...state.pods, pod],
+        userPodIds: [...state.userPodIds, Number(pod.id)],
+      };
+    });
   },
   
   // Helpers

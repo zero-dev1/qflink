@@ -14,19 +14,9 @@ import { ProfileSheet } from '@/components/ui/ProfileSheet';
 export default function Messages() {
   const navigate = useNavigate();
   const { isConnected } = useWalletStore();
-  const { conversations, isLoadingConversations, fetchConversations } = useMessagesStore();
+  const { conversations, isLoadingConversations } = useMessagesStore();
   const [profileSheetAddress, setProfileSheetAddress] = useState<string | null>(null);
 
-  useEffect(() => {
-    if (isConnected) fetchConversations();
-  }, [isConnected, fetchConversations]);
-
-  // Poll conversation list — pauses when tab hidden, immediate refresh on return
-  useVisibilityPolling(
-    () => { if (isConnected) fetchConversations(); },
-    15000,
-    [isConnected, fetchConversations],
-  );
 
   // Disconnected state
   if (!isConnected) {

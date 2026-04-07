@@ -3,7 +3,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useWalletStore } from '@/stores/wallet';
-import { usePodsStore } from '@/stores/pods';
+import { usePodsStore, type PodData } from '@/stores/pods';
 import { useToastStore } from '@/stores/toast';
 import {
   createPod,
@@ -103,9 +103,30 @@ export function PodComposer({ onClose, onSuccess }: PodComposerProps) {
       chimeSuccess();
       useToastStore.getState().addToast('success', `${trimmedName} is live`);
 
-      // Refresh pods list
-      usePodsStore.getState().fetchPods();
-      usePodsStore.getState().fetchUserPods();
+      // Optimistic pod insertion - appears immediately in Explore
+      const optimisticPod: PodData = {
+        id: BigInt(Date.now()), // temporary ID - will be replaced by chain data on next fetch
+        name: trimmedName,
+        description: trimmedDesc,
+        minBalance: thresholdWei,
+        creator: (useWalletStore.getState().evmAddress || '').toLowerCase(),
+        createdAt: BigInt(Math.floor(Date.now() / 1000)),
+        isDefault: false,
+        podType: 0,
+        tier: 0,
+        memberCount: 1,
+        isPublic: true,
+        threshold: thresholdWei,
+        modCount: 0,
+        category,
+      };
+      usePodsStore.getState().addOptimisticPod(optimisticPod);
+
+      // Background reconciliation - will replace optimistic pod with real chain data
+      setTimeout(() => {
+        usePodsStore.getState().fetchPods();
+        usePodsStore.getState().fetchUserPods();
+      }, 2000);
 
       // Brief delay to show success state, then close
       setTimeout(() => {

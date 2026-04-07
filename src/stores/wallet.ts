@@ -16,7 +16,7 @@ import {
 import { warmUpPapi, getTypedApi } from "@/lib/papiClient";
 import { reverseResolve, clearNameCache } from "@/lib/qns";
 import { hapticSuccess, chimeSuccess } from "@/lib/feedback";
-import { deriveEncryptionKeypair, type EncryptionKeyPair } from '@/lib/encryption';
+import { deriveEncryptionKeypair, saveKeypairToSession, loadKeypairFromSession, clearKeypairFromSession, type EncryptionKeyPair } from '@/lib/encryption';
 
 // ─── Types ───────────────────────────────────────────────────────────
 
@@ -162,24 +162,30 @@ export const useWalletStore = create<WalletState>()(
           // Success
           set({ isConnected: true, isConnecting: false });
           
-          // Derive encryption keypair (requires one wallet signature)
-          let encryptionKeyPair: EncryptionKeyPair | null = null;
-          try {
-            const signer = getCurrentConnection()?.signer;
-            if (signer) {
-              const signMessage = async (message: string): Promise<Uint8Array> => {
-                // Use the polkadot signer to sign a raw message
-                const encoder = new TextEncoder();
-                const messageBytes = encoder.encode(message);
-                const result = await signer.polkadotSigner.signBytes(messageBytes);
-                return new Uint8Array(result);
-              };
-              encryptionKeyPair = await deriveEncryptionKeypair(signMessage);
-              set({ encryptionKeyPair });
+          // Restore or derive encryption keypair
+          let encryptionKeyPair: EncryptionKeyPair | null = loadKeypairFromSession();
+
+          if (!encryptionKeyPair) {
+            // First time this session — need one wallet signature
+            try {
+              const signer = getCurrentConnection()?.signer;
+              if (signer) {
+                const signMessage = async (message: string): Promise<Uint8Array> => {
+                  const encoder = new TextEncoder();
+                  const messageBytes = encoder.encode(message);
+                  const result = await signer.polkadotSigner.signBytes(messageBytes);
+                  return new Uint8Array(result);
+                };
+                encryptionKeyPair = await deriveEncryptionKeypair(signMessage);
+                saveKeypairToSession(encryptionKeyPair);
+              }
+            } catch (encErr) {
+              console.warn('[wallet] Encryption keypair derivation failed:', encErr);
             }
-          } catch (encErr) {
-            // Non-fatal — DMs will fall back to plaintext warning
-            console.warn('[wallet] Encryption keypair derivation failed:', encErr);
+          }
+
+          if (encryptionKeyPair) {
+            set({ encryptionKeyPair });
           }
           
           // If user has no on-chain profile yet, register with encryption pubkey
@@ -220,8 +226,9 @@ export const useWalletStore = create<WalletState>()(
                 const newEvmAddr = conn.evmAddress.toLowerCase();
                 set({
                   evmAddress: newEvmAddr,
-                  encryptionKeyPair: null, // Force re-derivation on next send
+                  encryptionKeyPair: null,
                 });
+                clearKeypairFromSession();
                 get().refreshName();
               }
             } catch {}
@@ -279,6 +286,7 @@ export const useWalletStore = create<WalletState>()(
         if (visCleaner) { visCleaner(); }
         
         disconnectWallet();
+        clearKeypairFromSession();
         set({
           address: null,
           evmAddress: null,

@@ -12,8 +12,15 @@ import { getCategoryColor } from '@/lib/categories';
 import { formatBalance, cn } from '@/lib/utils';
 
 export function Sidebar() {
-  const { isConnected, isConnecting, qnsName, evmAddress, balance, disconnect } = useWalletStore();
-  const { pods, userPodIds } = usePodsStore();
+  const isConnected = useWalletStore((s) => s.isConnected);
+  const isConnecting = useWalletStore((s) => s.isConnecting);
+  const qnsName = useWalletStore((s) => s.qnsName);
+  const evmAddress = useWalletStore((s) => s.evmAddress);
+  const balance = useWalletStore((s) => s.balance);
+  const disconnect = useWalletStore((s) => s.disconnect);
+
+  const pods = usePodsStore((s) => s.pods);
+  const userPodIds = usePodsStore((s) => s.userPodIds);
   const navigate = useNavigate();
   const location = useLocation();
   const totalUnreadDMs = useUnreadStore((s) => s.getTotalUnreadDMs());

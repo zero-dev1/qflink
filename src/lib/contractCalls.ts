@@ -189,12 +189,14 @@ export async function getPod(podId: number): Promise<PodData | null> {
 
 export async function getAllPods(): Promise<PodData[]> {
   const count = await getPodCount();
-  const pods: PodData[] = [];
-  for (let i = 1; i <= count; i++) {
-    const pod = await getPod(i);
-    if (pod) pods.push(pod);
-  }
-  return pods;
+  if (count === 0) return [];
+
+  // Parallel fetch - all pods at once instead of sequential
+  const results = await Promise.all(
+    Array.from({ length: count }, (_, i) => getPod(i + 1))
+  );
+
+  return results.filter((pod): pod is PodData => pod !== null);
 }
 
 export async function getUserPods(address: `0x${string}`): Promise<number[]> {

@@ -1,4 +1,5 @@
 // src/components/layout/AppLayout.tsx
+import { useEffect } from 'react';
 import { Outlet, useLocation } from 'react-router-dom';
 import { AnimatePresence } from 'framer-motion';
 import { Sidebar } from './Sidebar';
@@ -6,14 +7,42 @@ import { MobileTabBar } from './MobileTabBar';
 import { PageTransition } from './PageTransition';
 import { ModePill } from '@/components/ui/ModePill';
 import { useWalletStore } from '@/stores/wallet';
+import { usePodsStore } from '@/stores/pods';
+import { useMessagesStore } from '@/stores/messages';
+import { useVisibilityPolling } from '@/hooks/useVisibilityPolling';
 import { useTabReturn } from '@/hooks/useTabReturn';
 
 export function AppLayout() {
   const location = useLocation();
-  const { isConnected } = useWalletStore();
+  const isConnected = useWalletStore((s) => s.isConnected);
+  const fetchPods = usePodsStore((s) => s.fetchPods);
+  const fetchUserPods = usePodsStore((s) => s.fetchUserPods);
+  const fetchConversations = useMessagesStore((s) => s.fetchConversations);
 
   // §24 — Tab return opacity breath on main content
   const breathClass = useTabReturn();
+
+  // One-time fetch when entering the app shell (or when wallet connects)
+  useEffect(() => {
+    fetchPods();
+    if (isConnected) {
+      fetchUserPods();
+      fetchConversations();
+    }
+  }, [isConnected, fetchPods, fetchUserPods, fetchConversations]);
+
+  // Single global poll - replaces per-page polls for pods/conversations
+  useVisibilityPolling(
+    () => {
+      fetchPods();
+      if (isConnected) {
+        fetchUserPods();
+        fetchConversations();
+      }
+    },
+    15000,
+    [isConnected, fetchPods, fetchUserPods, fetchConversations],
+  );
 
   return (
     <div className="flex h-screen bg-base overflow-hidden">

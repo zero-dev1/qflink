@@ -15,17 +15,16 @@ import { reverseResolve } from '@/lib/qns';
 export default function PodChat() {
   const { id } = useParams<{ id: string }>();
   const { isConnected, evmAddress } = useWalletStore();
-  const {
-    getPodById,
-    messages,
-    isLoadingMessages,
-    messageFetchErrors,
-    isSending,
-    fetchMessages,
-    fetchPods,
-    sendMessage,
-    isUserMember,
-  } = usePodsStore();
+  const podId = id ? Number(id) : null;
+
+  const pod = usePodsStore((s) => podId !== null ? s.getPodById(podId) : undefined);
+  const podMessages = usePodsStore((s) => podId !== null ? s.messages[podId] || [] : []);
+  const isLoadingMsg = usePodsStore((s) => podId !== null ? s.isLoadingMessages[podId] || false : false);
+  const msgFetchError = usePodsStore((s) => podId !== null ? s.messageFetchErrors[podId] || false : false);
+  const isSendingMsg = usePodsStore((s) => podId !== null ? s.isSending[podId] || false : false);
+  const isMember = usePodsStore((s) => podId !== null ? s.isUserMember(podId) : false);
+  const fetchMessages = usePodsStore((s) => s.fetchMessages);
+  const sendMessage = usePodsStore((s) => s.sendMessage);
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const messagesContainerRef = useRef<HTMLDivElement>(null);
@@ -35,9 +34,6 @@ export default function PodChat() {
   const [senderNames, setSenderNames] = useState<Record<string, string>>({});
   const [profileSheetAddress, setProfileSheetAddress] = useState<string | null>(null);
 
-  const podId = id ? Number(id) : null;
-  const pod = podId !== null ? getPodById(podId) : null;
-  const podMessages = podId !== null ? messages[podId] || [] : [];
 
   const checkIsAtBottom = useCallback(() => {
     if (!messagesContainerRef.current) return true;
@@ -52,9 +48,8 @@ export default function PodChat() {
   useEffect(() => {
     if (podId === null) return;
     fetchMessages(podId);
-    if (!pod) fetchPods();
     useUnreadStore.getState().markPodSeen(podId.toString());
-  }, [podId, fetchMessages, fetchPods, pod]);
+  }, [podId, fetchMessages]);
 
   // Ban check
   const checkBanStatus = useCallback(() => {
@@ -123,9 +118,6 @@ export default function PodChat() {
       const prev = sorted[index - 1];
       const showSender = !prev || prev.sender !== message.sender || message.timestamp - prev.timestamp > 5 * 60 * 1000;
       const isMine = message.sender === evmAddress;
-      // Only mark as optimistic if explicitly flagged (no more ID-based heuristic)
-      const isOptimistic = !!message.isOptimistic;
-      const isConfirming = !!message.isConfirming;
 
       return (
         <MessageBubble
@@ -136,8 +128,6 @@ export default function PodChat() {
           isMine={isMine}
           showSender={showSender}
           senderName={senderNames[message.sender.toLowerCase()] || undefined}
-          isOptimistic={isOptimistic}
-          isConfirming={isConfirming}
           isFailed={message.isFailed}
           onRetry={message.isFailed ? () => usePodsStore.getState().retryMessage(podId!, message.id) : undefined}
           onDismiss={message.isFailed ? () => usePodsStore.getState().dismissFailedMessage(podId!, message.id) : undefined}
@@ -145,7 +135,7 @@ export default function PodChat() {
         />
       );
     });
-  }, [podMessages, evmAddress, senderNames, usePodsStore]);
+  }, [podMessages, evmAddress, senderNames, podId]);
 
   if (podId === null) {
     return (
@@ -167,7 +157,7 @@ export default function PodChat() {
             </svg>
           </button>
         </Link>
-        {isLoadingMessages[podId] && !pod ? (
+        {isLoadingMsg && !pod ? (
           <Skeleton className="h-5 w-32" />
         ) : (
           <>
@@ -180,12 +170,12 @@ export default function PodChat() {
       </div>
 
       {/* Messages area */}
-      {messageFetchErrors[podId] && !isLoadingMessages[podId] ? (
+      {msgFetchError && !isLoadingMsg ? (
         <div className="flex-1 flex flex-col items-center justify-center">
           <p className="text-body-sm text-text-secondary">Could not load messages</p>
           <button onClick={() => fetchMessages(podId)} className="mt-3 text-label text-cyan-primary hover:text-cyan-hover transition-colors">Retry</button>
         </div>
-      ) : isLoadingMessages[podId] ? (
+      ) : isLoadingMsg ? (
         <div className="flex-1 px-4 md:px-6 py-4 space-y-4">
           {[1, 2, 3, 4].map((i) => (
             <div key={i} className={`flex ${i % 2 === 0 ? 'justify-end' : 'justify-start'}`}>
@@ -218,7 +208,7 @@ export default function PodChat() {
         <div className="shrink-0 px-4 md:px-6 py-3 pb-[calc(0.75rem+env(safe-area-inset-bottom))] bg-error/5 border-t border-error/20 text-center">
           <p className="text-body-sm text-error">You are banned from this pod</p>
         </div>
-      ) : !isUserMember(podId) ? (
+      ) : !isMember ? (
         <div className="shrink-0 px-4 md:px-6 py-3 pb-[calc(0.75rem+env(safe-area-inset-bottom))] bg-white/[0.02] border-t border-white/[0.04] text-center">
           <p className="text-body-sm text-text-secondary mb-2">Join this pod to send messages</p>
           <Link to="/explore" className="text-label text-cyan-primary hover:text-cyan-hover">Back to Explore →</Link>
@@ -229,7 +219,7 @@ export default function PodChat() {
             placeholder={`Message ${pod?.name || 'pod'}...`}
             onSend={handleSend}
             disabled={!isConnected}
-            isSending={podId !== null && isSending[podId] || false}
+            isSending={isSendingMsg}
           />
         </div>
       )}

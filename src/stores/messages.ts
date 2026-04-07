@@ -42,8 +42,7 @@ export interface DMMessage {
   content: string;
   timestamp: number;
   id: string;
-  isOptimistic?: boolean;
-  isConfirming?: boolean;
+  isLocalPending?: boolean; // dedup only - not visual
   isEncrypted?: boolean;
   isFailed?: boolean;
 }
@@ -164,7 +163,7 @@ export const useMessagesStore = create<MessagesStore>((set, get) => ({
 
     const lower = otherAddress.toLowerCase();
     const existing = get().messages[lower] || [];
-    const nonOptimistic = existing.filter(m => !m.isOptimistic && !m.isConfirming && !m.isFailed);
+    const nonOptimistic = existing.filter(m => !m.isLocalPending && !m.isFailed);
     const isFirstLoad = nonOptimistic.length === 0;
     const lastKnownCount = _dmLastFetchedCounts[lower] || 0;
 
@@ -278,7 +277,7 @@ export const useMessagesStore = create<MessagesStore>((set, get) => ({
         : mapped;
 
       // De-duplicate optimistic/confirming messages that now have a chain counterpart
-    const pending = existing.filter(m => m.isOptimistic || m.isConfirming || m.isFailed);
+    const pending = existing.filter(m => m.isLocalPending || m.isFailed);
     const remainingPending = pending.filter((opt) => {
       if (opt.isFailed) return true;
       return !allDecrypted.some(
@@ -331,7 +330,7 @@ export const useMessagesStore = create<MessagesStore>((set, get) => ({
     content,
     timestamp: Date.now(),
     id: `optimistic-${Date.now()}`,
-    isOptimistic: true,
+    isLocalPending: true,
   };
 
   set((state) => ({
@@ -347,21 +346,30 @@ export const useMessagesStore = create<MessagesStore>((set, get) => ({
     // --- Encryption logic (unchanged) ---
     let activeKeyPair = useWalletStore.getState().encryptionKeyPair;
     if (!activeKeyPair) {
-      try {
-        const { getCurrentConnection } = await import('@/lib/wallet');
-        const conn = getCurrentConnection();
-        if (conn?.signer?.polkadotSigner?.signBytes) {
-          const { deriveEncryptionKeypair } = await import('@/lib/encryption');
-          const signMessage = async (message: string): Promise<Uint8Array> => {
-            const encoder = new TextEncoder();
-            const messageBytes = encoder.encode(message);
-            const result = await conn.signer.polkadotSigner.signBytes(messageBytes);
-            return new Uint8Array(result);
-          };
-          activeKeyPair = await deriveEncryptionKeypair(signMessage);
-          useWalletStore.setState({ encryptionKeyPair: activeKeyPair });
-        }
-      } catch {}
+      // Try sessionStorage first (covers page refresh without re-prompting)
+      const { loadKeypairFromSession } = await import('@/lib/encryption');
+      activeKeyPair = loadKeypairFromSession();
+      if (activeKeyPair) {
+        useWalletStore.setState({ encryptionKeyPair: activeKeyPair });
+      } else {
+        // Last resort: try to re-derive (will prompt wallet popup)
+        try {
+          const { getCurrentConnection } = await import('@/lib/wallet');
+          const conn = getCurrentConnection();
+          if (conn?.signer?.polkadotSigner?.signBytes) {
+            const { deriveEncryptionKeypair, saveKeypairToSession } = await import('@/lib/encryption');
+            const signMessage = async (message: string): Promise<Uint8Array> => {
+              const encoder = new TextEncoder();
+              const messageBytes = encoder.encode(message);
+              const result = await conn.signer.polkadotSigner.signBytes(messageBytes);
+              return new Uint8Array(result);
+            };
+            activeKeyPair = await deriveEncryptionKeypair(signMessage);
+            saveKeypairToSession(activeKeyPair);
+            useWalletStore.setState({ encryptionKeyPair: activeKeyPair });
+          }
+        } catch {}
+      }
     }
 
     let messageToSend = content;
@@ -391,17 +399,15 @@ export const useMessagesStore = create<MessagesStore>((set, get) => ({
     }
     // --- End encryption logic ---
 
-    // Contract write — returns on BROADCAST
+    // Contract write - returns on BROADCAST
     const result = await contractSendMessage(lower as `0x${string}`, messageToSend);
 
-    // BROADCAST RECEIVED — transition to confirming, unlock input
+    // BROADCAST RECEIVED - unlock input immediately
     set((state) => ({
       messages: {
         ...state.messages,
         [lower]: (state.messages[lower] || []).map((m) =>
-          m.id === optimistic.id
-            ? { ...m, isOptimistic: false, isConfirming: true }
-            : m
+          m.id === optimistic.id ? { ...m, isLocalPending: true } : m
         ),
       },
       isSending: { ...state.isSending, [addr]: false },
@@ -424,54 +430,75 @@ export const useMessagesStore = create<MessagesStore>((set, get) => ({
             ...state.messages,
             [lower]: (state.messages[lower] || []).map((m) =>
               m.id === optimistic.id
-                ? { ...m, isConfirming: false }
+                ? { ...m, isLocalPending: false }
                 : m
             ),
           },
         }));
         hapticConfirm();
-      } else {
-        // Only fail on actual revert, not subscription timeout
-        const isActualFailure = confirmation.error &&
-          confirmation.error !== 'not_confirmed' &&
-          confirmation.error !== 'verification_failed';
+        return;
+      }
 
-        if (isActualFailure) {
-          set((state) => ({
-            messages: {
-              ...state.messages,
-              [lower]: (state.messages[lower] || []).map((m) =>
-                m.id === optimistic.id
-                  ? { ...m, isConfirming: false, isFailed: true }
-                  : m
-              ),
-            },
-          }));
-          useToastStore.getState().addToast('error', confirmation.error || 'Transaction failed');
-          hapticError();
-        } else {
-          // Soft-confirm — tx almost certainly landed
-          set((state) => ({
-            messages: {
-              ...state.messages,
-              [lower]: (state.messages[lower] || []).map((m) =>
-                m.id === optimistic.id
-                  ? { ...m, isConfirming: false }
-                  : m
-              ),
-            },
-          }));
-        }
+      // Check if it's a real failure or just subscription timeout
+      const isActualFailure = confirmation.error &&
+        confirmation.error !== 'not_confirmed' &&
+        confirmation.error !== 'verification_failed';
+
+      if (isActualFailure) {
+        // Verify on-chain before marking failed
+        try {
+          const beforeCount = (get().messages[lower] || [])
+            .filter(m => !m.isLocalPending && !m.isFailed).length;
+          const { getDirectMessageIds } = await import('@/lib/contractCalls');
+          const onChainIds = await getDirectMessageIds(
+            evmAddress as `0x${string}`,
+            lower as `0x${string}`,
+            beforeCount,
+            1
+          );
+          if (onChainIds.length > 0) {
+            // Message landed - mark clean
+            set((state) => ({
+              messages: {
+                ...state.messages,
+                [lower]: (state.messages[lower] || []).map((m) =>
+                  m.id === optimistic.id ? { ...m, isLocalPending: false } : m
+                ),
+              },
+            }));
+            hapticConfirm();
+            return;
+          }
+        } catch {}
+
+        set((state) => ({
+          messages: {
+            ...state.messages,
+            [lower]: (state.messages[lower] || []).map((m) =>
+              m.id === optimistic.id ? { ...m, isLocalPending: false, isFailed: true } : m
+            ),
+          },
+        }));
+        useToastStore.getState().addToast('error', confirmation.error || 'Transaction failed');
+        hapticError();
+      } else {
+        // Subscription timeout - tx almost certainly landed, mark clean
+        set((state) => ({
+          messages: {
+            ...state.messages,
+            [lower]: (state.messages[lower] || []).map((m) =>
+              m.id === optimistic.id ? { ...m, isLocalPending: false } : m
+            ),
+          },
+        }));
       }
     }).catch(() => {
-      // Silent soft-confirm
+      // Promise error - treat as landed
       set((state) => ({
         messages: {
           ...state.messages,
           [lower]: (state.messages[lower] || []).map((m) =>
-            m.id === optimistic.id
-              ? { ...m, isConfirming: false }
-              : m
+            m.id === optimistic.id ? { ...m, isLocalPending: false } : m
           ),
         },
       }));
@@ -492,7 +519,7 @@ export const useMessagesStore = create<MessagesStore>((set, get) => ({
       messages: {
         ...state.messages,
         [lower]: (state.messages[lower] || []).map((m) =>
-          m.id === optimistic.id ? { ...m, isOptimistic: false, isFailed: true } : m
+          m.id === optimistic.id ? { ...m, isLocalPending: false, isFailed: true } : m
         ),
       },
       isSending: { ...state.isSending, [addr]: false },

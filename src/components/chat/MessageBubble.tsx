@@ -17,8 +17,6 @@ interface MessageBubbleProps {
   isMine: boolean;
   showSender: boolean;
   senderName?: string;
-  isOptimistic?: boolean;
-  isConfirming?: boolean;
   isEncrypted?: boolean;
   isFailed?: boolean;
   onRetry?: () => void;
@@ -33,21 +31,13 @@ export const MessageBubble = memo(function MessageBubble({
   isMine,
   showSender,
   senderName,
-  isOptimistic = false,
-  isConfirming,
   isEncrypted,
   isFailed,
   onRetry,
   onDismiss,
   onAvatarTap,
 }: MessageBubbleProps) {
-  const state = isFailed
-  ? 'failed'
-  : isOptimistic
-    ? 'optimistic'
-    : isConfirming
-      ? 'confirming'
-      : 'confirmed';
+  const state = isFailed ? 'failed' : 'sent';
 
   return (
     <motion.div
@@ -83,17 +73,13 @@ export const MessageBubble = memo(function MessageBubble({
         {/* Message bubble — state-driven styling */}
         <div
           className={cn(
-            'rounded-lg px-3 py-2 transition-all',
-            // Failed state — red tinted
+            'inline-block rounded-2xl px-3.5 py-2 max-w-[85%] md:max-w-[70%]',
+            // Failed state
             state === 'failed' && isMine && 'bg-error/10 border border-error/20',
-            // Optimistic state — translucent with pulsing border
-            state === 'optimistic' && isMine && 'bg-cyan-muted/50 border border-cyan-border animate-border-pulse opacity-60',
-            // Confirming state — full opacity, subtle confirming indicator
-            state === 'confirming' && isMine && 'bg-cyan-muted',
-            // Confirmed state — full opacity
-            state === 'confirmed' && isMine && 'bg-cyan-muted',
+            // Normal state
+            state === 'sent' && isMine && 'bg-cyan-muted',
             // Other's messages
-            !isMine && 'bg-white/[0.03]',
+            !isMine && 'bg-white/[0.04]',
           )}
         >
           <p className="text-body text-text-primary">{content}</p>
@@ -102,48 +88,27 @@ export const MessageBubble = memo(function MessageBubble({
         {/* Status row below bubble */}
         {showSender && (
           <div className={cn('flex items-center gap-1.5 mt-0.5', isMine ? 'justify-end' : '')}>
-            <span className="text-caption text-text-tertiary">
+            <span className="text-[10px] text-text-tertiary tabular-nums">
               {formatMessageTime(timestamp)}
             </span>
 
-            {/* Optimistic — sending dots (fast pulse) */}
-            {state === 'optimistic' && isMine && (
-              <span className="flex items-center gap-0.5">
-                <span className="w-1 h-1 rounded-full bg-cyan-primary animate-pulse" style={{ animationDelay: '0ms' }} />
-                <span className="w-1 h-1 rounded-full bg-cyan-primary animate-pulse" style={{ animationDelay: '200ms' }} />
-                <span className="w-1 h-1 rounded-full bg-cyan-primary animate-pulse" style={{ animationDelay: '400ms' }} />
-              </span>
-            )}
-
-            {/* Confirming — subtle single dot pulse */}
-            {state === 'confirming' && isMine && (
-              <span className="flex items-center gap-1">
-                <span className="w-1 h-1 rounded-full bg-cyan-primary/50 animate-pulse" />
-              </span>
-            )}
-
-            {/* Confirmed — check mark */}
-            {state === 'confirmed' && isMine && (
+            {/* Confirmed check — always show for own sent messages */}
+            {state === 'sent' && isMine && (
               <svg width="12" height="12" viewBox="0 0 12 12" fill="none" className="text-cyan-primary">
-                <path d="M2.5 6L5 8.5L9.5 3.5" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" strokeLinejoin="round" />
+                <path d="M2.5 6.5L5 9L9.5 3.5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
               </svg>
             )}
 
-            {/* Failed — red text + retry */}
+            {/* Failed — retry + dismiss */}
             {state === 'failed' && isMine && (
-              <div className="flex items-center gap-2">
-                <span className="text-caption text-error">Failed</span>
+              <span className="flex items-center gap-2 ml-1">
                 {onRetry && (
-                  <button onClick={onRetry} aria-label="Retry sending message" className="text-caption text-cyan-primary hover:text-cyan-hover transition-colors">
-                    tap to retry
-                  </button>
+                  <button onClick={onRetry} className="text-[10px] text-cyan-primary hover:text-cyan-hover">Retry</button>
                 )}
                 {onDismiss && (
-                  <button onClick={onDismiss} aria-label="Dismiss failed message" className="text-caption text-text-tertiary hover:text-text-secondary transition-colors">
-                    Dismiss
-                  </button>
+                  <button onClick={onDismiss} className="text-[10px] text-error hover:text-error/80">Dismiss</button>
                 )}
-              </div>
+              </span>
             )}
           </div>
         )}

@@ -42,32 +42,19 @@ const fadeUp = {
 export default function Home() {
   const navigate = useNavigate();
   const { isConnected, qnsName, evmAddress, balance } = useWalletStore();
-  const { pods, userPodIds, isLoadingPods, fetchPods, fetchUserPods, getPodById } = usePodsStore();
-  const { conversations, isLoadingConversations, fetchConversations } = useMessagesStore();
+  const pods = usePodsStore((s) => s.pods);
+  const userPodIds = usePodsStore((s) => s.userPodIds);
+  const isLoadingPods = usePodsStore((s) => s.isLoadingPods);
+  const getPodById = usePodsStore((s) => s.getPodById);
+
+  const conversations = useMessagesStore((s) => s.conversations);
+  const isLoadingConversations = useMessagesStore((s) => s.isLoadingConversations);
   const isMobile = useIsMobile();
 
   const [podPreviews, setPodPreviews] = useState<PodPreview[]>([]);
   const [isLoadingPreviews, setIsLoadingPreviews] = useState(false);
   const [profileSheetAddress, setProfileSheetAddress] = useState<string | null>(null);
 
-  useEffect(() => {
-    if (!isConnected) return;
-    fetchPods();
-    fetchUserPods();
-    fetchConversations();
-  }, [isConnected, fetchPods, fetchUserPods, fetchConversations]);
-
-  // Poll for fresh data — pauses when tab hidden, immediate refresh on return
-  useVisibilityPolling(
-    () => {
-      if (!isConnected) return;
-      fetchPods();
-      fetchUserPods();
-      fetchConversations();
-    },
-    15000,
-    [isConnected, fetchPods, fetchUserPods, fetchConversations],
-  );
 
   useEffect(() => {
     if (!isConnected || userPodIds.length === 0) {

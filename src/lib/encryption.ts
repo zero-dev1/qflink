@@ -148,6 +148,36 @@ export async function decryptDirectMessage(
   return encodeUTF8(decrypted)
 }
 
+const SESSION_KEY = 'qflink-enc-keypair';
+
+export function saveKeypairToSession(kp: EncryptionKeyPair): void {
+  try {
+    const data = {
+      publicKey: Array.from(kp.publicKey),
+      secretKey: Array.from(kp.secretKey),
+    };
+    sessionStorage.setItem(SESSION_KEY, JSON.stringify(data));
+  } catch {}
+}
+
+export function loadKeypairFromSession(): EncryptionKeyPair | null {
+  try {
+    const raw = sessionStorage.getItem(SESSION_KEY);
+    if (!raw) return null;
+    const data = JSON.parse(raw);
+    return {
+      publicKey: new Uint8Array(data.publicKey),
+      secretKey: new Uint8Array(data.secretKey),
+    };
+  } catch {
+    return null;
+  }
+}
+
+export function clearKeypairFromSession(): void {
+  try { sessionStorage.removeItem(SESSION_KEY); } catch {}
+}
+
 export async function deriveEncryptionKeypair(
   signMessage: (message: string) => Promise<Uint8Array>
 ): Promise<EncryptionKeyPair> {

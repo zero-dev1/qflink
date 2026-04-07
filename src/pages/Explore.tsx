@@ -40,10 +40,10 @@ export default function Explore() {
   // Badge cache for official detection
   const [creatorBadges, setCreatorBadges] = useState<Record<string, boolean>>({});
 
+  // Only fetch user pods if connected - pod list comes from AppLayout
   useEffect(() => {
-    fetchPods();
     if (isConnected) fetchUserPods();
-  }, [fetchPods, fetchUserPods, isConnected]);
+  }, [isConnected, fetchUserPods]);
 
   // Fetch creator badges
   useEffect(() => {

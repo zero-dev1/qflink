@@ -16,14 +16,18 @@ import { reverseResolve } from '@/lib/qns';
 
 export default function DMChat() {
   const { address } = useParams<{ address: string }>();
-  const { isConnected, evmAddress, encryptionKeyPair } = useWalletStore();
-  const {
-    messages,
-    isLoadingMessages,
-    isSending,
-    fetchMessages,
-    sendMessage,
-  } = useMessagesStore();
+  const { isConnected, evmAddress, encryptionKeyPair } = useWalletStore((state) => ({
+    isConnected: state.isConnected,
+    evmAddress: state.evmAddress,
+    encryptionKeyPair: state.encryptionKeyPair,
+  }));
+  const otherAddress = address?.toLowerCase() || '';
+
+  const dmMessages = useMessagesStore((state) => state.messages[otherAddress] || []);
+  const isLoadingMsg = useMessagesStore((state) => state.isLoadingMessages[otherAddress] || false);
+  const isSendingMsg = useMessagesStore((state) => state.isSending[otherAddress] || false);
+  const fetchMessages = useMessagesStore((state) => state.fetchMessages);
+  const sendMessage = useMessagesStore((state) => state.sendMessage);
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const messagesContainerRef = useRef<HTMLDivElement>(null);
@@ -32,8 +36,6 @@ export default function DMChat() {
   const [recipientEncryptionReady, setRecipientEncryptionReady] = useState<boolean>(true);
   const [showProfileSheet, setShowProfileSheet] = useState(false);
 
-  const otherAddress = address?.toLowerCase() || '';
-  const dmMessages = messages[otherAddress] || [];
 
   // Resolve recipient QNS name
   useEffect(() => {
@@ -114,15 +116,13 @@ export default function DMChat() {
           isMine={isMine}
           showSender={showSender}
           senderName={!isMine ? recipientName || undefined : undefined}
-          isOptimistic={msg.isOptimistic}
-          isConfirming={msg.isConfirming}
           isFailed={msg.isFailed}
           onRetry={msg.isFailed ? () => useMessagesStore.getState().retryMessage(otherAddress, msg.id) : undefined}
           onDismiss={msg.isFailed ? () => useMessagesStore.getState().dismissFailedMessage(otherAddress, msg.id) : undefined}
         />
       );
     });
-  }, [dmMessages, evmAddress, recipientName, useMessagesStore]);
+  }, [dmMessages, evmAddress, recipientName, otherAddress]);
 
   // Display name
   const headerName = recipientName || (otherAddress ? `${otherAddress.slice(0, 6)}...${otherAddress.slice(-4)}` : 'Unknown');
@@ -178,7 +178,7 @@ export default function DMChat() {
 
       {/* Messages area */}
       <div ref={messagesContainerRef} onScroll={handleScroll} className="flex-1 overflow-y-auto px-4 md:px-6 py-4">
-        {isLoadingMessages[otherAddress] ? (
+        {isLoadingMsg ? (
           <div className="space-y-4">
             {[1, 2, 3].map((i) => (
               <div key={i} className={`flex ${i % 2 === 0 ? 'justify-end' : 'justify-start'}`}>
@@ -233,7 +233,7 @@ export default function DMChat() {
               placeholder={`Message ${recipientName || headerName}...`}
               onSend={handleSend}
               disabled={!isConnected}
-              isSending={isSending[otherAddress] || false}
+              isSending={isSendingMsg}
             />
           </div>
         </div>
