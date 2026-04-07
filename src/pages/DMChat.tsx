@@ -16,11 +16,9 @@ import { reverseResolve } from '@/lib/qns';
 
 export default function DMChat() {
   const { address } = useParams<{ address: string }>();
-  const { isConnected, evmAddress, encryptionKeyPair } = useWalletStore((state) => ({
-    isConnected: state.isConnected,
-    evmAddress: state.evmAddress,
-    encryptionKeyPair: state.encryptionKeyPair,
-  }));
+  const isConnected = useWalletStore((s) => s.isConnected);
+  const evmAddress = useWalletStore((s) => s.evmAddress);
+  const encryptionKeyPair = useWalletStore((s) => s.encryptionKeyPair);
   const otherAddress = address?.toLowerCase() || '';
 
   const dmMessages = useMessagesStore((state) => state.messages[otherAddress] || []);
