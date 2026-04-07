@@ -1,6 +1,6 @@
 // src/components/messages/ConversationRow.tsx
 // Design System §16.1 — avatar (badge ring), .qf split render, preview, timestamp, lock indicator, unread dot
-import { memo } from 'react';
+import { memo, useCallback } from 'react';
 import { Lock } from 'lucide-react';
 import { formatTimestamp } from '@/lib/utils';
 import { Avatar } from '@/components/ui/Avatar';
@@ -17,8 +17,8 @@ interface ConversationRowProps {
 
 export const ConversationRow = memo(function ConversationRow({ conversation, isActive = false, onClick, onAvatarTap }: ConversationRowProps) {
   const { address, displayName, lastMessage, lastMessageTime, unreadCount } = conversation;
-  const hasUnread = useUnreadStore((s) => s.hasDMUnread(address));
-  const dmUnreadCount = useUnreadStore((s) => s.getDMUnreadCount(address));
+  const hasUnread = useUnreadStore(useCallback((s) => s.hasDMUnread(address), [address]));
+  const dmUnreadCount = useUnreadStore(useCallback((s) => s.getDMUnreadCount(address), [address]));
 
   // Detect encrypted message in preview
   const isEncryptedPreview = lastMessage?.startsWith('enc:') || lastMessage?.startsWith('[Encrypted');
