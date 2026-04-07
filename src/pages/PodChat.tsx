@@ -17,14 +17,27 @@ export default function PodChat() {
   const { isConnected, evmAddress } = useWalletStore();
   const podId = id ? Number(id) : null;
 
-  const pod = usePodsStore((s) => podId !== null ? s.getPodById(podId) : undefined);
-  const podMessages = usePodsStore((s) => podId !== null ? s.messages[podId] || [] : []);
-  const isLoadingMsg = usePodsStore((s) => podId !== null ? s.isLoadingMessages[podId] || false : false);
-  const msgFetchError = usePodsStore((s) => podId !== null ? s.messageFetchErrors[podId] || false : false);
-  const isSendingMsg = usePodsStore((s) => podId !== null ? s.isSending[podId] || false : false);
-  const isMember = usePodsStore((s) => podId !== null ? s.isUserMember(podId) : false);
+  const pods = usePodsStore((s) => s.pods);
+  const podMessagesRaw = usePodsStore((s) => s.messages);
+  const isLoadingMsg = usePodsStore((s) => podId !== null ? !!s.isLoadingMessages[podId] : false);
+  const msgFetchError = usePodsStore((s) => podId !== null ? !!s.messageFetchErrors[podId] : false);
+  const isSendingMsg = usePodsStore((s) => podId !== null ? !!s.isSending[podId] : false);
+  const userPodIds = usePodsStore((s) => s.userPodIds);
   const fetchMessages = usePodsStore((s) => s.fetchMessages);
   const sendMessage = usePodsStore((s) => s.sendMessage);
+
+  const pod = useMemo(
+    () => (podId !== null ? pods.find((p) => Number(p.id) === podId) : undefined),
+    [pods, podId]
+  );
+  const podMessages = useMemo(
+    () => (podId !== null ? podMessagesRaw[podId] ?? [] : []),
+    [podMessagesRaw, podId]
+  );
+  const isMember = useMemo(
+    () => (podId !== null ? userPodIds.includes(podId) : false),
+    [userPodIds, podId]
+  );
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const messagesContainerRef = useRef<HTMLDivElement>(null);
