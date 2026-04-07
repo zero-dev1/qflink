@@ -81,33 +81,31 @@ export const MessageBubble = memo(function MessageBubble({
           <p className="text-body text-text-primary">{content}</p>
         </div>
 
-        {/* Status row below bubble */}
-        {showSender && (
-          <div className={cn('flex items-center gap-1.5 mt-0.5', isMine ? 'justify-end' : '')}>
-            <span className="text-[10px] text-text-tertiary tabular-nums">
-              {formatMessageTime(timestamp)}
+        {/* Status row below bubble — always visible */}
+        <div className={cn('flex items-center gap-1.5 mt-0.5', isMine ? 'justify-end' : '')}>
+          <span className="text-[10px] text-text-tertiary tabular-nums">
+            {formatMessageTime(timestamp)}
+          </span>
+
+          {/* Confirmed check — always show for own sent messages */}
+          {state === 'sent' && isMine && (
+            <svg width="12" height="12" viewBox="0 0 12 12" fill="none" className="text-cyan-primary">
+              <path d="M2.5 6.5L5 9L9.5 3.5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+            </svg>
+          )}
+
+          {/* Failed — retry + dismiss */}
+          {state === 'failed' && isMine && (
+            <span className="flex items-center gap-2 ml-1">
+              {onRetry && (
+                <button onClick={onRetry} className="text-[10px] text-cyan-primary hover:text-cyan-hover">Retry</button>
+              )}
+              {onDismiss && (
+                <button onClick={onDismiss} className="text-[10px] text-error hover:text-error/80">Dismiss</button>
+              )}
             </span>
-
-            {/* Confirmed check — always show for own sent messages */}
-            {state === 'sent' && isMine && (
-              <svg width="12" height="12" viewBox="0 0 12 12" fill="none" className="text-cyan-primary">
-                <path d="M2.5 6.5L5 9L9.5 3.5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
-              </svg>
-            )}
-
-            {/* Failed — retry + dismiss */}
-            {state === 'failed' && isMine && (
-              <span className="flex items-center gap-2 ml-1">
-                {onRetry && (
-                  <button onClick={onRetry} className="text-[10px] text-cyan-primary hover:text-cyan-hover">Retry</button>
-                )}
-                {onDismiss && (
-                  <button onClick={onDismiss} className="text-[10px] text-error hover:text-error/80">Dismiss</button>
-                )}
-              </span>
-            )}
-          </div>
-        )}
+          )}
+        </div>
       </div>
     </div>
   );

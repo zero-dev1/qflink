@@ -1,12 +1,17 @@
 // src/stores/mode.ts
 import { create } from 'zustand';
 
-export type InstantDuration = '5m' | '30m' | '2h' | '24h';
+export type InstantDuration = '5m' | '1h' | '24h';
+
+export const INSTANT_OPTIONS: { key: InstantDuration; label: string }[] = [
+  { key: '5m', label: '5 min' },
+  { key: '1h', label: '1 hour' },
+  { key: '24h', label: '24 hrs' },
+];
 
 const DURATION_MS: Record<InstantDuration, number> = {
   '5m': 5 * 60 * 1000,
-  '30m': 30 * 60 * 1000,
-  '2h': 2 * 60 * 60 * 1000,
+  '1h': 60 * 60 * 1000,
   '24h': 24 * 60 * 60 * 1000,
 };
 

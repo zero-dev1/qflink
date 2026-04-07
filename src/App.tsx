@@ -1,6 +1,6 @@
 // src/App.tsx
-import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
-import { Suspense, lazy } from "react";
+import { BrowserRouter, Routes, Route, Navigate, useLocation } from "react-router-dom";
+import { Suspense, lazy, type ReactNode } from "react";
 import { MotionConfig, LayoutGroup } from "framer-motion";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
 import { AppLayout } from "@/components/layout/AppLayout";
@@ -31,12 +31,18 @@ function PageLoader() {
   );
 }
 
+function RouteErrorBoundary({ children }: { children: ReactNode }) {
+  const location = useLocation();
+  return <ErrorBoundary key={location.pathname}>{children}</ErrorBoundary>;
+}
+
 export default function App() {
   return (
     <ErrorBoundary>
       {/* §28 — Respect prefers-reduced-motion for all Framer Motion animations */}
       <MotionConfig reducedMotion="user">
         <BrowserRouter>
+          <RouteErrorBoundary>
           <Suspense fallback={<PageLoader />}>
             <LayoutGroup>
             <Routes>
@@ -59,6 +65,7 @@ export default function App() {
             </Routes>
             </LayoutGroup>
           </Suspense>
+          </RouteErrorBoundary>
           <ToastContainer />
           <ActionBar />
         </BrowserRouter>

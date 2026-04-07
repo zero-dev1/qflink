@@ -39,15 +39,20 @@ export class ErrorBoundary extends Component<Props, State> {
           <p className="text-body text-text-secondary mb-6 max-w-sm">
             An unexpected error occurred. This might be a temporary issue with the chain connection.
           </p>
-          <button
-            onClick={() => {
-              this.handleReset();
-              window.location.reload();
-            }}
-            className="h-10 px-6 rounded-lg bg-cyan-primary text-text-on-cyan text-label font-medium hover:bg-cyan-hover transition-colors"
-          >
-            Reload app
-          </button>
+          <div className="flex gap-3">
+            <button
+              onClick={this.handleReset}
+              className="h-10 px-6 rounded-lg bg-cyan-primary text-text-on-cyan text-label font-medium hover:bg-cyan-hover transition-colors"
+            >
+              Try again
+            </button>
+            <button
+              onClick={() => window.location.reload()}
+              className="h-10 px-6 rounded-lg bg-white/[0.04] border border-white/[0.08] text-text-secondary text-label font-medium hover:bg-white/[0.06] transition-colors"
+            >
+              Reload app
+            </button>
+          </div>
         </div>
       );
     }

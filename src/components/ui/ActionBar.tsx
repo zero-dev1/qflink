@@ -286,19 +286,25 @@ export function ActionBar() {
         });
       }
       if (!q || 'instant'.includes(q)) {
+        const isInstant = useModeStore.getState().instantActive;
         results.push({
           id: 'action-instant',
-          label: 'Instant Mode — Coming soon',
-          icon: <Zap size={14} className="text-text-tertiary" strokeWidth={1.5} />,
+          label: isInstant ? 'Deactivate Instant Mode' : 'Activate Instant Mode (5 min)',
+          icon: <Zap size={14} className={isInstant ? 'text-cyan-primary' : 'text-text-tertiary'} strokeWidth={1.5} />,
           category: 'actions',
-          onSelect: () => { close(); },
+          onSelect: () => {
+            if (isInstant) useModeStore.getState().deactivateInstant();
+            else useModeStore.getState().activateInstant('5m');
+            close();
+          },
         });
       }
-      if (!q || 'privacy'.includes(q)) {
+      if (!q || 'privacy'.includes(q) || 'encryption'.includes(q)) {
+        const isPrivacy = useModeStore.getState().privacyActive;
         results.push({
           id: 'action-privacy',
-          label: 'Toggle Privacy Mode',
-          icon: <Lock size={14} className="text-text-secondary" strokeWidth={1.5} />,
+          label: isPrivacy ? 'Disable Encryption' : 'Enable Encryption',
+          icon: <Lock size={14} className={isPrivacy ? 'text-cyan-primary' : 'text-text-secondary'} strokeWidth={1.5} />,
           category: 'actions',
           onSelect: () => {
             useModeStore.getState().togglePrivacy();

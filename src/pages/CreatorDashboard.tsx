@@ -78,6 +78,12 @@ export default function CreatorDashboard() {
 
   const podId = podIdParam ? parseInt(podIdParam, 10) : null;
 
+  const animatedBalance = useCountUp(
+    revenue ? Number(revenue.contractBalance) / 1e18 : 0,
+    800,
+    !isLoading && revenue !== null,
+  );
+
   useEffect(() => {
     if (!isConnected || !evmAddress || podId === null || isNaN(podId)) return;
     let cancelled = false;
@@ -155,13 +161,7 @@ export default function CreatorDashboard() {
     );
   }
 
-  const animatedBalance = useCountUp(
-    revenue ? Number(revenue.contractBalance) / 1e18 : 0,
-    800,
-    !isLoading && revenue !== null,
-  );
-
-  const catColor = getCategoryColor(pod.category || 'Social');
+  const catColor = getCategoryColor(pod?.category || 'Social');
 
   return (
     <div className="h-full overflow-y-auto">

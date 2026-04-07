@@ -2,6 +2,7 @@
 import { useEffect } from 'react';
 import { Outlet, useLocation } from 'react-router-dom';
 import { AnimatePresence } from 'framer-motion';
+import { ErrorBoundary } from '@/components/ErrorBoundary';
 import { Sidebar } from './Sidebar';
 import { MobileTabBar } from './MobileTabBar';
 import { PageTransition } from './PageTransition';
@@ -65,11 +66,13 @@ export function AppLayout() {
 
         {/* Content — left-aligned, not centered */}
         <div className="flex-1 overflow-hidden">
-          <AnimatePresence mode="wait">
-            <PageTransition key={location.pathname}>
-              <Outlet />
-            </PageTransition>
-          </AnimatePresence>
+          <ErrorBoundary key={location.pathname}>
+            <AnimatePresence mode="wait">
+              <PageTransition key={location.pathname}>
+                <Outlet />
+              </PageTransition>
+            </AnimatePresence>
+          </ErrorBoundary>
         </div>
       </main>
 

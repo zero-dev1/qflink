@@ -269,7 +269,7 @@ interface WalletCircleProps {
   showQnsRing?: boolean;
 }
 
-function WalletCircle({ wallet, isSelected, isOther, connectState, onClick, evmAddress, showQnsRing }: WalletCircleProps) {
+function WalletCircle({ wallet, isSelected, isOther, connectState, onClick, evmAddress, showQnsRing, centerOffsetX }: WalletCircleProps & { centerOffsetX?: number }) {
   const baseSize = 72;
   const expandedSize = 96;
 
@@ -321,10 +321,10 @@ function WalletCircle({ wallet, isSelected, isOther, connectState, onClick, evmA
       className="flex flex-col items-center gap-3 outline-none"
       animate={{
         opacity: isOther ? 0 : 1,
-        scale: isOther ? 0.9 : 1,
-        x: 0,
+        scale: isOther ? 0.8 : 1,
+        x: isExpanded && centerOffsetX ? centerOffsetX : 0,
       }}
-      transition={{ duration: 0.4, ease: [0.25, 0.1, 0.25, 1] }}
+      transition={{ duration: 0.7, ease: [0.25, 0.1, 0.25, 1] }}
       style={{ pointerEvents: isOther ? 'none' : 'auto' }}
     >
       <motion.div
@@ -449,8 +449,8 @@ export default function Connect() {
     // State 1 — selection made
     setConnectState('selected');
 
-    // Brief pause for the scale-up animation to play
-    await new Promise((r) => setTimeout(r, 400));
+    // Brief pause for the scale-up + centering animation to play
+    await new Promise((r) => setTimeout(r, 900));
 
     // State 2 — waiting for signature
     setConnectState('signing');
@@ -465,8 +465,8 @@ export default function Connect() {
       setConnectState('cancelled');
       hapticError();
 
-      // Hold X for 600ms then restore
-      await new Promise((r) => setTimeout(r, 800));
+      // Hold X for a beat then restore
+      await new Promise((r) => setTimeout(r, 1200));
       setConnectState('selection');
       setSelectedWallet(null);
       return;
@@ -476,11 +476,11 @@ export default function Connect() {
     setConnectState('approved');
     hapticSuccess();
 
-    await new Promise((r) => setTimeout(r, 600));
+    await new Promise((r) => setTimeout(r, 1000));
 
     // State 4 — QFLink seal
     setConnectState('seal');
-    await new Promise((r) => setTimeout(r, 600));
+    await new Promise((r) => setTimeout(r, 1000));
 
     // State 5 — QNS acknowledgment
     setConnectState('qns');
@@ -488,35 +488,40 @@ export default function Connect() {
     if (latestState.qnsName) {
       setShowQnsRing(true);
     }
-    await new Promise((r) => setTimeout(r, 700));
+    await new Promise((r) => setTimeout(r, 1200));
 
     // State 6 — Avatar reveal
     setConnectState('avatar');
     setShowAvatar(true);
-    await new Promise((r) => setTimeout(r, 500));
+    await new Promise((r) => setTimeout(r, 900));
 
     // State 7 — Pill formation
     setConnectState('pill');
     setShowPill(true);
-    await new Promise((r) => setTimeout(r, 600));
+    await new Promise((r) => setTimeout(r, 1000));
 
     // State 8 — Entry
     setConnectState('entry');
     setShowEntry(true);
 
-    // Animate pill to sidebar position then navigate
+    // Animate pill to sidebar position — lands where the sidebar avatar will be
+    const sidebarX = isMobile ? 0 : -(window.innerWidth / 2) + 28 + 20;
+    const sidebarY = isMobile ? (window.innerHeight / 2) - 40 : (window.innerHeight / 2) - 60;
     await pillControls.start({
-      x: isMobile ? 0 : -window.innerWidth / 2 + 40,
-      y: isMobile ? window.innerHeight / 2 - 40 : window.innerHeight / 2 - 60,
-      scale: 0.6,
+      x: sidebarX,
+      y: sidebarY,
+      scale: 0.5,
+      opacity: 0.9,
       transition: {
         type: 'spring',
-        stiffness: 200,
-        damping: 18,
+        stiffness: 120,
+        damping: 22,
+        mass: 1.2,
+        duration: 0.9,
       },
     });
 
-    await new Promise((r) => setTimeout(r, 200));
+    await new Promise((r) => setTimeout(r, 300));
     navigate('/home');
   }, [connectState, connect, clearWalletError, navigate, isMobile, pillControls]);
 
@@ -588,6 +593,13 @@ export default function Connect() {
                     onClick={() => handleSelectWallet(w.id)}
                     evmAddress={evmAddress || undefined}
                     showQnsRing={showQnsRing}
+                    centerOffsetX={
+                      selectedWallet === w.id
+                        ? (visibleWallets.length === 2
+                          ? (visibleWallets[0].id === w.id ? 52 : -52)
+                          : 0)
+                        : 0
+                    }
                   />
                 ))}
               </div>

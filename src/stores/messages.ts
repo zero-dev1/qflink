@@ -363,39 +363,46 @@ export const useMessagesStore = create<MessagesStore>((set, get) => ({
   hapticSend();
 
   try {
-    // --- Encryption logic (unchanged) ---
+    // --- Encryption logic — gated by privacy toggle ---
+    const { useModeStore } = await import('@/stores/mode');
+    const privacyActive = useModeStore.getState().privacyActive;
+
     let activeKeyPair = useWalletStore.getState().encryptionKeyPair;
-    if (!activeKeyPair) {
-      // Try sessionStorage first (covers page refresh without re-prompting)
-      const { loadKeypairFromSession } = await import('@/lib/encryption');
-      activeKeyPair = loadKeypairFromSession();
-      if (activeKeyPair) {
-        useWalletStore.setState({ encryptionKeyPair: activeKeyPair });
-      } else {
-        // Last resort: try to re-derive (will prompt wallet popup)
-        try {
-          const { getCurrentConnection } = await import('@/lib/wallet');
-          const conn = getCurrentConnection();
-          if (conn?.signer?.polkadotSigner?.signBytes) {
-            const { deriveEncryptionKeypair, saveKeypairToSession } = await import('@/lib/encryption');
-            const signMessage = async (message: string): Promise<Uint8Array> => {
-              const encoder = new TextEncoder();
-              const messageBytes = encoder.encode(message);
-              const result = await conn.signer.polkadotSigner.signBytes(messageBytes);
-              return new Uint8Array(result);
-            };
-            activeKeyPair = await deriveEncryptionKeypair(signMessage);
-            saveKeypairToSession(activeKeyPair);
-            useWalletStore.setState({ encryptionKeyPair: activeKeyPair });
-          }
-        } catch {}
+
+    // Only attempt encryption if user has privacy mode enabled
+    if (privacyActive) {
+      if (!activeKeyPair) {
+        // Try sessionStorage first (covers page refresh without re-prompting)
+        const { loadKeypairFromSession } = await import('@/lib/encryption');
+        activeKeyPair = loadKeypairFromSession();
+        if (activeKeyPair) {
+          useWalletStore.setState({ encryptionKeyPair: activeKeyPair });
+        } else {
+          // Last resort: try to re-derive (will prompt wallet popup)
+          try {
+            const { getCurrentConnection } = await import('@/lib/wallet');
+            const conn = getCurrentConnection();
+            if (conn?.signer?.polkadotSigner?.signBytes) {
+              const { deriveEncryptionKeypair, saveKeypairToSession } = await import('@/lib/encryption');
+              const signMessage = async (message: string): Promise<Uint8Array> => {
+                const encoder = new TextEncoder();
+                const messageBytes = encoder.encode(message);
+                const result = await conn.signer.polkadotSigner.signBytes(messageBytes);
+                return new Uint8Array(result);
+              };
+              activeKeyPair = await deriveEncryptionKeypair(signMessage);
+              saveKeypairToSession(activeKeyPair);
+              useWalletStore.setState({ encryptionKeyPair: activeKeyPair });
+            }
+          } catch {}
+        }
       }
     }
 
     let messageToSend = content;
     let isEncrypted = false;
 
-    if (activeKeyPair) {
+    if (privacyActive && activeKeyPair) {
       try {
         const recipientProfile = await getProfile(lower as `0x${string}`);
         const recipientPubkeyHex = recipientProfile?.encryptionPubkey;

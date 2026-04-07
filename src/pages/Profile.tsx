@@ -1,6 +1,6 @@
 // src/pages/Profile.tsx
 // Design System §18 — Identity surface
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useMemo } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { Crown, Shield, FlaskConical, Megaphone, Zap, Lock, LockOpen } from 'lucide-react';
@@ -23,7 +23,13 @@ const fadeUp = {
 
 export default function Profile() {
   const navigate = useNavigate();
-  const { isConnected, qnsName, evmAddress, address, balance, encryptionKeyPair, disconnect } = useWalletStore();
+  const isConnected = useWalletStore((s) => s.isConnected);
+  const qnsName = useWalletStore((s) => s.qnsName);
+  const evmAddress = useWalletStore((s) => s.evmAddress);
+  const address = useWalletStore((s) => s.address);
+  const balance = useWalletStore((s) => s.balance);
+  const encryptionKeyPair = useWalletStore((s) => s.encryptionKeyPair);
+  const disconnect = useWalletStore((s) => s.disconnect);
   const pods = usePodsStore((s) => s.pods);
   const userPodIds = usePodsStore((s) => s.userPodIds);
   const isLoadingPods = usePodsStore((s) => s.isLoadingPods);
@@ -53,8 +59,8 @@ export default function Profile() {
     getBadgesForName(qnsName).then(setBadges).catch(() => setBadges([]));
   }, [qnsName]);
 
-  const createdPods = pods.filter((p) => p.creator === evmAddress?.toLowerCase());
-  const userPods = pods.filter((p) => userPodIds.includes(Number(p.id)));
+  const createdPods = useMemo(() => pods.filter((p) => p.creator === evmAddress?.toLowerCase()), [pods, evmAddress]);
+  const userPods = useMemo(() => pods.filter((p) => userPodIds.includes(Number(p.id))), [pods, userPodIds]);
   const firstName = qnsName ? qnsName.replace('.qf', '') : null;
 
   // Badge color for avatar ring

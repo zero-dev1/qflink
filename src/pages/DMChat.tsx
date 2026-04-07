@@ -5,6 +5,7 @@ import { useParams, Link } from 'react-router-dom';
 import { useVirtualizer } from '@tanstack/react-virtual';
 import { Lock, LockOpen } from 'lucide-react';
 import { useMessagesStore } from '@/stores/messages';
+import { useModeStore } from '@/stores/mode';
 import { useWalletStore } from '@/stores/wallet';
 import { useUnreadStore } from '@/stores/unread';
 import { useVisibilityPolling } from '@/hooks/useVisibilityPolling';
@@ -20,6 +21,7 @@ export default function DMChat() {
   const isConnected = useWalletStore((s) => s.isConnected);
   const evmAddress = useWalletStore((s) => s.evmAddress);
   const encryptionKeyPair = useWalletStore((s) => s.encryptionKeyPair);
+  const privacyActive = useModeStore((s) => s.privacyActive);
   const otherAddress = address?.toLowerCase() || '';
 
   const dmMessages = useMessagesStore((state) => state.messages[otherAddress] || []);
@@ -53,7 +55,7 @@ export default function DMChat() {
     });
   }, [otherAddress]);
 
-  const isEncrypted = !!encryptionKeyPair && recipientEncryptionReady;
+  const isEncrypted = privacyActive && !!encryptionKeyPair && recipientEncryptionReady;
 
   // Scroll tracking
   const checkIsAtBottom = useCallback(() => {
@@ -100,11 +102,14 @@ export default function DMChat() {
   // Auto-scroll: when new messages arrive and user is at bottom
   useEffect(() => {
     if (wasAtBottomRef.current && sortedMessages.length > 0) {
-      // Small delay to let virtualizer measure
+      // Double-rAF ensures virtualizer has measured the new item before scrolling
       requestAnimationFrame(() => {
-        virtualizer.scrollToIndex(sortedMessages.length - 1, { align: 'end', behavior: 'smooth' });
+        requestAnimationFrame(() => {
+          virtualizer.scrollToIndex(sortedMessages.length - 1, { align: 'end', behavior: 'smooth' });
+        });
       });
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [sortedMessages.length]);
 
   const handleSend = async (content: string) => {
@@ -235,8 +240,8 @@ export default function DMChat() {
           )}
       </div>
 
-      {/* Encryption warning */}
-      {!recipientEncryptionReady && isConnected && (
+      {/* Encryption warning — only relevant when user has privacy on */}
+      {privacyActive && !recipientEncryptionReady && isConnected && (
         <div className="px-4 md:px-6 py-2 bg-warning/5 border-t border-warning/20">
           <p className="text-caption text-warning/80 text-center">
             Messages to this user are not encrypted — they haven't set up encryption yet

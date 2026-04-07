@@ -8,6 +8,7 @@ import { usePodsStore } from '@/stores/pods';
 import { useMessagesStore } from '@/stores/messages';
 import { useModeStore } from '@/stores/mode';
 import { useGettingStartedStore } from '@/stores/gettingStarted';
+import { shallow } from 'zustand/shallow';
 import { ConversationRow } from '@/components/messages/ConversationRow';
 import { Avatar } from '@/components/ui/Avatar';
 import { Skeleton } from '@/components/ui/Skeleton';
@@ -41,7 +42,10 @@ const fadeUp = {
 
 export default function Home() {
   const navigate = useNavigate();
-  const { isConnected, qnsName, evmAddress, balance } = useWalletStore();
+  const isConnected = useWalletStore((s) => s.isConnected);
+  const qnsName = useWalletStore((s) => s.qnsName);
+  const evmAddress = useWalletStore((s) => s.evmAddress);
+  const balance = useWalletStore((s) => s.balance);
   const pods = usePodsStore((s) => s.pods);
   const userPodIds = usePodsStore((s) => s.userPodIds);
   const isLoadingPods = usePodsStore((s) => s.isLoadingPods);
@@ -63,9 +67,13 @@ export default function Home() {
       })
       .filter(Boolean) as PodPreview[];
   }, [isConnected, userPodIds, pods, unreadPodCounts]);
+  const { hasConnected, hasJoinedPod, hasSentMessage } = useGettingStartedStore(
+    (s) => ({ hasConnected: s.hasConnected, hasJoinedPod: s.hasJoinedPod, hasSentMessage: s.hasSentMessage }),
+    shallow,
+  );
+  const gsDismissed = useGettingStartedStore((s) => s.dismissed);
+
   const [profileSheetAddress, setProfileSheetAddress] = useState<string | null>(null);
-
-
 
   // Display name with split render
   const firstName = qnsName ? qnsName.replace('.qf', '') : null;
@@ -110,8 +118,8 @@ export default function Home() {
   }
 
   // ── Momentum tracker — one next action card ──
-  const { hasConnected, hasJoinedPod, hasSentMessage, dismissed: gsDismissed, isComplete: gsComplete } = useGettingStartedStore.getState();
-  const showMomentum = !gsDismissed && !gsComplete();
+  const gsComplete = hasConnected && hasJoinedPod && hasSentMessage;
+  const showMomentum = !gsDismissed && !gsComplete;
   const momentumStep = !hasJoinedPod
     ? { label: 'Join your first pod', link: '/explore', cta: 'Explore pods →' }
     : !hasSentMessage

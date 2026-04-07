@@ -14,7 +14,8 @@ import { ProfileSheet } from '@/components/ui/ProfileSheet';
 export default function Messages() {
   const navigate = useNavigate();
   const { isConnected } = useWalletStore();
-  const { conversations, isLoadingConversations } = useMessagesStore();
+  const conversations = useMessagesStore((s) => s.conversations);
+  const isLoadingConversations = useMessagesStore((s) => s.isLoadingConversations);
   const [profileSheetAddress, setProfileSheetAddress] = useState<string | null>(null);
 
 
