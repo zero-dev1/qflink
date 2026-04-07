@@ -1,6 +1,6 @@
 // src/components/layout/Sidebar.tsx
 // Two-layer architecture: 56px rail + collapsible 240px context panel
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import { NavLink, useNavigate, useLocation, useParams } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useWalletStore } from '@/stores/wallet';
@@ -24,9 +24,13 @@ export function Sidebar() {
   const navigate = useNavigate();
   const location = useLocation();
   const totalUnreadDMs = useUnreadStore((s) => s.getTotalUnreadDMs());
+  const unreadPodCounts = useUnreadStore((s) => s.unreadPodCounts);
   const [panelOpen, setPanelOpen] = useState(true);
 
-  const userPods = pods.filter((p) => userPodIds.includes(Number(p.id)));
+  const userPods = useMemo(
+    () => pods.filter((p) => userPodIds.includes(Number(p.id))),
+    [pods, userPodIds]
+  );
 
   const displayName = qnsName
     ? qnsName.replace('.qf', '')
@@ -55,7 +59,7 @@ export function Sidebar() {
             userPods.map((pod) => {
               const isActive = location.pathname === `/pod/${pod.id}`;
               const catColor = getCategoryColor(pod.category);
-              const hasUnread = useUnreadStore.getState().hasPodUnread(pod.id.toString());
+              const hasUnread = (unreadPodCounts[pod.id.toString()] || 0) > 0;
 
               return (
                 <NavLink
@@ -269,7 +273,8 @@ export function Sidebar() {
 // ─── Context panel content ──────────────────────────────────────────
 function ContextPanelContent() {
   const location = useLocation();
-  const { pods, userPodIds } = usePodsStore();
+  const pods = usePodsStore((s) => s.pods);
+  const userPodIds = usePodsStore((s) => s.userPodIds);
   const navigate = useNavigate();
 
   // Pod chat context — show member count / pod info
@@ -307,7 +312,10 @@ function ContextPanelContent() {
   }
 
   // Default — your pods list
-  const userPods = pods.filter((p) => userPodIds.includes(Number(p.id)));
+  const userPods = useMemo(
+    () => pods.filter((p) => userPodIds.includes(Number(p.id))),
+    [pods, userPodIds]
+  );
   return (
     <div>
       <p className="text-caption text-text-tertiary mb-2">Your Pods</p>

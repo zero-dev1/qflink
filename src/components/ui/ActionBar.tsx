@@ -146,7 +146,7 @@ export function ActionBarInline({
 export function ActionBar() {
   const { isOpen, close } = useActionBarStore();
   const { isConnected } = useWalletStore();
-  const { pods } = usePodsStore();
+  const pods = usePodsStore((s) => s.pods);
   const navigate = useNavigate();
   const location = useLocation();
 

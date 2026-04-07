@@ -187,33 +187,68 @@ export async function getPod(podId: number): Promise<PodData | null> {
   }
 }
 
+// Module-level cache: skip N getPod RPCs when pod count hasn't changed
+let _allPodsCache: { pods: PodData[]; count: number; fetchedAt: number } | null = null;
+const ALL_PODS_CACHE_TTL = 12_000; // slightly under the 15s poll interval
+
 export async function getAllPods(): Promise<PodData[]> {
   const count = await getPodCount();
-  if (count === 0) return [];
+  if (count === 0) { _allPodsCache = null; return []; }
 
-  // Parallel fetch - all pods at once instead of sequential
+  // Return cache if count is same and cache is fresh
+  if (
+    _allPodsCache &&
+    _allPodsCache.count === count &&
+    Date.now() - _allPodsCache.fetchedAt < ALL_PODS_CACHE_TTL
+  ) {
+    return _allPodsCache.pods;
+  }
+
+  // Parallel fetch - all pods at once
   const results = await Promise.all(
     Array.from({ length: count }, (_, i) => getPod(i + 1))
   );
-
-  return results.filter((pod): pod is PodData => pod !== null);
+  const pods = results.filter((pod): pod is PodData => pod !== null);
+  _allPodsCache = { pods, count, fetchedAt: Date.now() };
+  return pods;
 }
+
+export function invalidateAllPodsCache() { _allPodsCache = null; }
+
+// Module-level cache: skip N isMember RPCs when pod count + address are unchanged
+let _userPodsCache: { podIds: number[]; address: string; count: number; fetchedAt: number } | null = null;
+const USER_PODS_CACHE_TTL = 12_000;
 
 export async function getUserPods(address: `0x${string}`): Promise<number[]> {
   try {
     const count = await getPodCount();
     if (count === 0) return [];
+
+    // Return cache if count + address match and cache is fresh
+    if (
+      _userPodsCache &&
+      _userPodsCache.address === address.toLowerCase() &&
+      _userPodsCache.count === count &&
+      Date.now() - _userPodsCache.fetchedAt < USER_PODS_CACHE_TTL
+    ) {
+      return _userPodsCache.podIds;
+    }
+
     const checks = await Promise.all(
       Array.from({ length: count }, (_, i) => {
         const podId = i + 1;
         return isMember(podId, address).then((m) => ({ podId, isMember: m }));
       })
     );
-    return checks.filter(({ isMember }) => isMember).map(({ podId }) => podId);
+    const podIds = checks.filter(({ isMember }) => isMember).map(({ podId }) => podId);
+    _userPodsCache = { podIds, address: address.toLowerCase(), count, fetchedAt: Date.now() };
+    return podIds;
   } catch {
     return [];
   }
 }
+
+export function invalidateUserPodsCache() { _userPodsCache = null; }
 
 export async function getPodMemberCount(podId: number): Promise<number> {
   try {

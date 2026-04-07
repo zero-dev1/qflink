@@ -50,17 +50,19 @@ export default function Home() {
   const isLoadingConversations = useMessagesStore((s) => s.isLoadingConversations);
   const isMobile = useIsMobile();
 
+  const unreadPodCounts = useUnreadStore((s) => s.unreadPodCounts);
+
   const podPreviews = useMemo(() => {
     if (!isConnected || userPodIds.length === 0) return [];
     return userPodIds
       .map((podId) => {
         const pod = pods.find((p) => Number(p.id) === podId);
         if (!pod) return null;
-        const hasUnread = useUnreadStore.getState().hasPodUnread(podId.toString());
+        const hasUnread = (unreadPodCounts[podId.toString()] || 0) > 0;
         return { podId, name: pod.name, category: pod.category, memberCount: pod.memberCount, hasUnread };
       })
       .filter(Boolean) as PodPreview[];
-  }, [isConnected, userPodIds, pods]);
+  }, [isConnected, userPodIds, pods, unreadPodCounts]);
   const [profileSheetAddress, setProfileSheetAddress] = useState<string | null>(null);
 
 

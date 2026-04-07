@@ -15,6 +15,8 @@ import {
   getPodMessages,
   sendPodMessage as contractSendPodMessage,
   getPodMessageCount,
+  invalidateUserPodsCache,
+  invalidateAllPodsCache,
 } from '@/lib/contractCalls';
 import { hapticSuccess, chimeSuccess, hapticTap, hapticError, hapticSend, hapticConfirm, chimeError } from '@/lib/feedback';
 import { getContractErrorMessage } from '@/lib/contractErrors';
@@ -76,6 +78,9 @@ interface PodsStore {
   isUserMember: (podId: number) => boolean;
 }
 
+// Module-level tracking for optimistic pod memberships (survives fetchUserPods reconciliation)
+const _optimisticMemberPodIds = new Set<number>();
+
 export const usePodsStore = create<PodsStore>((set, get) => ({
   // Data
   pods: [],
@@ -99,7 +104,14 @@ export const usePodsStore = create<PodsStore>((set, get) => ({
   if (isFirstLoad) set({ isLoadingPods: true, podFetchError: false });
 
   try {
-    const pods = await getAllPods();
+    const chainPods = await getAllPods();
+
+    // QNS pattern: preserve optimistic pods not yet confirmed on chain
+    const optimisticPods = current.filter(p => {
+      const isOptimistic = Number(p.id) > 1_000_000_000_000;
+      return isOptimistic && !chainPods.some(cp => cp.name.toLowerCase() === p.name.toLowerCase());
+    });
+    const pods = [...chainPods, ...optimisticPods];
 
     // Compare before set: skip if identical (prevents re-renders)
     if (
@@ -126,8 +138,29 @@ export const usePodsStore = create<PodsStore>((set, get) => ({
       const evmAddress = useWalletStore.getState().evmAddress;
       if (!evmAddress) return;
       
-      const userPodIds = await getUserPods(evmAddress as `0x${string}`);
-      set({ userPodIds });
+      const chainPodIds = await getUserPods(evmAddress as `0x${string}`);
+
+      // Clear confirmed optimistic memberships
+      for (const id of _optimisticMemberPodIds) {
+        if (chainPodIds.includes(id)) _optimisticMemberPodIds.delete(id);
+      }
+
+      // Merge remaining optimistic memberships (QNS pattern)
+      const merged = [
+        ...chainPodIds,
+        ...[..._optimisticMemberPodIds].filter(id => !chainPodIds.includes(id)),
+      ];
+
+      // Compare before set: skip if identical (prevents re-renders)
+      const current = get().userPodIds;
+      if (
+        merged.length === current.length &&
+        merged.every((id, i) => id === current[i])
+      ) {
+        return;
+      }
+
+      set({ userPodIds: merged });
     } catch (error) {
       console.error('Failed to fetch user pods:', error);
     }
@@ -281,7 +314,15 @@ export const usePodsStore = create<PodsStore>((set, get) => ({
     useToastStore.getState().addToast('success', `Joined ${pod?.name || 'pod'}`);
     hapticSuccess();
     chimeSuccess();
-    set({ isJoining: false });
+    // Optimistic membership — user can send immediately (QNS pattern)
+    _optimisticMemberPodIds.add(podId);
+    invalidateUserPodsCache();
+    set(state => ({
+      isJoining: false,
+      userPodIds: state.userPodIds.includes(podId)
+        ? state.userPodIds
+        : [...state.userPodIds, podId],
+    }));
 
     // Mark getting started step
     try {
@@ -338,7 +379,7 @@ export const usePodsStore = create<PodsStore>((set, get) => ({
       id: optimisticId,
       sender: evmAddress,
       content,
-      timestamp: Math.floor(Date.now() / 1000),
+      timestamp: Date.now(), // milliseconds — matches _fetchMessage on-chain format
       isLocalPending: true, // for dedup only - message renders at full opacity
     };
 

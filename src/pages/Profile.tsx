@@ -24,7 +24,12 @@ const fadeUp = {
 export default function Profile() {
   const navigate = useNavigate();
   const { isConnected, qnsName, evmAddress, address, balance, encryptionKeyPair, disconnect } = useWalletStore();
-  const { pods, userPodIds, isLoadingPods, fetchPods, fetchUserPods, getPodById } = usePodsStore();
+  const pods = usePodsStore((s) => s.pods);
+  const userPodIds = usePodsStore((s) => s.userPodIds);
+  const isLoadingPods = usePodsStore((s) => s.isLoadingPods);
+  const fetchPods = usePodsStore((s) => s.fetchPods);
+  const fetchUserPods = usePodsStore((s) => s.fetchUserPods);
+  const getPodById = usePodsStore((s) => s.getPodById);
   const { instantActive, privacyActive, getInstantRemaining } = useModeStore();
 
   const [profile, setProfile] = useState<UserProfile | null>(null);

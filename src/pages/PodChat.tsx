@@ -45,6 +45,7 @@ export default function PodChat() {
   const wasAtBottomRef = useRef(true);
   const pollCountRef = useRef(0);
   const [isBannedFromPod, setIsBannedFromPod] = useState(false);
+  const senderNamesRef = useRef<Record<string, string>>({});
   const [senderNames, setSenderNames] = useState<Record<string, string>>({});
   const [profileSheetAddress, setProfileSheetAddress] = useState<string | null>(null);
 
@@ -75,11 +76,11 @@ export default function PodChat() {
 
   useEffect(() => { checkBanStatus(); }, [checkBanStatus]);
 
-  // §17 — Resolve sender .qf names for pod messages
+  // §17 — Resolve sender .qf names for pod messages (stable ref prevents re-run loops)
   useEffect(() => {
     if (podMessages.length === 0) return;
     const uniqueSenders = [...new Set(podMessages.map((m) => m.sender.toLowerCase()))];
-    const unresolved = uniqueSenders.filter((s) => !(s in senderNames));
+    const unresolved = uniqueSenders.filter((s) => !(s in senderNamesRef.current));
     if (unresolved.length === 0) return;
 
     Promise.allSettled(
@@ -95,10 +96,11 @@ export default function PodChat() {
         }
       }
       if (Object.keys(updates).length > 0) {
-        setSenderNames((prev) => ({ ...prev, ...updates }));
+        senderNamesRef.current = { ...senderNamesRef.current, ...updates };
+        setSenderNames({ ...senderNamesRef.current });
       }
     });
-  }, [podMessages, senderNames]);
+  }, [podMessages]);
 
   // Poll
   useVisibilityPolling(
@@ -129,11 +131,14 @@ export default function PodChat() {
   // Auto-scroll: when new messages arrive and user is at bottom
   useEffect(() => {
     if (wasAtBottomRef.current && sortedMessages.length > 0) {
-      // Small delay to let virtualizer measure
+      // Double-rAF ensures virtualizer has measured the new item before scrolling
       requestAnimationFrame(() => {
-        virtualizer.scrollToIndex(sortedMessages.length - 1, { align: 'end', behavior: 'smooth' });
+        requestAnimationFrame(() => {
+          virtualizer.scrollToIndex(sortedMessages.length - 1, { align: 'end', behavior: 'smooth' });
+        });
       });
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [sortedMessages.length]);
 
   const handleSend = async (content: string) => {

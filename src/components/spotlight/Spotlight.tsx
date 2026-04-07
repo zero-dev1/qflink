@@ -20,7 +20,7 @@ interface SpotlightAction {
 export function Spotlight() {
   const { isOpen, close } = useSpotlightStore();
   const { isConnected } = useWalletStore();
-  const { pods } = usePodsStore();
+  const pods = usePodsStore((s) => s.pods);
   const navigate = useNavigate();
 
   const [query, setQuery] = useState('');

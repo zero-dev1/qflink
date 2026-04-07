@@ -153,6 +153,20 @@ export const useMessagesStore = create<MessagesStore>((set, get) => ({
       // Sort by most recent message first
       items.sort((a, b) => b.lastMessageTime - a.lastMessageTime);
 
+      // Compare before set: skip if identical (prevents re-renders)
+      const current = get().conversations;
+      const unchanged =
+        items.length === current.length &&
+        items.every((item, i) =>
+          item.address === current[i].address &&
+          item.lastMessageTime === current[i].lastMessageTime &&
+          item.lastMessage === current[i].lastMessage
+        );
+      if (unchanged && !isFirstLoad) {
+        set({ isLoadingConversations: false });
+        return;
+      }
+
       set({ conversations: items, isLoadingConversations: false });
     } catch (error) {
       console.error('Failed to fetch conversations:', error);

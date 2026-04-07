@@ -9,6 +9,8 @@ import {
   createPod,
   createPaidPod,
   getCreationFee,
+  invalidateAllPodsCache,
+  invalidateUserPodsCache,
 } from '@/lib/contractCalls';
 import { getContractErrorMessage } from '@/lib/contractErrors';
 import { hapticTap, hapticSuccess, hapticError, chimeSuccess, chimeError } from '@/lib/feedback';
@@ -122,8 +124,10 @@ export function PodComposer({ onClose, onSuccess }: PodComposerProps) {
       };
       usePodsStore.getState().addOptimisticPod(optimisticPod);
 
-      // Background reconciliation - will replace optimistic pod with real chain data
+      // Background reconciliation - bust RPC caches then replace optimistic pod with real chain data
       setTimeout(() => {
+        invalidateAllPodsCache();
+        invalidateUserPodsCache();
         usePodsStore.getState().fetchPods();
         usePodsStore.getState().fetchUserPods();
       }, 2000);

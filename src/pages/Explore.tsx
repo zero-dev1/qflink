@@ -19,17 +19,15 @@ type SortMode = 'active' | 'new' | 'popular';
 export default function Explore() {
   const navigate = useNavigate();
   const { isConnected, balance } = useWalletStore();
-  const {
-    pods,
-    userPodIds,
-    isLoadingPods,
-    podFetchError,
-    isJoining,
-    fetchPods,
-    fetchUserPods,
-    joinPod,
-    isUserMember,
-  } = usePodsStore();
+  const pods = usePodsStore((s) => s.pods);
+  const userPodIds = usePodsStore((s) => s.userPodIds);
+  const isLoadingPods = usePodsStore((s) => s.isLoadingPods);
+  const podFetchError = usePodsStore((s) => s.podFetchError);
+  const isJoining = usePodsStore((s) => s.isJoining);
+  const fetchPods = usePodsStore((s) => s.fetchPods);
+  const fetchUserPods = usePodsStore((s) => s.fetchUserPods);
+  const joinPod = usePodsStore((s) => s.joinPod);
+  const isUserMember = usePodsStore((s) => s.isUserMember);
 
   const [selectedCategory, setSelectedCategory] = useState<string>('All');
   const [sortMode, setSortMode] = useState<SortMode>('active');
