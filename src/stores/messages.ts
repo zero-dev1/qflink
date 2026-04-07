@@ -543,7 +543,7 @@ export const useMessagesStore = create<MessagesStore>((set, get) => ({
       messages: {
         ...state.messages,
         [address]: (state.messages[address] || []).map((m) =>
-          m.id === messageId ? { ...m, isFailed: false, isOptimistic: true } : m
+          m.id === messageId ? { ...m, isFailed: false, isLocalPending: true } : m
         ),
       },
     }));
