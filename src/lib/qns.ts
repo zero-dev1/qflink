@@ -10,6 +10,7 @@ const resolverABI = [
 
 const ZERO_ADDRESS = "0x0000000000000000000000000000000000000000";
 const nameCache = new Map<string, { name: string | null; timestamp: number }>();
+const avatarCache = new Map<string, { url: string | null; timestamp: number }>();
 const CACHE_TTL = 5 * 60 * 1000;
 
 export function clearNameCache(address: string): void {
@@ -38,6 +39,34 @@ export async function reverseResolve(address: string): Promise<string | null> {
     return result;
   } catch {
     nameCache.set(lower, { name: null, timestamp: Date.now() });
+    return null;
+  }
+}
+
+export async function resolveAvatar(address: string): Promise<string | null> {
+  if (!CONTRACT_ADDRESSES.qnsResolver || CONTRACT_ADDRESSES.qnsResolver === ZERO_ADDRESS) return null;
+  const lower = address.toLowerCase();
+
+  // Check cache
+  const cached = avatarCache.get(lower);
+  if (cached && Date.now() - cached.timestamp < CACHE_TTL) return cached.url;
+
+  try {
+    // Step 1: reverse-resolve to get the .qf name
+    const name = await reverseResolve(lower);
+    if (!name) {
+      avatarCache.set(lower, { url: null, timestamp: Date.now() });
+      return null;
+    }
+
+    // Step 2: look up the "avatar" text record
+    const node = namehash(name);
+    const avatarUrl = await callContract(CONTRACT_ADDRESSES.qnsResolver, [...resolverABI], "text", [node, "avatar"]) as string;
+    const result = avatarUrl || null;
+    avatarCache.set(lower, { url: result, timestamp: Date.now() });
+    return result;
+  } catch {
+    avatarCache.set(lower, { url: null, timestamp: Date.now() });
     return null;
   }
 }

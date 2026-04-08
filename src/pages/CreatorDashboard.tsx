@@ -91,17 +91,28 @@ export default function CreatorDashboard() {
 
     async function loadDashboard() {
       try {
-        const [podData, creator, fee, members, contractBal, creatorSh, treasurySh] = await Promise.all([
+        // Core data — these must succeed
+        const [podData, creator, fee, members] = await Promise.all([
           getPod(podId!), getCreator(podId!), getEntryFee(podId!), getPodMemberCount(podId!),
-          getPaymentsBalance(), getPaymentsCreatorShare(), getPaymentsTreasuryShare(),
         ]);
         if (cancelled) return;
         setPod(podData);
         setEntryFee(fee);
         setMemberCount(members);
-        setRevenue({ contractBalance: contractBal, creatorShare: creatorSh, treasuryShare: treasurySh });
         setIsCreator(creator?.toLowerCase() === evmAddress?.toLowerCase());
+
+        // Revenue data — optional, gracefully degrade
+        try {
+          const [contractBal, creatorSh, treasurySh] = await Promise.all([
+            getPaymentsBalance(), getPaymentsCreatorShare(), getPaymentsTreasuryShare(),
+          ]);
+          if (!cancelled) setRevenue({ contractBalance: contractBal, creatorShare: creatorSh, treasuryShare: treasurySh });
+        } catch {
+          // Payments contract may not be available — revenue section will show '—'
+          console.warn('[CreatorDashboard] Revenue data unavailable');
+        }
       } catch (err) {
+        console.error('[CreatorDashboard] Failed to load:', err);
         if (!cancelled) addToast('error', 'Failed to load dashboard data');
       } finally {
         if (!cancelled) setIsLoading(false);

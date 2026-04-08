@@ -87,13 +87,13 @@ export function ProfileSheet({ address, isOpen, onClose, podContext }: ProfileSh
             aria-label="Close profile sheet"
           />
 
-          {/* Sheet — bottom sheet on mobile, centered on desktop */}
+          {/* Sheet — bottom sheet on mobile, centered modal on desktop */}
           <motion.div
-            initial={{ opacity: 0, y: 100 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: 60 }}
+            initial={{ opacity: 0, y: 100, scale: 0.95 }}
+            animate={{ opacity: 1, y: 0, scale: 1 }}
+            exit={{ opacity: 0, y: 60, scale: 0.95 }}
             transition={{ type: 'spring', damping: 25, stiffness: 300 }}
-            className="fixed bottom-0 left-0 right-0 md:bottom-auto md:top-1/2 md:left-1/2 md:-translate-x-1/2 md:-translate-y-1/2 z-[71] bg-surface-3 border border-white/[0.08] rounded-t-xl md:rounded-xl md:max-w-sm w-full p-6 pb-[calc(1.5rem+env(safe-area-inset-bottom))] md:pb-6"
+            className="fixed z-[71] bg-surface-3 border border-white/[0.08] rounded-t-xl p-6 pb-[calc(1.5rem+env(safe-area-inset-bottom))] bottom-0 left-0 right-0 md:rounded-xl md:max-w-sm md:pb-6 md:inset-0 md:m-auto md:h-fit md:w-full"
             onClick={(e) => e.stopPropagation()}
           >
             {/* Mobile drag handle */}

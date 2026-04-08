@@ -53,7 +53,10 @@ export function PodComposer({ onClose, onSuccess }: PodComposerProps) {
   useEffect(() => {
     const contract = price > 0 ? 'createPaid' : 'create';
     getCreationFee(contract)
-      .then(setCreationFee)
+      .then((fee) => {
+        console.log(`[PodComposer] Creation fee (${contract}):`, fee, `= ${Number(fee) / 1e18} QF`);
+        setCreationFee(fee);
+      })
       .catch(() => setCreationFee(null));
   }, [price]);
 
@@ -184,8 +187,8 @@ export function PodComposer({ onClose, onSuccess }: PodComposerProps) {
     case 'confirming':
       launchButtonContent = (
         <span className="flex items-center gap-2">
-          <div className="h-4 w-4 border-2 border-white/[0.10] border-t-text-on-cyan rounded-full animate-spin" />
-          Confirming...
+          <div className="h-4 w-4 border-2 border-white/[0.10] border-t-white rounded-full animate-spin" />
+          Creating your pod...
         </span>
       );
       launchButtonDisabled = true;
@@ -194,7 +197,7 @@ export function PodComposer({ onClose, onSuccess }: PodComposerProps) {
       launchButtonContent = (
         <span className="flex items-center gap-2">
           <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M3 8L6.5 11.5L13 4.5" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" /></svg>
-          Pod created
+          Pod created ✔
         </span>
       );
       launchButtonDisabled = true;
@@ -212,7 +215,7 @@ export function PodComposer({ onClose, onSuccess }: PodComposerProps) {
         launchButtonContent = 'Connect wallet first';
         launchButtonDisabled = true;
       } else if (!canAffordFee) {
-        launchButtonContent = 'Insufficient balance';
+        launchButtonContent = `Requires ${feeDisplay} QF`;
         launchButtonDisabled = true;
       } else {
         launchButtonContent = `Launch Pod \u00b7 ${feeDisplay} QF`;
@@ -238,9 +241,22 @@ export function PodComposer({ onClose, onSuccess }: PodComposerProps) {
         className="relative bg-surface-3 border border-white/[0.08] rounded-xl w-full max-w-[640px] max-h-[85vh] overflow-y-auto"
         onClick={(e) => e.stopPropagation()}
       >
+        {/* Close button — top-right, above content, inside container flow */}
+        <div className="flex justify-end p-4 pb-0">
+          <button
+            onClick={onClose}
+            className="w-8 h-8 rounded-lg flex items-center justify-center text-text-tertiary hover:text-text-secondary hover:bg-white/[0.04] active:scale-[0.96] z-10"
+            aria-label="Close"
+          >
+            <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+              <path d="M4 4L12 12M12 4L4 12" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
+            </svg>
+          </button>
+        </div>
+
         <div className="flex flex-col md:flex-row">
           {/* Left: Progressive reveal beats */}
-          <div className="flex-1 p-6 space-y-5">
+          <div className="flex-1 px-6 pb-6 space-y-5">
             {/* Beat 1 — Name */}
             <div>
               <p className="text-caption text-text-tertiary mb-2">Name your pod</p>
@@ -388,8 +404,8 @@ export function PodComposer({ onClose, onSuccess }: PodComposerProps) {
                 >
                   {/* Balance warning */}
                   {isConnected && creationFee !== null && !canAffordFee && (
-                    <p className="text-caption text-error mb-2">
-                      Creation fee is {feeDisplay} QF — your balance is {formatExactAmount(balance)} QF
+                    <p className="text-caption text-text-tertiary mb-2">
+                      You need {feeDisplay} QF to launch a pod
                     </p>
                   )}
 
@@ -399,7 +415,7 @@ export function PodComposer({ onClose, onSuccess }: PodComposerProps) {
                     className={cn(
                       'w-full h-12 rounded-xl text-label font-medium transition-all active:scale-[0.98]',
                       launchState === 'success'
-                        ? 'bg-green-600 text-white'
+                        ? 'bg-cyan-primary text-text-on-cyan'
                         : launchState === 'cancelled'
                           ? 'bg-white/[0.04] border border-white/[0.08] text-text-secondary'
                           : launchState === 'error'
@@ -451,16 +467,6 @@ export function PodComposer({ onClose, onSuccess }: PodComposerProps) {
           </div>
         </div>
 
-        {/* Close button */}
-        <button
-          onClick={onClose}
-          className="absolute top-4 right-4 w-8 h-8 rounded-lg flex items-center justify-center text-text-tertiary hover:text-text-secondary hover:bg-white/[0.04] active:scale-[0.96]"
-          aria-label="Close"
-        >
-          <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
-            <path d="M4 4L12 12M12 4L4 12" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
-          </svg>
-        </button>
       </motion.div>
     </motion.div>
   );

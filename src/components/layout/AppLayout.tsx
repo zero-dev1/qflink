@@ -1,9 +1,11 @@
 // src/components/layout/AppLayout.tsx
+// 3-column layout: Sidebar | Main Content | DetailPanel
 import { useEffect } from 'react';
 import { Outlet, useLocation } from 'react-router-dom';
 import { AnimatePresence } from 'framer-motion';
 import { ErrorBoundary } from '@/components/ErrorBoundary';
 import { Sidebar } from './Sidebar';
+import { DetailPanel } from './DetailPanel';
 import { MobileTabBar } from './MobileTabBar';
 import { PageTransition } from './PageTransition';
 import { ModePill } from '@/components/ui/ModePill';
@@ -54,9 +56,11 @@ export function AppLayout() {
         Skip to content
       </a>
 
+      {/* Column 1 — Sidebar */}
       <Sidebar />
 
-      <main id="main-content" className={`flex-1 flex flex-col overflow-hidden pb-14 md:pb-0 ${breathClass}`}>
+      {/* Column 2 — Main content */}
+      <main id="main-content" className={`flex-1 min-w-0 flex flex-col overflow-hidden pb-14 md:pb-0 ${breathClass}`}>
         {/* Mode pill — centered top of content area */}
         {isConnected && (
           <div className="shrink-0 py-2 px-4">
@@ -64,7 +68,6 @@ export function AppLayout() {
           </div>
         )}
 
-        {/* Content — left-aligned, not centered */}
         <div className="flex-1 overflow-hidden">
           <ErrorBoundary key={location.pathname}>
             <AnimatePresence mode="wait">
@@ -75,6 +78,9 @@ export function AppLayout() {
           </ErrorBoundary>
         </div>
       </main>
+
+      {/* Column 3 — Contextual detail panel (desktop only) */}
+      <DetailPanel />
 
       <MobileTabBar />
     </div>

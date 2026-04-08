@@ -8,6 +8,7 @@ import { useWalletStore } from '@/stores/wallet';
 import { useUnreadStore } from '@/stores/unread';
 import { useVisibilityPolling } from '@/hooks/useVisibilityPolling';
 import { MessageBubble } from '@/components/chat/MessageBubble';
+import { getBadgesForName, type UserBadge } from '@/lib/badges';
 import { ChatInput } from '@/components/chat/ChatInput';
 import { Skeleton } from '@/components/ui/Skeleton';
 import { ProfileSheet } from '@/components/ui/ProfileSheet';
@@ -48,6 +49,8 @@ export default function PodChat() {
   const senderNamesRef = useRef<Record<string, string>>({});
   const [senderNames, setSenderNames] = useState<Record<string, string>>({});
   const [profileSheetAddress, setProfileSheetAddress] = useState<string | null>(null);
+  const [senderBadgeColors, setSenderBadgeColors] = useState<Record<string, string>>({});
+  const [replyTo, setReplyTo] = useState<{ id: number; sender: string; content: string } | null>(null);
 
 
   const checkIsAtBottom = useCallback(() => {
@@ -86,18 +89,30 @@ export default function PodChat() {
     Promise.allSettled(
       unresolved.map(async (addr) => {
         const name = await reverseResolve(addr);
-        return { addr, name };
+        let badgeColor: string | undefined;
+        if (name) {
+          try {
+            const badges = await getBadgesForName(name);
+            if (badges.length > 0) badgeColor = badges[0].color;
+          } catch {}
+        }
+        return { addr, name, badgeColor };
       })
     ).then((results) => {
-      const updates: Record<string, string> = {};
+      const nameUpdates: Record<string, string> = {};
+      const colorUpdates: Record<string, string> = {};
       for (const r of results) {
-        if (r.status === 'fulfilled' && r.value.name) {
-          updates[r.value.addr] = r.value.name;
+        if (r.status === 'fulfilled') {
+          if (r.value.name) nameUpdates[r.value.addr] = r.value.name;
+          if (r.value.badgeColor) colorUpdates[r.value.addr] = r.value.badgeColor;
         }
       }
-      if (Object.keys(updates).length > 0) {
-        senderNamesRef.current = { ...senderNamesRef.current, ...updates };
+      if (Object.keys(nameUpdates).length > 0) {
+        senderNamesRef.current = { ...senderNamesRef.current, ...nameUpdates };
         setSenderNames({ ...senderNamesRef.current });
+      }
+      if (Object.keys(colorUpdates).length > 0) {
+        setSenderBadgeColors((prev) => ({ ...prev, ...colorUpdates }));
       }
     });
   }, [podMessages]);
@@ -144,7 +159,8 @@ export default function PodChat() {
   const handleSend = async (content: string) => {
     if (podId === null) return false;
     wasAtBottomRef.current = true;
-    return await sendMessage(podId, content);
+    const reply = replyTo ? { sender: replyTo.sender, content: replyTo.content } : undefined;
+    return await sendMessage(podId, content, reply);
   };
 
 
@@ -230,10 +246,13 @@ export default function PodChat() {
                       isMine={isMine}
                       showSender={showSender}
                       senderName={senderNames[message.sender.toLowerCase()] || undefined}
+                      senderBadgeColor={senderBadgeColors[message.sender.toLowerCase()] || undefined}
                       isFailed={message.isFailed}
                       onRetry={message.isFailed ? () => usePodsStore.getState().retryMessage(podId!, message.id) : undefined}
                       onDismiss={message.isFailed ? () => usePodsStore.getState().dismissFailedMessage(podId!, message.id) : undefined}
                       onAvatarTap={(addr) => setProfileSheetAddress(addr)}
+                      onReply={() => setReplyTo({ id: message.id, sender: message.sender, content: message.content })}
+                      replyTo={message.replyToContent ? { sender: message.replyToSender || '', content: message.replyToContent } : null}
                     />
                   </div>
                 );
@@ -259,10 +278,28 @@ export default function PodChat() {
           <Link to="/explore" className="text-label text-cyan-primary hover:text-cyan-hover">Back to Explore →</Link>
         </div>
       ) : (
-        <div className="shrink-0 px-4 md:px-6 py-3 pb-[calc(0.75rem+env(safe-area-inset-bottom))] border-t border-white/[0.04] bg-base">
+        <div className="shrink-0 px-4 md:px-6 pt-4 pb-4 pb-[calc(1rem+env(safe-area-inset-bottom))] border-t border-white/[0.06] bg-base">
+          {/* Reply preview */}
+          {replyTo && (
+            <div className="flex items-center justify-between mb-2 pl-3 pr-1 py-1.5 rounded-lg bg-white/[0.03] border border-white/[0.06]">
+              <div className="flex items-center gap-2 min-w-0">
+                <div className="w-0.5 h-4 bg-cyan-primary rounded-full shrink-0" />
+                <p className="text-caption text-text-tertiary truncate">
+                  {replyTo.content.slice(0, 60)}{replyTo.content.length > 60 ? '…' : ''}
+                </p>
+              </div>
+              <button onClick={() => setReplyTo(null)} className="shrink-0 w-6 h-6 flex items-center justify-center text-text-tertiary hover:text-text-secondary" aria-label="Cancel reply">
+                <svg width="12" height="12" viewBox="0 0 12 12" fill="none"><path d="M3 3L9 9M9 3L3 9" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" /></svg>
+              </button>
+            </div>
+          )}
           <ChatInput
-            placeholder={`Message ${pod?.name || 'pod'}...`}
-            onSend={handleSend}
+            placeholder={replyTo ? 'Reply...' : `Message ${pod?.name || 'pod'}...`}
+            onSend={async (content) => {
+              const result = await handleSend(content);
+              if (result) setReplyTo(null);
+              return result;
+            }}
             disabled={!isConnected}
             isSending={isSendingMsg}
           />

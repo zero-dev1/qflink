@@ -252,7 +252,7 @@ export function Sidebar() {
           >
             <Avatar
               address={evmAddress}
-              size={expanded ? 32 : 40}
+              size={32}
               className={cn('shrink-0', !expanded && 'w-full h-full rounded-full', isConnecting && 'opacity-60')}
             />
             {expanded && (

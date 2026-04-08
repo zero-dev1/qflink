@@ -26,31 +26,32 @@ export function decodeContractError(error: unknown): string | null {
 }
 
 export const CONTRACT_ERRORS: Record<string, string> = {
-  ChainMismatch: "Please switch your wallet to QF Network",
-  UserExists: "User already registered",
-  UserNotFound: "User not registered",
-  InvalidName: "Display name is invalid",
-  PodNotFound: "Pod not found",
-  AlreadyMember: "You are already a member of this pod",
-  NotMember: "You are not a member of this pod",
-  Banned: "You are banned from this pod",
-  NotCreator: "Only the pod creator can perform this action",
-  CreatorCantLeave: "Pod creators cannot leave their own pod",
-  InvalidFee: "Incorrect fee amount",
-  Unauthorized: "You are not authorized to perform this action",
-  NotPodMember: "You must be a pod member to send messages",
-  SelfMessage: "Cannot send a message to yourself",
-  EmptyContent: "Message content cannot be empty",
-  InsufficientCreationFee: "Insufficient creation fee — 500 QF required",
-  InsufficientBalance: "Insufficient QF balance for this action",
-  NotAuthorized: "You are not authorized to perform this action",
-  PodFull: "This pod is full",
+  ChainMismatch: "Switch your wallet to QF Network and try again",
+  UserExists: "You’re already registered — you’re good to go",
+  UserNotFound: "Register your profile first to continue",
+  InvalidName: "That name isn’t valid — try a different one",
+  PodNotFound: "This pod doesn’t exist anymore",
+  AlreadyMember: "You’re already in this pod — open it from your sidebar",
+  NotMember: "Join this pod first to interact",
+  Banned: "You’ve been removed from this pod by the creator",
+  NotCreator: "Only the pod creator can do this",
+  CreatorCantLeave: "Creators can’t leave their own pod",
+  InvalidFee: "Fee amount doesn’t match — refresh and try again",
+  Unauthorized: "You don’t have permission for this action",
+  NotPodMember: "Join this pod to send messages",
+  SelfMessage: "You can’t message yourself",
+  EmptyContent: "Type a message first",
+  InsufficientCreationFee: "Not enough QF for the creation fee — check your balance",
+  InsufficientBalance: "Not enough QF — top up your balance and try again",
+  NotAuthorized: "You don’t have permission for this action",
+  PodFull: "This pod is at capacity",
   AlreadyBanned: "This user is already banned",
-  NotBanned: "This user is not banned",
-  AlreadyMod: "This user is already a moderator",
-  NotMod: "This user is not a moderator",
-  InsufficientEntryFee: "Entry fee amount is incorrect",
-  ContentTooLong: "Message content exceeds maximum length",
+  NotBanned: "This user isn’t banned",
+  AlreadyMod: "Already a moderator",
+  NotMod: "Not a moderator",
+  InsufficientEntryFee: "Entry fee doesn’t match — refresh and try again",
+  ContentTooLong: "Message is too long — keep it under the limit",
+  Module: "Something went wrong — try again in a moment",
 };
 
 export function getContractErrorMessage(error: unknown): string {
@@ -61,6 +62,6 @@ export function getContractErrorMessage(error: unknown): string {
   }
 
   const raw = decodeContractError(error);
-  if (!raw) return "Transaction failed — please try again";
-  return CONTRACT_ERRORS[raw] ?? `Contract error: ${raw}`;
+  if (!raw) return "Something went wrong — try again in a moment";
+  return CONTRACT_ERRORS[raw] ?? "Something went wrong — try again in a moment";
 }

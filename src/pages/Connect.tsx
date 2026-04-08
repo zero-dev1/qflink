@@ -4,6 +4,7 @@ import { useNavigate, Link } from 'react-router-dom';
 import { motion, AnimatePresence, useAnimationControls } from 'framer-motion';
 import { useWalletStore } from '@/stores/wallet';
 import { cn } from '@/lib/utils';
+import { Avatar } from '@/components/ui/Avatar';
 import { hapticSuccess, hapticError, hapticTap } from '@/lib/feedback';
 
 // ── Types ──────────────────────────────────────────────────────────
@@ -207,23 +208,6 @@ function EmeraldRing({ size }: { size: number }) {
   );
 }
 
-/** Simple identicon-like avatar from address */
-function AvatarIcon({ address }: { address: string }) {
-  // Generate a deterministic color from the address
-  const hash = address ? parseInt(address.slice(2, 10), 16) : 0;
-  const hue = hash % 360;
-  const bg = `hsl(${hue}, 40%, 25%)`;
-  const letter = address ? address.slice(2, 3).toUpperCase() : '?';
-
-  return (
-    <div
-      className="w-full h-full rounded-full flex items-center justify-center text-h2 font-display text-text-primary"
-      style={{ background: bg }}
-    >
-      {letter}
-    </div>
-  );
-}
 
 // ── Letter stagger for welcome name ────────────────────────────────
 
@@ -324,7 +308,7 @@ function WalletCircle({ wallet, isSelected, isOther, connectState, onClick, evmA
         scale: isOther ? 0.8 : 1,
         x: isExpanded && centerOffsetX ? centerOffsetX : 0,
       }}
-      transition={{ duration: 0.7, ease: [0.25, 0.1, 0.25, 1] }}
+      transition={{ duration: 0.85, ease: [0.25, 0.1, 0.25, 1] }}
       style={{ pointerEvents: isOther ? 'none' : 'auto' }}
     >
       <motion.div
@@ -371,7 +355,7 @@ function WalletCircle({ wallet, isSelected, isOther, connectState, onClick, evmA
             animate={{ opacity: 1, scale: 1 }}
             transition={{ duration: 0.4, type: 'spring', stiffness: 300, damping: 20 }}
           >
-            <AvatarIcon address={evmAddress} />
+            <Avatar address={evmAddress} size={80} className="w-full h-full" />
           </motion.div>
         )}
 
@@ -450,7 +434,7 @@ export default function Connect() {
     setConnectState('selected');
 
     // Brief pause for the scale-up + centering animation to play
-    await new Promise((r) => setTimeout(r, 900));
+    await new Promise((r) => setTimeout(r, 1100));
 
     // State 2 — waiting for signature
     setConnectState('signing');
@@ -476,11 +460,11 @@ export default function Connect() {
     setConnectState('approved');
     hapticSuccess();
 
-    await new Promise((r) => setTimeout(r, 1000));
+    await new Promise((r) => setTimeout(r, 1200));
 
     // State 4 — QFLink seal
     setConnectState('seal');
-    await new Promise((r) => setTimeout(r, 1000));
+    await new Promise((r) => setTimeout(r, 1200));
 
     // State 5 — QNS acknowledgment
     setConnectState('qns');
@@ -488,17 +472,17 @@ export default function Connect() {
     if (latestState.qnsName) {
       setShowQnsRing(true);
     }
-    await new Promise((r) => setTimeout(r, 1200));
+    await new Promise((r) => setTimeout(r, 1400));
 
     // State 6 — Avatar reveal
     setConnectState('avatar');
     setShowAvatar(true);
-    await new Promise((r) => setTimeout(r, 900));
+    await new Promise((r) => setTimeout(r, 1100));
 
     // State 7 — Pill formation
     setConnectState('pill');
     setShowPill(true);
-    await new Promise((r) => setTimeout(r, 1000));
+    await new Promise((r) => setTimeout(r, 1200));
 
     // State 8 — Entry
     setConnectState('entry');
@@ -693,7 +677,7 @@ export default function Connect() {
                   animate={{ scale: 1 }}
                   transition={{ type: 'spring', stiffness: 400, damping: 20 }}
                 >
-                  {evmAddress && <AvatarIcon address={evmAddress} />}
+                  {evmAddress && <Avatar address={evmAddress} size={32} className="w-full h-full" />}
                 </motion.div>
 
                 {/* Name */}

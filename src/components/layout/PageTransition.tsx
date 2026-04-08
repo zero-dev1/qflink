@@ -56,9 +56,9 @@ function getTransitionVariant(pathname: string, prevPath?: string) {
 
 const spring = {
   type: 'spring' as const,
-  damping: 28,
-  stiffness: 300,
-  mass: 0.8,
+  damping: 32,
+  stiffness: 240,
+  mass: 0.9,
 };
 
 export function PageTransition({ children }: PageTransitionProps) {

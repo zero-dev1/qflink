@@ -17,9 +17,9 @@ interface ToastState {
 
 const DEFAULT_DURATIONS: Record<ToastType, number> = {
   success: 3000,
-  info: 4000,  // QDL spec says 4s for info
-  warning: 0,  // QDL spec: no auto-dismiss
-  error: 0,    // QDL spec: no auto-dismiss
+  info: 4000,
+  warning: 6000,
+  error: 5000,
 };
 
 const MAX_TOASTS = 3;

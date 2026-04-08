@@ -8,6 +8,13 @@ import { cn } from '@/lib/utils';
 
 type SendPhase = 'idle' | 'signing' | 'sending';
 
+const PLACEHOLDER_CYCLE = [
+  'Say something...',
+  'Share an idea...',
+  'Ask a question...',
+  'Start a conversation...',
+];
+
 interface ChatInputProps {
   placeholder: string;
   onSend: (content: string) => Promise<boolean> | boolean | void;
@@ -20,6 +27,21 @@ export function ChatInput({ placeholder, onSend, disabled = false, isSending = f
   const [phase, setPhase] = useState<SendPhase>('idle');
   const inputRef = useRef<HTMLInputElement>(null);
   const pendingTextRef = useRef<string | null>(null);
+  const [placeholderIdx, setPlaceholderIdx] = useState(0);
+  const [placeholderFade, setPlaceholderFade] = useState(true);
+
+  // Animated placeholder cycle — only when input is empty
+  useEffect(() => {
+    if (input.length > 0 || phase !== 'idle') return;
+    const interval = setInterval(() => {
+      setPlaceholderFade(false);
+      setTimeout(() => {
+        setPlaceholderIdx((i) => (i + 1) % PLACEHOLDER_CYCLE.length);
+        setPlaceholderFade(true);
+      }, 200);
+    }, 3500);
+    return () => clearInterval(interval);
+  }, [input, phase]);
 
   // Sync external isSending → internal phase
 useEffect(() => {
@@ -69,7 +91,7 @@ useEffect(() => {
   // §16.2 — Signing state: input transforms to "Approve in wallet →"
   if (phase === 'signing') {
     return (
-      <div className="flex items-center justify-center h-12 rounded-xl bg-white/[0.03] border border-cyan-border px-4">
+      <div className="flex items-center justify-center h-12 px-4">
         <div className="flex items-center gap-2 text-cyan-primary">
           <div className="h-4 w-4 border-2 border-white/[0.10] border-t-cyan-primary rounded-full animate-spin" />
           <span className="text-label">Approve in wallet →</span>
@@ -80,7 +102,7 @@ useEffect(() => {
 
   if (phase === 'sending') {
     return (
-      <div className="flex items-center justify-center h-12 rounded-xl bg-white/[0.03] border border-white/[0.06] px-4">
+      <div className="flex items-center justify-center h-12 px-4">
         <div className="flex items-center gap-2 text-text-tertiary">
           <div className="h-4 w-4 border-2 border-white/[0.10] border-t-cyan-primary rounded-full animate-spin" />
           <span className="text-label">Confirming...</span>
@@ -89,16 +111,32 @@ useEffect(() => {
     );
   }
 
+  // Determine which placeholder to show — animated cycle when empty, prop when replying
+  const activePlaceholder = input.length === 0 && !placeholder.startsWith('Reply')
+    ? PLACEHOLDER_CYCLE[placeholderIdx]
+    : placeholder;
+
   return (
-    <div>
-      <div className="flex items-center gap-2 h-12 rounded-xl bg-white/[0.03] border border-white/[0.06] px-4 focus-within:border-cyan-border transition-colors">
+    <div className="relative">
+      <div className="flex items-center gap-2 h-12 px-4 rounded-xl border border-white/[0.06] bg-white/[0.03] focus-within:border-cyan-primary/30 transition-colors">
+        {/* Custom animated placeholder overlay */}
+        {input.length === 0 && !placeholder.startsWith('Reply') && (
+          <span
+            className={cn(
+              'absolute left-4 text-[16px] md:text-body text-text-tertiary pointer-events-none select-none transition-opacity duration-200',
+              placeholderFade ? 'opacity-100' : 'opacity-0'
+            )}
+          >
+            {PLACEHOLDER_CYCLE[placeholderIdx]}
+          </span>
+        )}
         <input
           ref={inputRef}
           type="text"
           value={input}
           onChange={(e) => setInput(e.target.value.slice(0, LIMITS.MAX_MESSAGE_LENGTH))}
           onKeyDown={handleKeyDown}
-          placeholder={placeholder}
+          placeholder={input.length === 0 && !placeholder.startsWith('Reply') ? '' : activePlaceholder}
           disabled={disabled}
           autoFocus
           className="flex-1 bg-transparent outline-none text-[16px] md:text-body text-text-primary placeholder:text-text-tertiary"

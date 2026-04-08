@@ -4,6 +4,7 @@ import { Suspense, lazy, type ReactNode } from "react";
 import { MotionConfig, LayoutGroup } from "framer-motion";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
 import { AppLayout } from "@/components/layout/AppLayout";
+import { AdminLayout } from "@/components/layout/AdminLayout";
 import { ToastContainer } from "@/components/ui/Toast";
 import { ActionBar } from "@/components/ui/ActionBar";
 
@@ -19,6 +20,7 @@ const Messages = lazy(() => import("@/pages/Messages"));
 const DMChat = lazy(() => import("@/pages/DMChat"));
 const Profile = lazy(() => import("@/pages/Profile"));
 const CreatorDashboard = lazy(() => import("@/pages/CreatorDashboard"));
+const Admin = lazy(() => import("@/pages/Admin"));
 
 function PageLoader() {
   return (
@@ -59,6 +61,11 @@ export default function App() {
                 <Route path="/dm/:address" element={<DMChat />} />
                 <Route path="/profile" element={<Profile />} />
                 <Route path="/creator/:podId" element={<CreatorDashboard />} />
+              </Route>
+
+              {/* Admin — standalone layout with own sidebar */}
+              <Route element={<AdminLayout />}>
+                <Route path="/admin" element={<Admin />} />
               </Route>
 
               <Route path="*" element={<Navigate to="/" replace />} />

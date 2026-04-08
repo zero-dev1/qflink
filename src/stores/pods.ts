@@ -45,6 +45,8 @@ export interface RawPodMessage {
   id: number;
   isLocalPending?: boolean; // internal flag for dedup — NOT for visual state
   isFailed?: boolean;
+  replyToSender?: string;
+  replyToContent?: string;
 }
 
 interface PodsStore {
@@ -68,7 +70,7 @@ interface PodsStore {
   fetchUserPods: () => Promise<void>;
   fetchMessages: (podId: number) => Promise<void>;
   joinPod: (podId: number) => Promise<boolean>;
-  sendMessage: (podId: number, content: string) => Promise<boolean>;
+  sendMessage: (podId: number, content: string, replyTo?: { sender: string; content: string }) => Promise<boolean>;
   retryMessage: (podId: number, messageId: number) => Promise<boolean>;
   dismissFailedMessage: (podId: number, messageId: number) => void;
   addOptimisticPod: (pod: PodData) => void;
@@ -370,7 +372,7 @@ export const usePodsStore = create<PodsStore>((set, get) => ({
     }
   },
   
-  sendMessage: async (podId: number, content: string) => {
+  sendMessage: async (podId: number, content: string, replyTo?: { sender: string; content: string }) => {
     const evmAddress = useWalletStore.getState().evmAddress;
     if (!evmAddress) return false;
 
@@ -381,6 +383,7 @@ export const usePodsStore = create<PodsStore>((set, get) => ({
       content,
       timestamp: Date.now(), // milliseconds — matches _fetchMessage on-chain format
       isLocalPending: true, // for dedup only - message renders at full opacity
+      ...(replyTo && { replyToSender: replyTo.sender, replyToContent: replyTo.content }),
     };
 
     // Instant insert - full opacity, no visual indicator
@@ -553,9 +556,14 @@ export const usePodsStore = create<PodsStore>((set, get) => ({
     set((state) => {
       // Don't add if a pod with this name already exists
       if (state.pods.some(p => p.name === pod.name)) return state;
+      const podIdNum = Number(pod.id);
+      // Creator is automatically a member — track optimistically so fetchUserPods preserves it
+      _optimisticMemberPodIds.add(podIdNum);
       return {
         pods: [...state.pods, pod],
-        userPodIds: [...state.userPodIds, Number(pod.id)],
+        userPodIds: state.userPodIds.includes(podIdNum)
+          ? state.userPodIds
+          : [...state.userPodIds, podIdNum],
       };
     });
   },

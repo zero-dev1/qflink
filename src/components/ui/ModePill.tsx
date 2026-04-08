@@ -31,7 +31,8 @@ export function ModePill() {
   const pillRef = useRef<HTMLDivElement>(null);
 
   // §23 — Post-reconnect shimmer
-  const { isConnecting, isConnected } = useWalletStore();
+  const { isConnecting, isConnected, encryptionKeyPair } = useWalletStore();
+  const hasKeypair = !!encryptionKeyPair;
   const wasConnecting = useRef(false);
   const [shimmer, setShimmer] = useState(false);
 
@@ -201,21 +202,47 @@ export function ModePill() {
         {/* Divider */}
         <div className="w-px h-4 bg-white/[0.08]" />
 
-        {/* Privacy / Encryption side */}
+        {/* Privacy / Encryption side — visual confirmation of keypair status */}
         <button
           onClick={handlePrivacyTap}
           className={cn(
-            'flex items-center gap-1.5 h-8 px-3 rounded-r-pill transition-all duration-200 active:scale-[0.97]',
+            'relative flex items-center gap-1.5 h-8 px-3 rounded-r-pill transition-all duration-200 active:scale-[0.97]',
             privacyActive
               ? 'text-cyan-primary'
               : 'text-text-tertiary hover:text-text-secondary'
           )}
-          aria-label={privacyActive ? 'Encryption on — tap to disable' : 'Encryption off — tap to enable'}
-        >
-          {privacyActive
-            ? <Lock size={14} className="text-cyan-primary" strokeWidth={1.5} />
-            : <LockOpen size={14} strokeWidth={1.5} />
+          aria-label={
+            privacyActive
+              ? hasKeypair
+                ? 'Encryption active and sealed — tap to disable'
+                : 'Encryption on but no keypair — tap to disable'
+              : 'Encryption off — tap to enable'
           }
+        >
+          <AnimatePresence mode="wait">
+            <motion.span
+              key={privacyActive ? 'locked' : 'unlocked'}
+              initial={{ scale: 0.7, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.7, opacity: 0 }}
+              transition={{ duration: 0.15 }}
+              className="flex items-center"
+            >
+              {privacyActive
+                ? <Lock size={14} className="text-cyan-primary" strokeWidth={1.5} />
+                : <LockOpen size={14} strokeWidth={1.5} />
+              }
+            </motion.span>
+          </AnimatePresence>
+          {/* Status dot — green when sealed, amber when no keypair */}
+          {privacyActive && (
+            <span
+              className={cn(
+                'absolute top-1.5 right-2 w-1.5 h-1.5 rounded-full',
+                hasKeypair ? 'bg-success' : 'bg-warning animate-pulse'
+              )}
+            />
+          )}
         </button>
       </motion.div>
     </div>

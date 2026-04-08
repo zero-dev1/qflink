@@ -380,13 +380,14 @@ function PodDetailInline({
         onClick={onClose}
       />
 
-      {/* Panel — bottom sheet on mobile, center on desktop */}
+      {/* Panel — bottom sheet on mobile, dead center on desktop */}
+      <div className="fixed inset-0 z-50 flex items-end md:items-center justify-center pointer-events-none">
       <motion.div
         initial={{ opacity: 0, y: 40, scale: 0.95 }}
         animate={{ opacity: 1, y: 0, scale: 1 }}
         exit={{ opacity: 0, y: 20, scale: 0.95 }}
-        transition={{ type: 'spring', damping: 25, stiffness: 300 }}
-        className="fixed bottom-0 left-0 right-0 md:bottom-auto md:top-1/2 md:left-1/2 md:-translate-x-1/2 md:-translate-y-1/2 z-50 bg-surface-3 border border-white/[0.08] rounded-t-xl md:rounded-xl md:max-w-modal w-full p-6 pb-[calc(1.5rem+env(safe-area-inset-bottom))] md:pb-6 max-h-[85vh] overflow-y-auto"
+        transition={{ type: 'spring', damping: 28, stiffness: 260 }}
+        className="pointer-events-auto bg-surface-3 border border-white/[0.08] rounded-t-xl md:rounded-xl md:max-w-modal w-full p-6 pb-[calc(1.5rem+env(safe-area-inset-bottom))] md:pb-6 max-h-[85vh] overflow-y-auto"
         onClick={(e) => e.stopPropagation()}
       >
         {/* Mobile drag handle */}
@@ -480,6 +481,7 @@ function PodDetailInline({
           {buttonContent}
         </button>
       </motion.div>
+      </div>
     </>
   );
 }

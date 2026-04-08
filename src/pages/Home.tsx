@@ -135,17 +135,21 @@ export default function Home() {
         className="max-w-content px-6 md:px-8 py-8"
       >
         {/* §13.1 — Greeting + Balance */}
-        <motion.div variants={fadeUp} className="flex items-baseline justify-between gap-4 mb-6">
-          <h1 className="font-display text-h1 text-text-primary truncate">
-            {getGreeting()},{' '}
-            {firstName ? (
-              <>
-                {firstName}<span className="text-cyan-primary">.qf</span>
-              </>
-            ) : evmAddress ? (
-              `${evmAddress.slice(0, 6)}...${evmAddress.slice(-4)}`
-            ) : ''}
-          </h1>
+        <motion.div variants={fadeUp} className="flex items-start justify-between gap-4 mb-6">
+          <div className="min-w-0">
+            <h1 className="font-display text-h1 text-text-primary">
+              {getGreeting()}
+            </h1>
+            <p className="text-body text-text-secondary mt-0.5 truncate">
+              {firstName ? (
+                <>
+                  {firstName}<span className="text-cyan-primary">.qf</span>
+                </>
+              ) : evmAddress ? (
+                <span className="font-mono text-body-sm">{evmAddress.slice(0, 6)}...{evmAddress.slice(-4)}</span>
+              ) : null}
+            </p>
+          </div>
           {balance > 0n && (
             <button
               onClick={() => navigate('/profile')}
